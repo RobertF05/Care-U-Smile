@@ -32,7 +32,7 @@ const Procedure = {
     }
     
     if (filters.patientId) {
-      query = query.eq('patient_id', filters.patientId);
+      query = query.eq('Patient_ID', filters.patientId);
     }
     
     query = query.range(from, to);
@@ -144,7 +144,7 @@ const Procedure = {
     const { data, error } = await supabaseAdmin
       .from('procedures')
       .select('*')
-      .eq('patient_id', patientId)
+      .eq('Patient_ID', patientId)
       .order('procedure_date', { ascending: false });
     
     if (error) throw error;

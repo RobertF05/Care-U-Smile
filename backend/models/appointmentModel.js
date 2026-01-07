@@ -33,7 +33,7 @@ const Appointment = {
     }
     
     if (filters.patientId) {
-      query = query.eq('patient_id', filters.patientId);
+      query = query.eq('Patient_ID', filters.patientId);
     }
     
     query = query.range(from, to);
@@ -158,7 +158,7 @@ const Appointment = {
     const { data, error } = await supabaseAdmin
       .from('clinical_appointments')
       .select('*')
-      .eq('patient_id', patientId)
+      .eq('Patient_ID', patientId)
       .order('appointment_date', { ascending: false });
     
     if (error) throw error;

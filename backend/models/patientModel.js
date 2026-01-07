@@ -35,7 +35,7 @@ const Patient = {
     const { data, error } = await supabaseAdmin
       .from('patients')
       .select('*')
-      .eq('patient_id', id)
+      .eq('Patient_ID', id)
       .single();
     
     if (error) throw error;
@@ -62,7 +62,7 @@ const Patient = {
     const { data, error } = await supabaseAdmin
       .from('patients')
       .update(patientData)
-      .eq('patient_id', id)
+      .eq('Patient_ID', id)
       .select()
       .single();
     
@@ -75,7 +75,7 @@ const Patient = {
     const { data, error } = await supabaseAdmin
       .from('patients')
       .delete()
-      .eq('patient_id', id)
+      .eq('Patient_ID', id)
       .select()
       .single();
     

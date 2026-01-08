@@ -1,69 +1,103 @@
+// frontend/src/context/AuthContext.jsx
 import React, { createContext, useState, useEffect } from 'react';
 
-// Crear el contexto
 export const AuthContext = createContext();
 
-// Provider del contexto
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState(null);
 
-  // Simular verificación de sesión al cargar
+  // Verificar autenticación al cargar
   useEffect(() => {
-    const checkAuth = async () => {
-      // Aquí iría la lógica para verificar si hay un token válido
-      // Por ahora, simulamos una carga
-      setTimeout(() => {
-        // Verificar si hay usuario en localStorage (temporal)
-        const savedUser = localStorage.getItem('dentalUser');
-        if (savedUser) {
-          setUser(JSON.parse(savedUser));
-        }
-        setLoading(false);
-      }, 1000);
-    };
-
     checkAuth();
   }, []);
 
-  // Función para iniciar sesión
-  const login = async (email, password) => {
+  const checkAuth = async () => {
     try {
-      // Aquí conectarías con tu backend
-      // Ejemplo: const response = await fetch('/api/auth/login', {...})
+      const savedUser = localStorage.getItem('user');
       
-      // Simulación exitosa
-      const mockUser = {
-        id: '1',
-        email,
-        name: 'Dr. Administrador',
-        role: 'odontologo',
-        clinic: 'Care U Smile'
-      };
+      if (!savedUser) {
+        setLoading(false);
+        return;
+      }
+
+      // Verificar con backend si la sesión es válida
+      const userData = JSON.parse(savedUser);
       
-      setUser(mockUser);
-      localStorage.setItem('dentalUser', JSON.stringify(mockUser));
+      // Tu backend no tiene endpoint de verificación de sesión todavía
+      // Por ahora, usar el usuario guardado
+      // Cuando implementes JWT, aquí verificarías el token
+      setUser(userData);
       
-      return { success: true, user: mockUser };
     } catch (error) {
-      console.error('Error en login:', error);
-      return { success: false, error: 'Credenciales incorrectas' };
+      console.error('Error verificando autenticación:', error);
+      // Limpiar datos inválidos
+      localStorage.removeItem('user');
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Función para cerrar sesión
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('dentalUser');
-    console.log('Sesión cerrada');
+  const login = async (email, password) => {
+    setAuthError(null);
+    setLoading(true);
+    
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+      
+      if (response.ok && data.success) {
+        // Basado en tu authController, devuelve: { success: true, data: { user } }
+        const userData = data.data.user;
+        
+        // Guardar en localStorage
+        localStorage.setItem('user', JSON.stringify(userData));
+        setUser(userData);
+        
+        return { 
+          success: true, 
+          user: userData 
+        };
+      } else {
+        setAuthError(data.error || 'Credenciales incorrectas');
+        return { 
+          success: false, 
+          error: data.error || 'Error en login' 
+        };
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      setAuthError('Error de conexión con el servidor');
+      return { 
+        success: false, 
+        error: 'Error de conexión con el servidor' 
+      };
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Valores que estarán disponibles en el contexto
+  const logout = () => {
+    localStorage.removeItem('user');
+    setUser(null);
+    setAuthError(null);
+  };
+
   const value = {
     user,
     login,
     logout,
-    loading
+    loading,
+    authError,
+    clearAuthError: () => setAuthError(null),
   };
 
   return (

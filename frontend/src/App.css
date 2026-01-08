@@ -421,3 +421,327 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Estilos para Dashboard */
+.dashboard-header {
+  margin-bottom: 2rem;
+}
+
+.welcome-section h1 {
+  margin-bottom: 0.5rem;
+  color: var(--primary-blue-dark);
+}
+
+.dashboard-subtitle {
+  color: var(--text-light);
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.dashboard-card {
+  background: var(--white);
+  border-radius: var(--border-radius-lg);
+  padding: 1.5rem;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid rgba(100, 181, 246, 0.1);
+  transition: all 0.3s ease;
+}
+
+.dashboard-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary-blue);
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.card-icon-wrapper {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 1rem;
+}
+
+.card-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-dark);
+  margin: 0;
+}
+
+.card-body {
+  margin-top: 0.5rem;
+}
+
+.card-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--primary-blue-dark);
+  line-height: 1;
+}
+
+.card-change {
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin-top: 0.5rem;
+}
+
+/* Secciones */
+.dashboard-sections {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: 1.5rem;
+}
+
+.section {
+  background: var(--white);
+  border-radius: var(--border-radius-lg);
+  padding: 1.5rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 2px solid var(--primary-light-blue);
+}
+
+.section-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: var(--primary-blue-dark);
+  display: flex;
+  align-items: center;
+}
+
+.section-badge {
+  background: var(--primary-blue);
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* Tarjetas de citas */
+.appointment-card {
+  display: flex;
+  align-items: center;
+  padding: 1rem;
+  background: var(--primary-light-blue);
+  border-radius: var(--border-radius-md);
+  margin-bottom: 0.75rem;
+  border-left: 4px solid;
+}
+
+.appointment-time {
+  min-width: 70px;
+  padding-right: 1rem;
+  border-right: 1px solid rgba(100, 181, 246, 0.3);
+}
+
+.appointment-time strong {
+  color: var(--text-dark);
+  font-size: 1.1rem;
+}
+
+.appointment-info {
+  flex: 1;
+  padding: 0 1rem;
+}
+
+.patient-name {
+  font-weight: 600;
+  color: var(--text-dark);
+  margin-bottom: 0.25rem;
+}
+
+.appointment-details {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.9rem;
+}
+
+.procedure {
+  color: var(--accent-teal);
+  font-weight: 500;
+}
+
+.identification {
+  color: var(--text-light);
+}
+
+.appointment-status {
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Tarjetas de procedimientos */
+.procedure-card {
+  display: flex;
+  align-items: flex-start;
+  padding: 1rem;
+  background: linear-gradient(135deg, #FFF9C4, #FFFDE7);
+  border-radius: var(--border-radius-md);
+  margin-bottom: 0.75rem;
+  border-left: 4px solid var(--warning-orange);
+}
+
+.procedure-icon {
+  width: 40px;
+  height: 40px;
+  background: var(--warning-orange);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 1rem;
+  flex-shrink: 0;
+}
+
+.procedure-info {
+  flex: 1;
+}
+
+.procedure-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.procedure-amount {
+  font-weight: 700;
+  color: var(--success-green);
+}
+
+.procedure-description {
+  color: var(--text-dark);
+  margin: 0.5rem 0;
+  font-size: 0.95rem;
+}
+
+.procedure-footer {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+}
+
+.procedure-type {
+  background: rgba(255, 167, 38, 0.2);
+  color: var(--warning-orange);
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-weight: 500;
+}
+
+.procedure-date {
+  color: var(--text-light);
+}
+
+/* Estados vacíos */
+.empty-state {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-light);
+}
+
+.empty-state p {
+  margin: 0;
+}
+
+/* Loading */
+.loading-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid var(--primary-light-blue);
+  border-top: 4px solid var(--primary-blue);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 1rem;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .dashboard-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .dashboard-sections {
+    grid-template-columns: 1fr;
+  }
+  
+  .appointment-card,
+  .procedure-card {
+    flex-direction: column;
+  }
+  
+  .appointment-time {
+    border-right: none;
+    border-bottom: 1px solid rgba(100, 181, 246, 0.3);
+    padding-right: 0;
+    padding-bottom: 0.5rem;
+    margin-bottom: 0.5rem;
+    min-width: auto;
+    width: 100%;
+  }
+  
+  .appointment-info {
+    padding: 0.5rem 0;
+  }
+  
+  .appointment-details {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .dashboard-card {
+    padding: 1rem;
+  }
+  
+  .card-value {
+    font-size: 1.75rem;
+  }
+}

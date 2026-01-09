@@ -1,15 +1,18 @@
 // frontend/src/pages/OrthodonticsPage/OrthodonticsPage.jsx
 import { useContext, useState, useEffect } from "react";
 import { AppContext } from "../../context/AppContext";
-import { formatDate, formatCurrency, formatFullName } from "../../utils/formatters";
+import { AuthContext } from "../../context/AuthContext";
+import { formatDate, formatCurrency } from "../../utils/formatters";
 import "./OrthodonticsPage.css";
 
 export default function OrthodonticsPage() {
+  const { user } = useContext(AuthContext);
   const { 
     procedures, 
     fetchOrthodontics,
     loading,
-    stats
+    error: contextError,
+    clearError
   } = useContext(AppContext);
   
   const [search, setSearch] = useState("");
@@ -17,35 +20,64 @@ export default function OrthodonticsPage() {
     startDate: "",
     endDate: ""
   });
+  const [localError, setLocalError] = useState("");
 
   // Cargar ortodoncias al montar
   useEffect(() => {
-    fetchOrthodontics();
-  }, []);
+    if (user) {
+      loadOrthodontics();
+    }
+  }, [user]);
+
+  const loadOrthodontics = async () => {
+    try {
+      setLocalError("");
+      clearError();
+      await fetchOrthodontics();
+    } catch (error) {
+      console.error('Error al cargar ortodoncias:', error);
+      setLocalError(error.message || 'Error al cargar ortodoncias');
+    }
+  };
 
   // Aplicar filtros
-  const applyFilters = () => {
-    const filters = {};
-    if (dateFilter.startDate) filters.startDate = dateFilter.startDate;
-    if (dateFilter.endDate) filters.endDate = dateFilter.endDate;
-    fetchOrthodontics(filters);
+  const applyFilters = async () => {
+    try {
+      setLocalError("");
+      const filters = {};
+      if (dateFilter.startDate) filters.startDate = dateFilter.startDate;
+      if (dateFilter.endDate) filters.endDate = dateFilter.endDate;
+      await fetchOrthodontics(filters);
+    } catch (error) {
+      console.error('Error al aplicar filtros:', error);
+      setLocalError(error.message || 'Error al aplicar filtros');
+    }
   };
 
   // Limpiar filtros
-  const clearFilters = () => {
-    setDateFilter({ startDate: "", endDate: "" });
-    setSearch("");
-    fetchOrthodontics();
+  const clearFilters = async () => {
+    try {
+      setLocalError("");
+      setDateFilter({ startDate: "", endDate: "" });
+      setSearch("");
+      await fetchOrthodontics();
+    } catch (error) {
+      console.error('Error al limpiar filtros:', error);
+      setLocalError(error.message || 'Error al limpiar filtros');
+    }
   };
 
   // Filtrar ortodoncias por búsqueda
   const filteredOrthodontics = procedures
     .filter(ortho => {
+      if (!search.trim()) return true;
+      
       const searchTerm = search.toLowerCase();
       return (
         ortho.procedure_description?.toLowerCase().includes(searchTerm) ||
         ortho.patient_name?.toLowerCase().includes(searchTerm) ||
-        ortho.patient_identification?.includes(searchTerm)
+        ortho.patient_identification?.includes(searchTerm) ||
+        ortho.original_query_type?.toLowerCase().includes(searchTerm)
       );
     });
 
@@ -79,11 +111,16 @@ export default function OrthodonticsPage() {
       totalClinicEarnings,
       totalDoctorEarnings,
       totalOverall,
-      count: filteredOrthodontics.length
+      count: filteredOrthodontics.length,
+      avgClinic: filteredOrthodontics.length > 0 ? totalClinicEarnings / filteredOrthodontics.length : 0,
+      avgDoctor: filteredOrthodontics.length > 0 ? totalDoctorEarnings / filteredOrthodontics.length : 0
     };
   };
 
   const totalEarnings = calculateTotalEarnings();
+  
+  // Manejar errores
+  const error = localError || contextError;
 
   if (loading && procedures.length === 0) {
     return (
@@ -91,6 +128,20 @@ export default function OrthodonticsPage() {
         <div className="loading-message">
           <div className="loading-spinner"></div>
           <p>Cargando tratamientos de ortodoncia...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="orthodontics-container">
+        <div className="error-message">
+          <h3>❌ Error</h3>
+          <p>{error}</p>
+          <button onClick={loadOrthodontics} className="btn-retry">
+            Reintentar
+          </button>
         </div>
       </div>
     );
@@ -115,8 +166,6 @@ export default function OrthodonticsPage() {
           
           <div className="orthodontics-count">
             <span>{filteredOrthodontics.length}</span>
-            <span>/</span>
-            <span>{stats.totalOrthodontics || 0}</span>
           </div>
         </div>
       </div>
@@ -130,7 +179,9 @@ export default function OrthodonticsPage() {
             <div className="earnings-content">
               <h4>Ganancias Clínica (40%)</h4>
               <p className="earnings-value">{formatCurrency(totalEarnings.totalClinicEarnings)}</p>
-              <p className="earnings-percentage">40% del total</p>
+              <p className="earnings-percentage">
+                {formatCurrency(totalEarnings.avgClinic)} promedio
+              </p>
             </div>
           </div>
           
@@ -139,7 +190,9 @@ export default function OrthodonticsPage() {
             <div className="earnings-content">
               <h4>Ganancias Doctora (60%)</h4>
               <p className="earnings-value">{formatCurrency(totalEarnings.totalDoctorEarnings)}</p>
-              <p className="earnings-percentage">60% del total</p>
+              <p className="earnings-percentage">
+                {formatCurrency(totalEarnings.avgDoctor)} promedio
+              </p>
             </div>
           </div>
           
@@ -196,11 +249,9 @@ export default function OrthodonticsPage() {
                 ? "No se encontraron tratamientos con los filtros aplicados."
                 : "No hay tratamientos de ortodoncia registrados."}
             </p>
-            {!search && !dateFilter.startDate && !dateFilter.endDate && (
-              <button className="btn-add-first">
-                Agregar primer tratamiento
-              </button>
-            )}
+            <p className="no-results-help">
+              Los tratamientos de ortodoncia se crean al completar una cita de ortodoncia y registrar los detalles.
+            </p>
           </div>
         ) : (
           <div className="table-responsive-container">
@@ -215,7 +266,7 @@ export default function OrthodonticsPage() {
                   <th>Ganancia Clínica</th>
                   <th>Ganancia Doctora</th>
                   <th>Forma de Pago</th>
-                  <th>Estado</th>
+                  <th>Origen</th>
                   <th>Observaciones</th>
                 </tr>
               </thead>
@@ -235,7 +286,14 @@ export default function OrthodonticsPage() {
                         {orthodontic.patient_identification || "N/A"}
                       </td>
                       <td className="description-cell">
-                        {orthodontic.procedure_description || "Sin descripción"}
+                        <div className="description-content">
+                          <strong>{orthodontic.procedure_description || "Sin descripción"}</strong>
+                          {orthodontic.original_query_type && (
+                            <div className="original-appointment">
+                              <small>Origen: {orthodontic.original_query_type}</small>
+                            </div>
+                          )}
+                        </div>
                       </td>
                       <td className="total-cost-cell">
                         <strong>{formatCurrency(earnings.total)}</strong>
@@ -262,9 +320,11 @@ export default function OrthodonticsPage() {
                         </span>
                       </td>
                       <td>
-                        <span className={`status-badge status-${orthodontic.state?.toLowerCase() || 'pending'}`}>
-                          {orthodontic.state || "Pendiente"}
-                        </span>
+                        {orthodontic.original_query_type ? (
+                          <span className="origin-badge">Desde cita</span>
+                        ) : (
+                          <span className="origin-badge direct">Directo</span>
+                        )}
                       </td>
                       <td className="observations-cell">
                         {orthodontic.observations || "Ninguna"}

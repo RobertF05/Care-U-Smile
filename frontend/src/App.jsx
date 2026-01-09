@@ -5,6 +5,7 @@ import Dashboard from './pages/DashboardPage/DashboardPage.jsx'
 import PatientsPage from './pages/PatientsPage/PatientsPage.jsx'
 import ProceduresPage from './pages/ProceduresPage/ProceduresPage.jsx';
 import OrthodonticsPage from './pages/OrthodonticsPage/OrthodonticsPage.jsx';
+import AppointmentPage from './pages/AppointmentPage/AppointmentPage.jsx';
 import Login from './pages/LoginPage/LoginPage.jsx'
 import { AuthContext } from './context/AuthContext' // ✅ Importar el contexto
 import './App.css'
@@ -48,12 +49,7 @@ function App() {
       case 'ortodoncia':
         return <OrthodonticsPage />
       case 'citas':
-        return (
-          <div className="page-content">
-            <h1>📅 Citas</h1>
-            <p>Agenda de citas - Próximamente</p>
-          </div>
-        )
+        return <AppointmentPage />
       case 'gastos':
         return (
           <div className="page-content">

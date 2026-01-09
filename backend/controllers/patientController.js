@@ -1,21 +1,42 @@
-import Patient from '../models/patientModel.js';
+// controllers/patientController.js
+import { supabaseAdmin } from '../config/supabase.js';
 
 const patientController = {
   // Obtener todos los pacientes
   getAll: async (req, res) => {
     try {
       const { page = 1, limit = 20, search = '' } = req.query;
-      const result = await Patient.getAll(parseInt(page), parseInt(limit), search);
+      const from = (page - 1) * limit;
+      const to = from + limit - 1;
       
-      res.json({ 
-        success: true, 
-        ...result 
+      let query = supabaseAdmin
+        .from('patients')
+        .select('*', { count: 'exact' })
+        .order('creation_date', { ascending: false });
+      
+      if (search) {
+        query = query.or(`first_name.ilike.%${search}%,first_last_name.ilike.%${search}%,identification.ilike.%${search}%`);
+      }
+      
+      query = query.range(from, to);
+      
+      const { data, error, count } = await query;
+      
+      if (error) throw error;
+      
+      res.json({
+        success: true,
+        data,
+        total: count,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages: Math.ceil(count / limit)
       });
     } catch (error) {
       console.error('Error al obtener pacientes:', error);
-      res.status(500).json({ 
-        success: false, 
-        error: 'Error al obtener pacientes' 
+      res.status(500).json({
+        success: false,
+        error: 'Error al obtener pacientes'
       });
     }
   },
@@ -24,24 +45,31 @@ const patientController = {
   getById: async (req, res) => {
     try {
       const { id } = req.params;
-      const patient = await Patient.getById(id);
       
-      if (!patient) {
-        return res.status(404).json({ 
-          success: false, 
-          error: 'Paciente no encontrado' 
+      const { data, error } = await supabaseAdmin
+        .from('patients')
+        .select('*')
+        .eq('Patient_ID', id)
+        .single();
+      
+      if (error) throw error;
+      
+      if (!data) {
+        return res.status(404).json({
+          success: false,
+          error: 'Paciente no encontrado'
         });
       }
       
-      res.json({ 
-        success: true, 
-        data: patient 
+      res.json({
+        success: true,
+        data
       });
     } catch (error) {
       console.error('Error al obtener paciente:', error);
-      res.status(500).json({ 
-        success: false, 
-        error: 'Error al obtener paciente' 
+      res.status(500).json({
+        success: false,
+        error: 'Error al obtener paciente'
       });
     }
   },
@@ -53,33 +81,33 @@ const patientController = {
       
       // Validar datos requeridos
       if (!patientData.first_name || !patientData.first_last_name || !patientData.identification) {
-        return res.status(400).json({ 
-          success: false, 
-          error: 'Nombre, apellido y cédula son requeridos' 
+        return res.status(400).json({
+          success: false,
+          error: 'Nombre, apellido e identificación son requeridos'
         });
       }
       
-      // Verificar si ya existe
-      const existingPatient = await Patient.findByIdentification(patientData.identification);
-      if (existingPatient) {
-        return res.status(400).json({ 
-          success: false, 
-          error: 'Ya existe un paciente con esta cédula' 
-        });
-      }
+      const { data, error } = await supabaseAdmin
+        .from('patients')
+        .insert([{
+          ...patientData,
+          creation_date: new Date().toISOString()
+        }])
+        .select()
+        .single();
       
-      const newPatient = await Patient.create(patientData);
+      if (error) throw error;
       
-      res.status(201).json({ 
-        success: true, 
+      res.status(201).json({
+        success: true,
         message: 'Paciente creado exitosamente',
-        data: newPatient 
+        data
       });
     } catch (error) {
       console.error('Error al crear paciente:', error);
-      res.status(500).json({ 
-        success: false, 
-        error: 'Error al crear paciente' 
+      res.status(500).json({
+        success: false,
+        error: 'Error al crear paciente'
       });
     }
   },
@@ -90,26 +118,38 @@ const patientController = {
       const { id } = req.params;
       const patientData = req.body;
       
-      const patient = await Patient.getById(id);
-      if (!patient) {
-        return res.status(404).json({ 
-          success: false, 
-          error: 'Paciente no encontrado' 
+      const { data: existingPatient, error: checkError } = await supabaseAdmin
+        .from('patients')
+        .select('Patient_ID')
+        .eq('Patient_ID', id)
+        .single();
+      
+      if (checkError || !existingPatient) {
+        return res.status(404).json({
+          success: false,
+          error: 'Paciente no encontrado'
         });
       }
       
-      const updatedPatient = await Patient.update(id, patientData);
+      const { data, error } = await supabaseAdmin
+        .from('patients')
+        .update(patientData)
+        .eq('Patient_ID', id)
+        .select()
+        .single();
       
-      res.json({ 
-        success: true, 
+      if (error) throw error;
+      
+      res.json({
+        success: true,
         message: 'Paciente actualizado exitosamente',
-        data: updatedPatient 
+        data
       });
     } catch (error) {
       console.error('Error al actualizar paciente:', error);
-      res.status(500).json({ 
-        success: false, 
-        error: 'Error al actualizar paciente' 
+      res.status(500).json({
+        success: false,
+        error: 'Error al actualizar paciente'
       });
     }
   },
@@ -119,25 +159,110 @@ const patientController = {
     try {
       const { id } = req.params;
       
-      const patient = await Patient.getById(id);
-      if (!patient) {
-        return res.status(404).json({ 
-          success: false, 
-          error: 'Paciente no encontrado' 
+      // Verificar que el paciente exista
+      const { data: existingPatient, error: checkError } = await supabaseAdmin
+        .from('patients')
+        .select('Patient_ID')
+        .eq('Patient_ID', id)
+        .single();
+      
+      if (checkError || !existingPatient) {
+        return res.status(404).json({
+          success: false,
+          error: 'Paciente no encontrado'
         });
       }
       
-      await Patient.delete(id);
+      // Verificar si el paciente tiene citas asociadas
+      const { data: appointments, error: appointmentsError } = await supabaseAdmin
+        .from('clinical_appointments')
+        .select('appointment_ID')
+        .eq('Patient_ID', id);
       
-      res.json({ 
-        success: true, 
-        message: 'Paciente eliminado exitosamente'
+      if (appointmentsError) throw appointmentsError;
+      
+      if (appointments && appointments.length > 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'No se puede eliminar el paciente porque tiene citas asociadas'
+        });
+      }
+      
+      // Eliminar paciente
+      const { data, error } = await supabaseAdmin
+        .from('patients')
+        .delete()
+        .eq('Patient_ID', id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      res.json({
+        success: true,
+        message: 'Paciente eliminado exitosamente',
+        data
       });
     } catch (error) {
       console.error('Error al eliminar paciente:', error);
-      res.status(500).json({ 
-        success: false, 
-        error: 'Error al eliminar paciente' 
+      res.status(500).json({
+        success: false,
+        error: 'Error al eliminar paciente'
+      });
+    }
+  },
+
+  // Buscar pacientes
+  search: async (req, res) => {
+    try {
+      const { q } = req.query;
+      
+      if (!q) {
+        return res.json({
+          success: true,
+          data: []
+        });
+      }
+      
+      const { data, error } = await supabaseAdmin
+        .from('patients')
+        .select('*')
+        .or(`first_name.ilike.%${q}%,first_last_name.ilike.%${q}%,identification.ilike.%${q}%`)
+        .limit(10);
+      
+      if (error) throw error;
+      
+      res.json({
+        success: true,
+        data: data || []
+      });
+    } catch (error) {
+      console.error('Error al buscar pacientes:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Error al buscar pacientes'
+      });
+    }
+  },
+
+  // Contar pacientes
+  count: async (req, res) => {
+    try {
+      const { count, error } = await supabaseAdmin
+        .from('patients')
+        .select('*', { count: 'exact', head: true });
+      
+      if (error) throw error;
+      
+      res.json({
+        success: true,
+        count: count || 0
+      });
+    } catch (error) {
+      console.error('Error al contar pacientes:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Error al contar pacientes'
       });
     }
   }

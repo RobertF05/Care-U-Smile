@@ -1,8 +1,9 @@
+// procedureModel.js - Versión actualizada
 import { supabaseAdmin } from '../config/supabase.js';
 
 const Procedure = {
-  // Obtener todos los procedimientos
-  async getAll(page = 1, limit = 20, filters = {}) {
+  // Obtener procedimientos regulares (NO ortodoncia)
+  async getAllNormal(page = 1, limit = 20, filters = {}) {
     const from = (page - 1) * limit;
     const to = from + limit - 1;
     
@@ -14,8 +15,13 @@ const Procedure = {
           first_name,
           first_last_name,
           identification
+        ),
+        clinical_appointments (
+          query_type,
+          appointment_date
         )
       `, { count: 'exact' })
+      .eq('is_orthodontics', false) // Solo procedimientos regulares
       .order('procedure_date', { ascending: false });
     
     // Aplicar filtros
@@ -25,10 +31,6 @@ const Procedure = {
     
     if (filters.endDate) {
       query = query.lte('procedure_date', filters.endDate);
-    }
-    
-    if (filters.isOrthodontics !== undefined) {
-      query = query.eq('is_orthodontics', filters.isOrthodontics);
     }
     
     if (filters.patientId) {
@@ -45,8 +47,76 @@ const Procedure = {
     const transformedData = data.map(item => ({
       ...item,
       patient_name: `${item.patients?.first_name || ''} ${item.patients?.first_last_name || ''}`.trim(),
-      patient_identification: item.patients?.identification
+      patient_identification: item.patients?.identification,
+      original_query_type: item.clinical_appointments?.query_type,
+      original_appointment_date: item.clinical_appointments?.appointment_date
     }));
+    
+    return {
+      data: transformedData,
+      total: count,
+      page,
+      limit,
+      totalPages: Math.ceil(count / limit)
+    };
+  },
+
+  // Obtener procedimientos de ortodoncia
+  async getAllOrthodontics(page = 1, limit = 20, filters = {}) {
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+    
+    let query = supabaseAdmin
+      .from('procedures')
+      .select(`
+        *,
+        patients (
+          first_name,
+          first_last_name,
+          identification
+        ),
+        clinical_appointments (
+          query_type,
+          appointment_date
+        )
+      `, { count: 'exact' })
+      .eq('is_orthodontics', true) // Solo ortodoncia
+      .order('procedure_date', { ascending: false });
+    
+    // Aplicar filtros
+    if (filters.startDate) {
+      query = query.gte('procedure_date', filters.startDate);
+    }
+    
+    if (filters.endDate) {
+      query = query.lte('procedure_date', filters.endDate);
+    }
+    
+    if (filters.patientId) {
+      query = query.eq('Patient_ID', filters.patientId);
+    }
+    
+    query = query.range(from, to);
+    
+    const { data, error, count } = await query;
+    
+    if (error) throw error;
+    
+    // Transformar datos y calcular ganancias
+    const transformedData = data.map(item => {
+      const clinic_income = item.total_cost * 0.4;
+      const doctor_income = item.total_cost * 0.6;
+      
+      return {
+        ...item,
+        patient_name: `${item.patients?.first_name || ''} ${item.patients?.first_last_name || ''}`.trim(),
+        patient_identification: item.patients?.identification,
+        original_query_type: item.clinical_appointments?.query_type,
+        original_appointment_date: item.clinical_appointments?.appointment_date,
+        clinic_income,
+        doctor_income
+      };
+    });
     
     return {
       data: transformedData,
@@ -68,6 +138,11 @@ const Procedure = {
           first_last_name,
           identification,
           number_phone
+        ),
+        clinical_appointments (
+          query_type,
+          appointment_date,
+          observations as appointment_observations
         )
       `)
       .eq('procedure_id', id)
@@ -75,7 +150,7 @@ const Procedure = {
     
     if (error) throw error;
     
-    // Calcular ingresos
+    // Calcular ingresos si es ortodoncia
     const clinic_income = data.is_orthodontics ? data.total_cost * 0.4 : data.total_cost;
     const doctor_income = data.is_orthodontics ? data.total_cost * 0.6 : 0;
     
@@ -85,11 +160,13 @@ const Procedure = {
       patient_identification: data.patients?.identification,
       patient_phone: data.patients?.number_phone,
       clinic_income,
-      doctor_income
+      doctor_income,
+      original_query_type: data.clinical_appointments?.query_type,
+      original_appointment_date: data.clinical_appointments?.appointment_date
     };
   },
 
-  // Crear procedimiento
+  // Crear procedimiento directamente (sin cita)
   async create(procedureData) {
     const { data, error } = await supabaseAdmin
       .from('procedures')

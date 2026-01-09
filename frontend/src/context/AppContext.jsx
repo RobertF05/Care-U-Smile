@@ -30,23 +30,41 @@ export const AppProvider = ({ children }) => {
     setError(null);
     
     try {
+      console.log(`📤 Enviando solicitud a: /api${endpoint}`, options);
+      
+      // Obtener token si existe
+      const token = localStorage.getItem('token');
+      const headers = {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      };
+      
+      // Añadir token si existe
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
       const response = await fetch(`/api${endpoint}`, {
-        headers: {
-          'Content-Type': 'application/json',
-          ...options.headers,
-        },
+        headers,
         ...options,
       });
 
+      console.log(`📥 Respuesta recibida:`, response.status, response.statusText);
+      
       const data = await response.json();
+      console.log('📄 Datos de respuesta:', data);
       
       if (!data.success) {
-        throw new Error(data.error || 'Error en la solicitud');
+        throw new Error(data.error || `Error en la solicitud (${response.status})`);
       }
       
       return data;
     } catch (error) {
-      console.error('API Error:', error);
+      console.error('❌ API Error completo:', {
+        endpoint,
+        error: error.message,
+        stack: error.stack
+      });
       setError(error.message);
       throw error;
     } finally {
@@ -168,16 +186,25 @@ export const AppProvider = ({ children }) => {
 
   const createAppointment = async (appointmentData) => {
     try {
+      console.log('📝 Datos de la cita a crear:', appointmentData);
+      
       const data = await apiFetch('/appointments', {
         method: 'POST',
         body: JSON.stringify(appointmentData),
       });
       
+      console.log('✅ Cita creada exitosamente:', data);
+      
       setAppointments(prev => [...prev, data.data]);
       
       return data;
     } catch (error) {
-      console.error('Error creando cita:', error);
+      console.error('❌ Error detallado creando cita:', {
+        error: error.message,
+        appointmentData,
+        timestamp: new Date().toISOString()
+      });
+      setError('Error al crear cita: ' + error.message);
       return { success: false, error: error.message };
     }
   };
@@ -200,27 +227,87 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  const deleteAppointment = async (id) => {
+    try {
+      const data = await apiFetch(`/appointments/${id}`, {
+        method: 'DELETE',
+      });
+      
+      setAppointments(prev => 
+        prev.filter(appointment => appointment.appointment_ID !== id)
+      );
+      
+      return data;
+    } catch (error) {
+      console.error('Error eliminando cita:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
   // ========== PROCEDIMIENTOS ==========
-  const fetchProcedures = async (filters = {}) => {
+  // Función para procedimientos regulares (is_orthodontics = false)
+  const fetchProceduresNormal = async (filters = {}) => {
     try {
       const queryParams = new URLSearchParams(filters).toString();
-      const endpoint = queryParams ? `/procedures?${queryParams}` : '/procedures';
+      const endpoint = queryParams ? `/procedures/normal?${queryParams}` : '/procedures/normal';
       const data = await apiFetch(endpoint);
       
       setProcedures(data.data);
       setStats(prev => ({ 
         ...prev, 
         totalProcedures: data.total,
-        // Calcular procedimientos pendientes (sin estado completado)
         pendingProcedures: data.data.filter(proc => !proc.state || proc.state !== 'COMPLETED').length
       }));
       
       return data;
     } catch (error) {
-      console.error('Error cargando procedimientos:', error);
+      console.error('Error cargando procedimientos normales:', error);
       return { success: false, error: error.message };
     }
   };
+
+  // Función para ortodoncias (is_orthodontics = true)
+  const fetchOrthodontics = async (filters = {}) => {
+    try {
+      const queryParams = new URLSearchParams(filters).toString();
+      const endpoint = queryParams ? `/procedures/orthodontics?${queryParams}` : '/procedures/orthodontics';
+      const data = await apiFetch(endpoint);
+      
+      setProcedures(data.data);
+      setStats(prev => ({ 
+        ...prev, 
+        totalOrthodontics: data.total,
+        orthodonticsIncome: data.data.reduce((sum, ortho) => sum + (ortho.total_cost || 0), 0)
+      }));
+      
+      return data;
+    } catch (error) {
+      console.error('Error cargando ortodoncias:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  // Función general para todos los procedimientos (deprecada)
+  // En tu AppContext.jsx, actualiza la función fetchProcedures:
+const fetchProcedures = async (filters = {}) => {
+  try {
+    const queryParams = new URLSearchParams(filters).toString();
+    const endpoint = queryParams ? `/procedures/normal?${queryParams}` : '/procedures/normal';
+    const data = await apiFetch(endpoint);
+    
+    setProcedures(data.data);
+    setStats(prev => ({ 
+      ...prev, 
+      totalProcedures: data.total,
+      pendingProcedures: data.data.filter(proc => !proc.state || proc.state !== 'COMPLETED').length
+    }));
+    
+    return data;
+  } catch (error) {
+    console.error('Error cargando procedimientos:', error);
+    return { success: false, error: error.message };
+  }
+};
 
   const getProceduresByPatient = async (patientId) => {
     try {
@@ -249,67 +336,20 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  // Función específica para procedimientos (is_orthodontics = false)
-const fetchProceduresNormal = async (filters = {}) => {
-  try {
-    const queryParams = new URLSearchParams({
-      ...filters,
-      isOrthodontics: 'false'  // Solo procedimientos normales
-    }).toString();
-    
-    const endpoint = `/procedures?${queryParams}`;
-    const data = await apiFetch(endpoint);
-    
-    if (data.success) {
-      setProcedures(data.data || []);
-      setStats(prev => ({ 
-        ...prev, 
-        totalProcedures: data.total || data.data?.length || 0
-      }));
-    }
-    
-    return data;
-  } catch (error) {
-    console.error('Error cargando procedimientos:', error);
-    return { success: false, error: error.message };
-  }
-};
-
-// Función específica para ortodoncias (is_orthodontics = true)
-const fetchOrthodontics = async (filters = {}) => {
-  try {
-    const queryParams = new URLSearchParams({
-      ...filters,
-      isOrthodontics: 'true'  // Solo ortodoncias
-    }).toString();
-    
-    const endpoint = `/procedures?${queryParams}`;
-    const data = await apiFetch(endpoint);
-    
-    if (data.success) {
-      // Calcular ganancias
-      let clinicIncome = 0;
-      let doctorIncome = 0;
-      
-      (data.data || []).forEach(procedure => {
-        clinicIncome += procedure.total_cost * 0.4;  // 40% para clínica
-        doctorIncome += procedure.total_cost * 0.6;  // 60% para doctora
+  // Función para convertir cita en procedimiento
+  const convertAppointmentToProcedure = async (appointmentId, procedureData) => {
+    try {
+      const data = await apiFetch(`/appointments/${appointmentId}/convert-to-procedure`, {
+        method: 'POST',
+        body: JSON.stringify(procedureData),
       });
       
-      setStats(prev => ({ 
-        ...prev, 
-        orthodonticsClinicIncome: clinicIncome,
-        orthodonticsDoctorIncome: doctorIncome,
-        totalOrthodontics: data.total || data.data?.length || 0
-      }));
+      return data;
+    } catch (error) {
+      console.error('Error al convertir cita en procedimiento:', error);
+      throw error;
     }
-    
-    return data;
-  } catch (error) {
-    console.error('Error cargando ortodoncias:', error);
-    return { success: false, error: error.message };
-  }
-};
+  };
 
   // ========== GASTOS ==========
   const fetchBills = async (filters = {}) => {
@@ -372,7 +412,7 @@ const fetchOrthodontics = async (filters = {}) => {
         await Promise.all([
           fetchPatients(),
           fetchAppointments(),
-          fetchProcedures(),
+          fetchProceduresNormal(), // Cambiado a fetchProceduresNormal
           fetchMonthlyClosings(),
           // Obtener estadísticas del mes actual
           getIncomeStats(
@@ -409,13 +449,15 @@ const fetchOrthodontics = async (filters = {}) => {
     getAppointmentsByDate,
     createAppointment,
     updateAppointment,
+    deleteAppointment,
     
     // Procedimientos
-    fetchProcedures,
+    fetchProceduresNormal, // Añadido
+    fetchOrthodontics, // Añadido
+    fetchProcedures, // Mantenido por compatibilidad
     getProceduresByPatient,
     getIncomeStats,
-    fetchProceduresNormal,
-    fetchOrthodontics,
+    convertAppointmentToProcedure,
     
     // Gastos
     fetchBills,

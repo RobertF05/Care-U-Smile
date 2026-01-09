@@ -2,6 +2,9 @@ import React, { useState, useContext } from 'react'
 import Sidebar from './components/sidebar/sidebar.jsx'
 import Header from './components/header/header.jsx'
 import Dashboard from './pages/DashboardPage/DashboardPage.jsx'
+import PatientsPage from './pages/PatientsPage/PatientsPage.jsx'
+import ProceduresPage from './pages/ProceduresPage/ProceduresPage.jsx';
+import OrthodonticsPage from './pages/OrthodonticsPage/OrthodonticsPage.jsx';
 import Login from './pages/LoginPage/LoginPage.jsx'
 import { AuthContext } from './context/AuthContext' // ✅ Importar el contexto
 import './App.css'
@@ -39,26 +42,11 @@ function App() {
       case 'dashboard':
         return <Dashboard />
       case 'pacientes':
-        return (
-          <div className="page-content">
-            <h1>👥 Pacientes</h1>
-            <p>Gestión de pacientes - Próximamente</p>
-          </div>
-        )
+        return <PatientsPage />
       case 'procedimientos':
-        return (
-          <div className="page-content">
-            <h1>🦷 Procedimientos</h1>
-            <p>Gestión de procedimientos odontológicos - Próximamente</p>
-          </div>
-        )
+        return <ProceduresPage />
       case 'ortodoncia':
-        return (
-          <div className="page-content">
-            <h1>🔧 Ortodoncia</h1>
-            <p>Tratamientos de ortodoncia - Próximamente</p>
-          </div>
-        )
+        return <OrthodonticsPage />
       case 'citas':
         return (
           <div className="page-content">

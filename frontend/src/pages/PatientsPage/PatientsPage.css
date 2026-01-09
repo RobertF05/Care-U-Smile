@@ -1,0 +1,694 @@
+/* frontend/src/pages/PatientPage/PatientPage.css */
+/* Contenedor principal */
+.patients-container {
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* Encabezado de página */
+.patients-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 25px;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.patients-header h2 {
+  font-size: 24px;
+  font-weight: 600;
+  color: #37474F;
+  margin: 0;
+}
+
+/* Barra de herramientas */
+.patients-tools {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+}
+
+/* Contador */
+.patients-count {
+  background-color: #42A5F5;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 15px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Barra de búsqueda */
+.search-wrapper {
+  position: relative;
+  min-width: 300px;
+}
+
+.search-box {
+  width: 100%;
+  padding: 10px 15px 10px 40px;
+  border: 1px solid #E0E0E0;
+  border-radius: 10px;
+  font-size: 14px;
+  background-color: white;
+  transition: all 0.3s ease;
+  color: #37474F;
+}
+
+.search-box:focus {
+  outline: none;
+  border-color: #42A5F5;
+  box-shadow: 0 0 0 3px rgba(66, 165, 245, 0.1);
+}
+
+.search-box::placeholder {
+  color: #78909C;
+  opacity: 0.7;
+}
+
+.search-wrapper svg {
+  position: absolute;
+  left: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  fill: #78909C;
+}
+
+/* Botón para limpiar filtros */
+.btn-clear-filters {
+  background: none;
+  border: 1px solid #E0E0E0;
+  cursor: pointer;
+  color: #78909C;
+  padding: 8px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 35px;
+  height: 35px;
+}
+
+.btn-clear-filters:hover {
+  background-color: #F5F5F5;
+  border-color: #BDBDBD;
+  color: #37474F;
+}
+
+/* Botón de acción principal */
+.action-buttons {
+  margin-bottom: 25px;
+}
+
+.btn-action-primary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 24px;
+  background-color: #42A5F5;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.btn-action-primary:hover {
+  background-color: #1E88E5;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(66, 165, 245, 0.2);
+}
+
+.btn-action-primary span {
+  font-size: 16px;
+}
+
+/* Sección de tabla */
+.patients-section {
+  background-color: white;
+  border-radius: 16px;
+  padding: 25px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.patients-section h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #37474F;
+  margin-bottom: 20px;
+}
+
+/* Contenedor responsive para tabla */
+.table-responsive-container {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: 10px;
+  border: 1px solid #E0E0E0;
+}
+
+/* Tabla de pacientes */
+.patients-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 14px;
+  border-radius: 10px;
+  overflow: hidden;
+  min-width: 1000px;
+}
+
+.patients-table thead {
+  background-color: #E3F2FD;
+}
+
+.patients-table th {
+  padding: 15px 12px;
+  text-align: left;
+  border-bottom: 1px solid #E0E0E0;
+  color: #37474F;
+  font-weight: 500;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+/* Especificar anchos de columnas */
+.patients-table th:nth-child(1) { min-width: 200px; } /* Nombre */
+.patients-table th:nth-child(2) { min-width: 120px; } /* Cédula */
+.patients-table th:nth-child(3) { min-width: 120px; } /* Teléfono */
+.patients-table th:nth-child(4) { min-width: 180px; } /* Correo */
+.patients-table th:nth-child(5) { min-width: 80px; }  /* Edad */
+.patients-table th:nth-child(6) { min-width: 140px; } /* Fecha Registro */
+.patients-table th:nth-child(7) { min-width: 160px; } /* Acciones */
+
+.patients-table td {
+  padding: 15px 12px;
+  text-align: left;
+  border-bottom: 1px solid #E0E0E0;
+  color: #455A64;
+  font-weight: 400;
+  font-size: 14px;
+}
+
+/* Alternar colores de filas */
+.patients-table tbody tr:nth-child(even) {
+  background-color: rgba(227, 242, 253, 0.3);
+}
+
+.patients-table tbody tr:hover {
+  background-color: rgba(227, 242, 253, 0.6);
+}
+
+/* Celda de nombre del paciente */
+.patient-name-cell {
+  vertical-align: top;
+}
+
+.patient-name {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.patient-name strong {
+  color: #37474F;
+  font-size: 15px;
+}
+
+.patient-profession {
+  font-size: 12px;
+  color: #4DB6AC;
+  background-color: rgba(77, 182, 172, 0.1);
+  padding: 2px 8px;
+  border-radius: 12px;
+  display: inline-block;
+  width: fit-content;
+}
+
+/* Correo del paciente */
+.patient-email {
+  color: #42A5F5;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.patient-email:hover {
+  color: #1E88E5;
+  text-decoration: underline;
+}
+
+/* Celda de cédula */
+.patient-id {
+  font-family: monospace;
+  font-weight: 500;
+  color: #37474F;
+}
+
+/* Celda de acciones */
+.actions-cell {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.btn-edit, .btn-delete {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-edit {
+  background-color: #42A5F5;
+  color: white;
+}
+
+.btn-edit:hover {
+  background-color: #1E88E5;
+  transform: translateY(-1px);
+}
+
+.btn-delete {
+  background-color: #EF5350;
+  color: white;
+}
+
+.btn-delete:hover {
+  background-color: #D32F2F;
+  transform: translateY(-1px);
+}
+
+/* Mensaje sin resultados */
+.no-results {
+  text-align: center;
+  padding: 40px 20px;
+  background-color: #F8F9FA;
+  border-radius: 10px;
+  margin-top: 20px;
+  border: 1px dashed #E0E0E0;
+}
+
+.no-results p {
+  color: #78909C;
+  margin-bottom: 20px;
+  font-size: 1rem;
+}
+
+.btn-add-first {
+  background-color: #42A5F5;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.btn-add-first:hover {
+  background-color: #1E88E5;
+}
+
+/* Estado de carga */
+.loading-message {
+  text-align: center;
+  padding: 60px 20px;
+  background-color: #F8F9FA;
+  border-radius: 10px;
+  margin-top: 20px;
+}
+
+.loading-message p {
+  color: #78909C;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.loading-spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 2px solid #E0E0E0;
+  border-radius: 50%;
+  border-top-color: #42A5F5;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Modal Backdrop */
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 20px;
+}
+
+.modal-content {
+  background-color: white;
+  padding: 30px;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  animation: modalSlideIn 0.3s ease;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.modal-content h3 {
+  color: #42A5F5;
+  margin-bottom: 25px;
+  font-size: 22px;
+  text-align: center;
+}
+
+/* Formularios en modal */
+.form-row {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.form-row .form-group {
+  flex: 1;
+}
+
+.form-group {
+  margin-bottom: 15px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #37474F;
+  font-size: 14px;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #E0E0E0;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #42A5F5;
+  box-shadow: 0 0 0 3px rgba(66, 165, 245, 0.1);
+}
+
+.form-group input[type="date"] {
+  padding: 9px 12px;
+}
+
+/* Modal de confirmación */
+.confirm-modal {
+  max-width: 400px;
+}
+
+.warning-text {
+  color: #EF5350;
+  font-weight: 500;
+  margin: 10px 0;
+}
+
+/* Acciones del modal */
+.modal-actions {
+  display: flex;
+  gap: 15px;
+  margin-top: 25px;
+  justify-content: flex-end;
+}
+
+.btn-confirm {
+  background-color: #42A5F5;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  min-width: 120px;
+}
+
+.btn-confirm:hover:not(:disabled) {
+  background-color: #1E88E5;
+  transform: translateY(-1px);
+}
+
+.btn-confirm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-cancel {
+  background-color: #F5F5F5;
+  color: #78909C;
+  border: 1px solid #E0E0E0;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  min-width: 100px;
+}
+
+.btn-cancel:hover {
+  background-color: #E0E0E0;
+  color: #37474F;
+}
+
+/* Notificaciones */
+.notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 15px 25px;
+  border-radius: 8px;
+  color: white;
+  font-weight: 500;
+  z-index: 3000;
+  animation: slideInRight 0.3s ease, fadeOut 0.3s ease 2.7s forwards;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  max-width: 400px;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  to {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+}
+
+.notification.success {
+  background-color: #4DB6AC;
+  border-left: 4px solid #26A69A;
+}
+
+.notification.error {
+  background-color: #EF5350;
+  border-left: 4px solid #D32F2F;
+}
+
+/* Responsividad */
+@media (max-width: 768px) {
+  .patients-container {
+    padding: 15px;
+  }
+  
+  .patients-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  
+  .patients-tools {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  
+  .search-wrapper {
+    min-width: 100%;
+  }
+  
+  .patients-section {
+    padding: 15px;
+  }
+  
+  .patients-table {
+    min-width: 800px;
+  }
+  
+  .patients-table th,
+  .patients-table td {
+    padding: 12px 8px;
+    font-size: 13px;
+  }
+  
+  .form-row {
+    flex-direction: column;
+    gap: 0;
+  }
+  
+  .modal-actions {
+    flex-direction: column;
+  }
+  
+  .btn-confirm,
+  .btn-cancel {
+    width: 100%;
+    min-width: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .patients-table {
+    min-width: 700px;
+  }
+  
+  .actions-cell {
+    flex-direction: column;
+    gap: 5px;
+  }
+  
+  .btn-edit, .btn-delete {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .modal-content {
+    padding: 20px;
+  }
+  
+  .notification {
+    left: 20px;
+    right: 20px;
+    max-width: calc(100% - 40px);
+  }
+}
+
+/* Agrega estos estilos al final de PatientPage.css */
+
+/* Campo de dirección especial */
+.address-field {
+  margin-bottom: 20px;
+}
+
+.address-textarea {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #E0E0E0;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 100px;
+  max-height: 200px;
+  line-height: 1.5;
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+}
+
+.address-textarea:focus {
+  outline: none;
+  border-color: #42A5F5;
+  box-shadow: 0 0 0 3px rgba(66, 165, 245, 0.1);
+}
+
+.address-textarea::placeholder {
+  color: #78909C;
+  opacity: 0.7;
+}
+
+/* Mejora para mostrar mejor las direcciones en la tabla */
+.patient-address-cell {
+  max-width: 250px;
+  word-wrap: break-word;
+  white-space: normal;
+  line-height: 1.4;
+}
+
+/* Para mostrar dirección completa en tooltip */
+.patient-address {
+  position: relative;
+  cursor: help;
+  display: inline-block;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.patient-address:hover::after {
+  content: attr(data-full-address);
+  position: absolute;
+  left: 0;
+  top: 100%;
+  background: #37474F;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: normal;
+  width: 300px;
+  max-width: 90vw;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}

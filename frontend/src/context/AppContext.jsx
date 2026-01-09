@@ -249,6 +249,68 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  // Función específica para procedimientos (is_orthodontics = false)
+const fetchProceduresNormal = async (filters = {}) => {
+  try {
+    const queryParams = new URLSearchParams({
+      ...filters,
+      isOrthodontics: 'false'  // Solo procedimientos normales
+    }).toString();
+    
+    const endpoint = `/procedures?${queryParams}`;
+    const data = await apiFetch(endpoint);
+    
+    if (data.success) {
+      setProcedures(data.data || []);
+      setStats(prev => ({ 
+        ...prev, 
+        totalProcedures: data.total || data.data?.length || 0
+      }));
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('Error cargando procedimientos:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Función específica para ortodoncias (is_orthodontics = true)
+const fetchOrthodontics = async (filters = {}) => {
+  try {
+    const queryParams = new URLSearchParams({
+      ...filters,
+      isOrthodontics: 'true'  // Solo ortodoncias
+    }).toString();
+    
+    const endpoint = `/procedures?${queryParams}`;
+    const data = await apiFetch(endpoint);
+    
+    if (data.success) {
+      // Calcular ganancias
+      let clinicIncome = 0;
+      let doctorIncome = 0;
+      
+      (data.data || []).forEach(procedure => {
+        clinicIncome += procedure.total_cost * 0.4;  // 40% para clínica
+        doctorIncome += procedure.total_cost * 0.6;  // 60% para doctora
+      });
+      
+      setStats(prev => ({ 
+        ...prev, 
+        orthodonticsClinicIncome: clinicIncome,
+        orthodonticsDoctorIncome: doctorIncome,
+        totalOrthodontics: data.total || data.data?.length || 0
+      }));
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('Error cargando ortodoncias:', error);
+    return { success: false, error: error.message };
+  }
+};
+
   // ========== GASTOS ==========
   const fetchBills = async (filters = {}) => {
     try {
@@ -352,6 +414,8 @@ export const AppProvider = ({ children }) => {
     fetchProcedures,
     getProceduresByPatient,
     getIncomeStats,
+    fetchProceduresNormal,
+    fetchOrthodontics,
     
     // Gastos
     fetchBills,

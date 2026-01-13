@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useContext } from 'react';
+import React, { useState, useEffect, useMemo, useContext, useRef } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
   faCalendarAlt,
@@ -25,7 +25,8 @@ import {
   faCalendarCheck,
   faExchangeAlt,
   faMoneyBillWave,
-  faCreditCard
+  faCreditCard,
+  faLock
 } from '@fortawesome/free-solid-svg-icons';
 import { AppContext } from '../../context/AppContext';
 import { AuthContext } from '../../context/AuthContext';
@@ -39,22 +40,18 @@ const TIME_FILTERS = {
   ALL: 'all'
 };
 
-// Estados de citas
+// Estados de citas (sin CONFIRMED)
 const APPOINTMENT_STATUS = {
   SCHEDULED: 'scheduled',
-  CONFIRMED: 'confirmed',
   COMPLETED: 'completed',
-  CANCELLED: 'cancelled',
-  NO_SHOW: 'no_show'
+  CANCELLED: 'cancelled'
 };
 
 // Métodos de pago
 const PAYMENT_METHODS = [
   'Efectivo',
-  'Tarjeta',
-  'Transferencia',
-  'Cheque',
-  'Crédito'
+  'POS',
+  'Transferencia'
 ];
 
 const AppointmentPage = () => {
@@ -67,7 +64,8 @@ const AppointmentPage = () => {
     createAppointment,
     updateAppointment,
     deleteAppointment,
-    fetchPatients
+    fetchPatients,
+    convertAppointmentToProcedure
   } = useContext(AppContext);
 
   // Estados
@@ -78,15 +76,20 @@ const AppointmentPage = () => {
   const [showFilters, setShowFilters] = useState(true);
   const [expandedAppointments, setExpandedAppointments] = useState({});
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
   const [showConvertModal, setShowConvertModal] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
+  const [patientSearchTerm, setPatientSearchTerm] = useState('');
+  const [showPatientSearch, setShowPatientSearch] = useState(false);
+  const [filteredPatients, setFilteredPatients] = useState([]);
   
+  // Referencia para el buscador de pacientes
+  const patientSearchRef = useRef(null);
+
   // Formulario de nueva cita
   const [newAppointment, setNewAppointment] = useState({
     patient_id: '',
     appointment_date: '',
-    query_type: '',
+    query_type: 'Consulta',
     is_orthodontics: false,
     observations: ''
   });
@@ -106,6 +109,39 @@ const AppointmentPage = () => {
       fetchPatients();
     }
   }, [user]);
+
+  // Filtrar pacientes cuando cambia el término de búsqueda
+  useEffect(() => {
+    if (patients.length > 0 && patientSearchTerm.trim()) {
+      const term = patientSearchTerm.toLowerCase();
+      const filtered = patients.filter(patient => {
+        const fullName = `${patient.first_name || ''} ${patient.first_last_name || ''}`.toLowerCase();
+        const identification = (patient.identification || '').toLowerCase();
+        const phone = (patient.number_phone?.toString() || '').toLowerCase();
+        
+        return fullName.includes(term) || 
+               identification.includes(term) || 
+               phone.includes(term);
+      });
+      setFilteredPatients(filtered);
+    } else {
+      setFilteredPatients(patients);
+    }
+  }, [patients, patientSearchTerm]);
+
+  // Cerrar buscador de pacientes al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (patientSearchRef.current && !patientSearchRef.current.contains(event.target)) {
+        setShowPatientSearch(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   // Filtrar citas
   const filteredAppointments = useMemo(() => {
@@ -188,10 +224,7 @@ const AppointmentPage = () => {
 
     const completed = appointments.filter(apt => apt.state === APPOINTMENT_STATUS.COMPLETED).length;
     const cancelled = appointments.filter(apt => apt.state === APPOINTMENT_STATUS.CANCELLED).length;
-    const pending = appointments.filter(apt => 
-      apt.state === APPOINTMENT_STATUS.SCHEDULED || 
-      apt.state === APPOINTMENT_STATUS.CONFIRMED
-    ).length;
+    const pending = appointments.filter(apt => apt.state === APPOINTMENT_STATUS.SCHEDULED).length;
 
     const orthodontics = appointments.filter(apt => apt.is_orthodontics).length;
     const general = total - orthodontics;
@@ -212,9 +245,9 @@ const AppointmentPage = () => {
     if (!dateString) return '';
     const date = new Date(dateString);
     return date.toLocaleDateString('es-ES', {
-      weekday: 'long',
+      weekday: 'short',
       year: 'numeric',
-      month: 'long',
+      month: 'short',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
@@ -227,6 +260,16 @@ const AppointmentPage = () => {
     return date.toLocaleTimeString('es-ES', {
       hour: '2-digit',
       minute: '2-digit'
+    });
+  };
+
+  const formatDateShort = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('es-ES', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
     });
   };
 
@@ -245,16 +288,45 @@ const AppointmentPage = () => {
     }));
   };
 
+  // Verificar si la cita ya tiene un procedimiento asociado
+  const hasProcedure = (appointment) => {
+    return appointment.procedure_id || appointment.procedure_ID;
+  };
+
+  // Verificar si la cita puede ser editada
+  const canEditAppointment = (appointment) => {
+    return !hasProcedure(appointment) && appointment.state !== 'completed';
+  };
+
+  // Función para manejar cambios en el switch de ortodoncia
+  const handleOrthodonticsSwitch = (checked) => {
+    setNewAppointment({
+      ...newAppointment,
+      is_orthodontics: checked,
+      query_type: checked ? 'Ortodoncia' : 'Consulta'
+    });
+  };
+
+  // Función para seleccionar paciente desde el buscador
+  const handleSelectPatient = (patient) => {
+    setNewAppointment({
+      ...newAppointment,
+      patient_id: patient.Patient_ID.toString()
+    });
+    setPatientSearchTerm('');
+    setShowPatientSearch(false);
+  };
+
   // Crear nueva cita
   const handleAddAppointment = async (e) => {
     e.preventDefault();
     
     try {
-      // Preparar datos
+      // Asegurar que el nombre del servicio sea "Ortodoncia" si el switch está activado
       const appointmentData = {
         Patient_ID: parseInt(newAppointment.patient_id),
         appointment_date: new Date(newAppointment.appointment_date).toISOString(),
-        query_type: newAppointment.query_type,
+        query_type: newAppointment.is_orthodontics ? 'Ortodoncia' : newAppointment.query_type,
         is_orthodontics: newAppointment.is_orthodontics,
         observations: newAppointment.observations || null
       };
@@ -267,10 +339,11 @@ const AppointmentPage = () => {
       setNewAppointment({
         patient_id: '',
         appointment_date: '',
-        query_type: '',
+        query_type: 'Consulta',
         is_orthodontics: false,
         observations: ''
       });
+      setPatientSearchTerm('');
       
       setShowAddModal(false);
       fetchAppointments();
@@ -283,25 +356,25 @@ const AppointmentPage = () => {
     }
   };
 
-  // Actualizar cita (solo estado)
+  // Actualizar cita (solo estado) - Con validación de procedimiento
   const handleUpdateAppointment = async (appointmentId, newState) => {
     try {
+      const appointment = appointments.find(a => a.appointment_ID === appointmentId);
+      if (hasProcedure(appointment)) {
+        alert('No se puede cambiar el estado de una cita que ya tiene un procedimiento registrado');
+        return;
+      }
+      
       await updateAppointment(appointmentId, { state: newState });
       fetchAppointments();
       
       let message = '';
       switch(newState) {
-        case 'confirmed':
-          message = '✅ Cita confirmada';
-          break;
         case 'completed':
           message = '✅ Cita completada';
           break;
         case 'cancelled':
           message = '❌ Cita cancelada';
-          break;
-        case 'no_show':
-          message = '⚠️ Marcada como no asistió';
           break;
       }
       
@@ -312,8 +385,14 @@ const AppointmentPage = () => {
     }
   };
 
-  // Eliminar cita
+  // Eliminar cita - Con validación de procedimiento
   const handleDeleteAppointment = async (appointmentId) => {
+    const appointment = appointments.find(a => a.appointment_ID === appointmentId);
+    if (hasProcedure(appointment)) {
+      alert('No se puede eliminar una cita que ya tiene un procedimiento registrado');
+      return;
+    }
+    
     if (window.confirm('¿Está seguro de que desea eliminar esta cita?')) {
       try {
         await deleteAppointment(appointmentId);
@@ -326,31 +405,26 @@ const AppointmentPage = () => {
     }
   };
 
-  // Convertir cita en procedimiento
+  // Convertir cita en procedimiento - Con validación
   const handleConvertToProcedure = async (e) => {
     e.preventDefault();
     
     if (!selectedAppointment) return;
     
+    if (hasProcedure(selectedAppointment)) {
+      alert('Esta cita ya tiene un procedimiento registrado');
+      setShowConvertModal(false);
+      return;
+    }
+    
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:3000/api/appointments/${selectedAppointment.appointment_ID}/convert-to-procedure`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
+      await convertAppointmentToProcedure(
+        selectedAppointment.appointment_ID,
+        {
           ...procedureForm,
           total_cost: parseFloat(procedureForm.total_cost)
-        })
-      });
-      
-      const result = await response.json();
-      
-      if (!result.success) {
-        throw new Error(result.error || 'Error al registrar procedimiento');
-      }
+        }
+      );
       
       // Cerrar modal y resetear formulario
       setShowConvertModal(false);
@@ -365,7 +439,7 @@ const AppointmentPage = () => {
       fetchAppointments();
       
       // Mostrar mensaje de éxito
-      alert(result.message || '✅ Procedimiento registrado exitosamente');
+      alert('✅ Procedimiento registrado exitosamente');
       
       // Redirigir a la página correspondiente
       if (selectedAppointment.is_orthodontics) {
@@ -380,8 +454,13 @@ const AppointmentPage = () => {
     }
   };
 
-  // Abrir modal para convertir cita
+  // Abrir modal para convertir cita - Con validación
   const openConvertModal = (appointment) => {
+    if (hasProcedure(appointment)) {
+      alert('Esta cita ya tiene un procedimiento registrado');
+      return;
+    }
+    
     if (appointment.state !== 'completed') {
       alert('Solo se pueden registrar procedimientos de citas completadas');
       return;
@@ -397,19 +476,11 @@ const AppointmentPage = () => {
     setShowConvertModal(true);
   };
 
-  // Abrir modal para editar cita
-  const openEditModal = (appointment) => {
-    setSelectedAppointment(appointment);
-    setShowEditModal(true);
-  };
-
   const getStatusColor = (status) => {
     const colors = {
       [APPOINTMENT_STATUS.SCHEDULED]: '#FFA726', // naranja
-      [APPOINTMENT_STATUS.CONFIRMED]: '#42A5F5', // azul
       [APPOINTMENT_STATUS.COMPLETED]: '#66BB6A', // verde
       [APPOINTMENT_STATUS.CANCELLED]: '#EF5350', // rojo
-      [APPOINTMENT_STATUS.NO_SHOW]: '#78909C'    // gris
     };
     return colors[status] || '#78909C';
   };
@@ -417,21 +488,17 @@ const AppointmentPage = () => {
   const getStatusIcon = (status) => {
     const icons = {
       [APPOINTMENT_STATUS.SCHEDULED]: faClock,
-      [APPOINTMENT_STATUS.CONFIRMED]: faCalendarCheck,
       [APPOINTMENT_STATUS.COMPLETED]: faCheckCircle,
       [APPOINTMENT_STATUS.CANCELLED]: faTimesCircle,
-      [APPOINTMENT_STATUS.NO_SHOW]: faTimesCircle
     };
     return icons[status] || faClock;
   };
 
   const getStatusLabel = (status) => {
     const labels = {
-      [APPOINTMENT_STATUS.SCHEDULED]: 'Programada',
-      [APPOINTMENT_STATUS.CONFIRMED]: 'Confirmada',
+      [APPOINTMENT_STATUS.SCHEDULED]: 'Pendiente',
       [APPOINTMENT_STATUS.COMPLETED]: 'Completada',
       [APPOINTMENT_STATUS.CANCELLED]: 'Cancelada',
-      [APPOINTMENT_STATUS.NO_SHOW]: 'No asistió'
     };
     return labels[status] || status;
   };
@@ -471,10 +538,6 @@ const AppointmentPage = () => {
           <p className="subtitle">Programación y seguimiento de citas odontológicas</p>
         </div>
         <div className="header-right">
-          <div className="appointments-count">
-            <span className="count-number">{stats.total}</span>
-            <span className="count-label">citas totales</span>
-          </div>
           <button 
             className="add-appointment-btn"
             onClick={() => setShowAddModal(true)}
@@ -559,15 +622,7 @@ const AppointmentPage = () => {
                   style={{ backgroundColor: '#FFA72620', color: '#FFA726' }}
                 >
                   <FontAwesomeIcon icon={faClock} />
-                  Programadas
-                </button>
-                <button 
-                  className={`status-filter-btn ${statusFilter === APPOINTMENT_STATUS.CONFIRMED ? 'active' : ''}`}
-                  onClick={() => setStatusFilter(APPOINTMENT_STATUS.CONFIRMED)}
-                  style={{ backgroundColor: '#42A5F520', color: '#42A5F5' }}
-                >
-                  <FontAwesomeIcon icon={faCalendarCheck} />
-                  Confirmadas
+                  Pendientes
                 </button>
                 <button 
                   className={`status-filter-btn ${statusFilter === APPOINTMENT_STATUS.COMPLETED ? 'active' : ''}`}
@@ -576,6 +631,14 @@ const AppointmentPage = () => {
                 >
                   <FontAwesomeIcon icon={faCheckCircle} />
                   Completadas
+                </button>
+                <button 
+                  className={`status-filter-btn ${statusFilter === APPOINTMENT_STATUS.CANCELLED ? 'active' : ''}`}
+                  onClick={() => setStatusFilter(APPOINTMENT_STATUS.CANCELLED)}
+                  style={{ backgroundColor: '#EF535020', color: '#EF5350' }}
+                >
+                  <FontAwesomeIcon icon={faTimesCircle} />
+                  Canceladas
                 </button>
               </div>
             </div>
@@ -698,7 +761,7 @@ const AppointmentPage = () => {
         </div>
       </div>
 
-      {/* Lista de citas */}
+      {/* Lista de citas - DISEÑO HORIZONTAL PARA PC */}
       {filteredAppointments.length === 0 ? (
         <div className="no-appointments">
           <div className="no-appointments-icon">
@@ -726,27 +789,53 @@ const AppointmentPage = () => {
               className="appointment-card"
               style={{ borderLeftColor: getStatusColor(appointment.state) }}
             >
-              <div 
-                className="appointment-card-header"
-                onClick={() => toggleExpandAppointment(appointment.appointment_ID)}
-              >
-                <div className="appointment-header-info">
-                  {/* Tipo y fecha */}
-                  <div className="appointment-type-date">
-                    <div className="appointment-type" style={{ color: getTypeColor(appointment.is_orthodontics) }}>
-                      <FontAwesomeIcon icon={getTypeIcon(appointment.is_orthodontics)} />
-                      <span>{getTypeLabel(appointment.is_orthodontics)}</span>
+              <div className="appointment-card-content">
+                {/* Fila horizontal principal - COMPACTADA */}
+                <div className="appointment-main-row compact-view">
+                  {/* Columna 1: Fecha y hora - COMPACTADA */}
+                  <div className="appointment-column date-column compact">
+                    <div className="appointment-date-short compact">{formatDateShort(appointment.appointment_date)}</div>
+                    <div className="appointment-time compact">{formatTime(appointment.appointment_date)}</div>
+                  </div>
+
+                  {/* Columna 2: Paciente - COMPACTADA */}
+                  <div className="appointment-column patient-column compact">
+                    <div className="appointment-patient-name compact">
+                      <FontAwesomeIcon icon={faUser} />
+                      <span className="patient-name-truncate">{appointment.patient_name || 'Paciente no especificado'}</span>
                     </div>
-                    <div className="appointment-date-time">
-                      <h3 className="appointment-main-date">{formatDateTime(appointment.appointment_date)}</h3>
-                      <span className="appointment-time">{formatTime(appointment.appointment_date)}</span>
+                    <div className="appointment-patient-info compact">
+                      <span className="patient-id compact">
+                        <FontAwesomeIcon icon={faIdCard} />
+                        {appointment.patient_identification?.substring(0, 10) || 'N/A'}
+                      </span>
                     </div>
                   </div>
 
-                  {/* Estado y paciente */}
-                  <div className="appointment-status-patient">
+                  {/* Columna 3: Servicio - COMPACTADA */}
+                  <div className="appointment-column service-column compact">
+                    <div className="appointment-service-info compact">
+                      <FontAwesomeIcon icon={faStethoscope} />
+                      <span className="service-name-truncate">{appointment.query_type || 'Consulta'}</span>
+                    </div>
+                    <div className="appointment-type-info">
+                      <span 
+                        className="appointment-type-badge compact"
+                        style={{ 
+                          backgroundColor: getTypeColor(appointment.is_orthodontics) + '20',
+                          color: getTypeColor(appointment.is_orthodontics)
+                        }}
+                      >
+                        <FontAwesomeIcon icon={getTypeIcon(appointment.is_orthodontics)} />
+                        {getTypeLabel(appointment.is_orthodontics)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Columna 4: Estado - COMPACTADA */}
+                  <div className="appointment-column status-column compact">
                     <div 
-                      className="appointment-status" 
+                      className="appointment-status-badge compact"
                       style={{ 
                         backgroundColor: getStatusColor(appointment.state) + '20',
                         color: getStatusColor(appointment.state)
@@ -755,193 +844,182 @@ const AppointmentPage = () => {
                       <FontAwesomeIcon icon={getStatusIcon(appointment.state)} />
                       <span>{getStatusLabel(appointment.state)}</span>
                     </div>
-                    <div className="appointment-patient">
-                      <FontAwesomeIcon icon={faUser} />
-                      <span>{appointment.patient_name || 'Paciente no especificado'}</span>
-                    </div>
+                    {hasProcedure(appointment) && (
+                      <div className="procedure-badge locked">
+                        <FontAwesomeIcon icon={faLock} />
+                        <span>Bloqueado</span>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Acciones y expandir */}
-                  <div className="appointment-actions">
-                    <div className="appointment-service">
-                      <FontAwesomeIcon icon={faStethoscope} />
-                      <span>{appointment.query_type || 'Consulta'}</span>
-                    </div>
-                    <div className="appointment-actions-buttons">
-                      {appointment.state === 'completed' && (
+                  {/* Columna 5: Acciones - MODIFICADA */}
+                  <div className="appointment-column actions-column compact">
+                    <div className="appointment-actions-horizontal">
+                      {/* Botón para convertir en procedimiento */}
+                      {appointment.state === 'completed' && !hasProcedure(appointment) && (
                         <button 
-                          className="action-btn convert-btn"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openConvertModal(appointment);
-                          }}
+                          className="action-btn-horizontal convert-btn"
+                          onClick={() => openConvertModal(appointment)}
                           title="Registrar como procedimiento"
                         >
                           <FontAwesomeIcon icon={faExchangeAlt} />
+                          <span>Registrar</span>
                         </button>
                       )}
-                      <button 
-                        className="action-btn edit-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openEditModal(appointment);
-                        }}
-                      >
-                        <FontAwesomeIcon icon={faEdit} />
-                      </button>
-                      <button 
-                        className="action-btn delete-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteAppointment(appointment.appointment_ID);
-                        }}
-                      >
-                        <FontAwesomeIcon icon={faTrash} />
-                      </button>
+                      
+                      {/* Botones de estado - con validación */}
+                      <div className="status-actions-horizontal">
+                        {appointment.state === 'scheduled' && !hasProcedure(appointment) && (
+                          <>
+                            <button 
+                              className="status-action-btn complete-action"
+                              onClick={() => handleUpdateAppointment(appointment.appointment_ID, 'completed')}
+                            >
+                              <FontAwesomeIcon icon={faCheckCircle} />
+                              Completar
+                            </button>
+                            <button 
+                              className="status-action-btn cancel-action"
+                              onClick={() => handleUpdateAppointment(appointment.appointment_ID, 'cancelled')}
+                            >
+                              <FontAwesomeIcon icon={faTimesCircle} />
+                              Cancelar
+                            </button>
+                          </>
+                        )}
+                        {appointment.state === 'completed' && !hasProcedure(appointment) && (
+                          <button 
+                            className="status-action-btn cancel-action"
+                            onClick={() => handleUpdateAppointment(appointment.appointment_ID, 'cancelled')}
+                          >
+                            <FontAwesomeIcon icon={faTimesCircle} />
+                            Cancelar
+                          </button>
+                        )}
+                      </div>
+                      
+                      {/* Botones de editar/eliminar (solo si no tiene procedimiento) */}
+                      {canEditAppointment(appointment) && (
+                        <div className="edit-delete-actions">
+                          <button 
+                            className="action-btn-small edit-btn"
+                            onClick={() => {
+                              // Aquí podrías implementar la edición completa
+                              alert('La edición de citas está disponible');
+                            }}
+                            title="Editar cita"
+                          >
+                            <FontAwesomeIcon icon={faEdit} />
+                          </button>
+                          <button 
+                            className="action-btn-small delete-btn"
+                            onClick={() => handleDeleteAppointment(appointment.appointment_ID)}
+                            title="Eliminar cita"
+                          >
+                            <FontAwesomeIcon icon={faTrash} />
+                          </button>
+                        </div>
+                      )}
+                      
+                      {/* Mostrar icono de bloqueo si tiene procedimiento */}
+                      {hasProcedure(appointment) && (
+                        <div className="locked-indicator" title="Cita bloqueada - Ya tiene procedimiento">
+                          <FontAwesomeIcon icon={faLock} />
+                          <span>Bloqueada</span>
+                        </div>
+                      )}
+                      
+                      {/* Icono expandir */}
                       <FontAwesomeIcon 
                         icon={expandedAppointments[appointment.appointment_ID] ? faChevronUp : faChevronDown} 
-                        className="expand-icon"
+                        className="expand-icon-horizontal"
+                        onClick={() => toggleExpandAppointment(appointment.appointment_ID)}
                       />
                     </div>
                   </div>
                 </div>
-              </div>
-              
-              {/* Detalles expandidos */}
-              {expandedAppointments[appointment.appointment_ID] && (
-                <div className="appointment-card-details">
-                  {/* Información del paciente */}
-                  <div className="patient-info-section">
-                    <h4 className="section-title">
-                      <FontAwesomeIcon icon={faUser} />
-                      Información del Paciente
-                    </h4>
-                    <div className="patient-details">
-                      <div className="patient-detail">
-                        <span className="detail-label">Nombre:</span>
-                        <span className="detail-value">{appointment.patient_name || 'No disponible'}</span>
-                      </div>
-                      <div className="patient-detail">
-                        <span className="detail-label">
-                          <FontAwesomeIcon icon={faIdCard} />
-                          Identificación:
-                        </span>
-                        <span className="detail-value">{appointment.patient_identification || 'No disponible'}</span>
-                      </div>
-                      <div className="patient-detail">
-                        <span className="detail-label">
-                          <FontAwesomeIcon icon={faPhone} />
-                          Teléfono:
-                        </span>
-                        <span className="detail-value">{appointment.patient_phone || 'No disponible'}</span>
-                      </div>
-                    </div>
-                  </div>
 
-                  {/* Detalles de la cita */}
-                  <div className="appointment-details-section">
-                    <h4 className="section-title">
-                      <FontAwesomeIcon icon={faCalendarAlt} />
-                      Detalles de la Cita
-                    </h4>
-                    <div className="appointment-details">
-                      <div className="appointment-detail">
-                        <span className="detail-label">Servicio:</span>
-                        <span className="detail-value">{appointment.query_type || 'No especificado'}</span>
-                      </div>
-                      <div className="appointment-detail">
-                        <span className="detail-label">Fecha y hora:</span>
-                        <span className="detail-value">{formatDateTime(appointment.appointment_date)}</span>
-                      </div>
-                      <div className="appointment-detail">
-                        <span className="detail-label">Estado:</span>
-                        <span 
-                          className="detail-value status-badge"
-                          style={{ 
-                            backgroundColor: getStatusColor(appointment.state) + '20',
-                            color: getStatusColor(appointment.state)
-                          }}
-                        >
-                          <FontAwesomeIcon icon={getStatusIcon(appointment.state)} />
-                          {getStatusLabel(appointment.state)}
-                        </span>
-                      </div>
-                      <div className="appointment-detail">
-                        <span className="detail-label">Tipo:</span>
-                        <span 
-                          className="detail-value type-badge"
-                          style={{ 
-                            backgroundColor: getTypeColor(appointment.is_orthodontics) + '20',
-                            color: getTypeColor(appointment.is_orthodontics)
-                          }}
-                        >
-                          <FontAwesomeIcon icon={getTypeIcon(appointment.is_orthodontics)} />
-                          {getTypeLabel(appointment.is_orthodontics)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Botones de acción */}
-                  <div className="appointment-action-buttons">
-                    {appointment.state === 'scheduled' && (
-                      <button 
-                        className="action-btn confirm-btn"
-                        onClick={() => handleUpdateAppointment(appointment.appointment_ID, 'confirmed')}
-                      >
-                        <FontAwesomeIcon icon={faCheckCircle} />
-                        Confirmar Cita
-                      </button>
-                    )}
-                    {appointment.state === 'confirmed' && (
-                      <button 
-                        className="action-btn complete-btn"
-                        onClick={() => handleUpdateAppointment(appointment.appointment_ID, 'completed')}
-                      >
-                        <FontAwesomeIcon icon={faCheckCircle} />
-                        Marcar como Completada
-                      </button>
-                    )}
-                    {(appointment.state === 'scheduled' || appointment.state === 'confirmed') && (
-                      <button 
-                        className="action-btn cancel-btn"
-                        onClick={() => handleUpdateAppointment(appointment.appointment_ID, 'cancelled')}
-                      >
-                        <FontAwesomeIcon icon={faTimesCircle} />
-                        Cancelar Cita
-                      </button>
-                    )}
-                    {appointment.state === 'completed' && (
-                      <button 
-                        className="action-btn convert-full-btn"
-                        onClick={() => openConvertModal(appointment)}
-                      >
-                        <FontAwesomeIcon icon={faExchangeAlt} />
-                        Registrar como Procedimiento
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Observaciones */}
-                  {appointment.observations && (
-                    <div className="observations-section">
+                {/* Detalles expandidos */}
+                {expandedAppointments[appointment.appointment_ID] && (
+                  <div className="appointment-details-expanded">
+                    <div className="expanded-section">
                       <h4 className="section-title">
                         <FontAwesomeIcon icon={faCalendarAlt} />
-                        Observaciones
+                        Detalles Completos
                       </h4>
-                      <div className="observations-content">
-                        <p>{appointment.observations}</p>
+                      <div className="expanded-details-grid">
+                        <div className="expanded-detail">
+                          <span className="detail-label">Fecha y hora completa:</span>
+                          <span className="detail-value">{formatDateTime(appointment.appointment_date)}</span>
+                        </div>
+                        <div className="expanded-detail">
+                          <span className="detail-label">Estado:</span>
+                          <span 
+                            className="detail-value status-badge-expanded"
+                            style={{ 
+                              backgroundColor: getStatusColor(appointment.state) + '20',
+                              color: getStatusColor(appointment.state)
+                            }}
+                          >
+                            <FontAwesomeIcon icon={getStatusIcon(appointment.state)} />
+                            {getStatusLabel(appointment.state)}
+                          </span>
+                        </div>
+                        <div className="expanded-detail">
+                          <span className="detail-label">Tipo de servicio:</span>
+                          <span 
+                            className="detail-value type-badge-expanded"
+                            style={{ 
+                              backgroundColor: getTypeColor(appointment.is_orthodontics) + '20',
+                              color: getTypeColor(appointment.is_orthodontics)
+                            }}
+                          >
+                            <FontAwesomeIcon icon={getTypeIcon(appointment.is_orthodontics)} />
+                            {getTypeLabel(appointment.is_orthodontics)}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  )}
-                </div>
-              )}
+
+                    {/* Observaciones */}
+                    {appointment.observations && (
+                      <div className="expanded-section">
+                        <h4 className="section-title">
+                          <FontAwesomeIcon icon={faCalendarAlt} />
+                          Observaciones
+                        </h4>
+                        <div className="observations-content-expanded">
+                          <p>{appointment.observations}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Información del procedimiento si existe */}
+                    {hasProcedure(appointment) && (
+                      <div className="expanded-section">
+                        <h4 className="section-title">
+                          <FontAwesomeIcon icon={faExchangeAlt} />
+                          Procedimiento Registrado
+                        </h4>
+                        <div className="procedure-info">
+                          <p className="procedure-message">
+                            ✅ Esta cita ya fue registrada como procedimiento. 
+                            {appointment.is_orthodontics 
+                              ? ' Puede ver los detalles en la sección de Ortodoncia.' 
+                              : ' Puede ver los detalles en la sección de Procedimientos.'}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Modal para agregar cita */}
+      {/* Modal para agregar cita - MODIFICADO CON BUSCADOR */}
       {showAddModal && (
         <div className="modal-overlay">
           <div className="modal-content">
@@ -952,14 +1030,17 @@ const AppointmentPage = () => {
               </h3>
               <button 
                 className="close-modal-btn"
-                onClick={() => setShowAddModal(false)}
+                onClick={() => {
+                  setShowAddModal(false);
+                  setPatientSearchTerm('');
+                }}
               >
                 <FontAwesomeIcon icon={faTimes} />
               </button>
             </div>
             
             <form onSubmit={handleAddAppointment} className="appointment-form">
-              {/* Switch para ortodoncia */}
+              {/* Switch para ortodoncia - MODIFICADO */}
               <div className="form-group">
                 <label className="form-label">
                   <div className="switch-container">
@@ -968,10 +1049,7 @@ const AppointmentPage = () => {
                       <input
                         type="checkbox"
                         checked={newAppointment.is_orthodontics}
-                        onChange={(e) => setNewAppointment({
-                          ...newAppointment,
-                          is_orthodontics: e.target.checked
-                        })}
+                        onChange={(e) => handleOrthodonticsSwitch(e.target.checked)}
                       />
                       <span className="slider round"></span>
                     </label>
@@ -982,7 +1060,7 @@ const AppointmentPage = () => {
                 </label>
               </div>
 
-              {/* Campo de nombre del servicio */}
+              {/* Campo de nombre del servicio - MODIFICADO */}
               <div className="form-group">
                 <label className="form-label">Nombre del servicio:</label>
                 <input
@@ -995,30 +1073,88 @@ const AppointmentPage = () => {
                   })}
                   className="form-input"
                   placeholder={newAppointment.is_orthodontics ? 
-                    "Ej: Consulta inicial, ajuste de brackets, etc." : 
+                    "Ortodoncia (automático)" : 
                     "Ej: Limpieza dental, extracción, etc."}
+                  disabled={newAppointment.is_orthodontics}
+                  readOnly={newAppointment.is_orthodontics}
                 />
+                {newAppointment.is_orthodontics && (
+                  <small className="form-help-text">El servicio se establece automáticamente como "Ortodoncia"</small>
+                )}
               </div>
 
-              {/* Paciente */}
-              <div className="form-group">
+              {/* Paciente CON BUSCADOR MEJORADO */}
+              <div className="form-group" ref={patientSearchRef}>
                 <label className="form-label">Paciente:</label>
-                <select
-                  required
-                  value={newAppointment.patient_id}
-                  onChange={(e) => setNewAppointment({
-                    ...newAppointment,
-                    patient_id: e.target.value
-                  })}
-                  className="form-select"
-                >
-                  <option value="">Seleccionar paciente...</option>
-                  {patients.map(patient => (
-                    <option key={patient.Patient_ID} value={patient.Patient_ID}>
-                      {patient.first_name} {patient.first_last_name} - {patient.identification}
-                    </option>
-                  ))}
-                </select>
+                <div className="patient-search-container">
+                  <div className="search-box-patient">
+                    <FontAwesomeIcon icon={faSearch} className="search-icon-patient" />
+                    <input
+                      type="text"
+                      required
+                      value={patientSearchTerm || (() => {
+                        const selectedPatient = patients.find(p => 
+                          p.Patient_ID.toString() === newAppointment.patient_id
+                        );
+                        return selectedPatient ? 
+                          `${selectedPatient.first_name} ${selectedPatient.first_last_name} - ${selectedPatient.identification}` : 
+                          '';
+                      })()}
+                      onChange={(e) => {
+                        setPatientSearchTerm(e.target.value);
+                        if (!showPatientSearch) setShowPatientSearch(true);
+                      }}
+                      onFocus={() => setShowPatientSearch(true)}
+                      className="form-input"
+                      placeholder="Buscar paciente por nombre, cédula o teléfono..."
+                    />
+                    {patientSearchTerm && (
+                      <button 
+                        type="button"
+                        className="clear-search-btn-patient"
+                        onClick={() => {
+                          setPatientSearchTerm('');
+                          setNewAppointment({...newAppointment, patient_id: ''});
+                        }}
+                      >
+                        <FontAwesomeIcon icon={faTimes} />
+                      </button>
+                    )}
+                  </div>
+                  
+                  {showPatientSearch && patients.length > 0 && (
+                    <div className="patient-search-results">
+                      <div className="search-results-header">
+                        <span>Seleccione un paciente ({filteredPatients.length} resultados)</span>
+                        {patients.length > 10 && (
+                          <small>Usa el buscador para filtrar entre {patients.length} pacientes</small>
+                        )}
+                      </div>
+                      <div className="patient-results-list">
+                        {filteredPatients.slice(0, 8).map(patient => (
+                          <div 
+                            key={patient.Patient_ID}
+                            className={`patient-result-item ${newAppointment.patient_id === patient.Patient_ID.toString() ? 'selected' : ''}`}
+                            onClick={() => handleSelectPatient(patient)}
+                          >
+                            <div className="patient-result-name">
+                              <strong>{patient.first_name} {patient.first_last_name}</strong>
+                            </div>
+                            <div className="patient-result-details">
+                              <span>Cédula: {patient.identification || 'N/A'}</span>
+                              <span>Tel: {patient.number_phone || 'N/A'}</span>
+                            </div>
+                          </div>
+                        ))}
+                        {filteredPatients.length === 0 && (
+                          <div className="no-patient-results">
+                            No se encontraron pacientes con "{patientSearchTerm}"
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Fecha y hora */}
@@ -1056,11 +1192,18 @@ const AppointmentPage = () => {
                 <button 
                   type="button" 
                   className="btn-cancel"
-                  onClick={() => setShowAddModal(false)}
+                  onClick={() => {
+                    setShowAddModal(false);
+                    setPatientSearchTerm('');
+                  }}
                 >
                   Cancelar
                 </button>
-                <button type="submit" className="btn-submit">
+                <button 
+                  type="submit" 
+                  className="btn-submit"
+                  disabled={!newAppointment.patient_id}
+                >
                   <FontAwesomeIcon icon={faPlus} />
                   Crear Cita
                 </button>
@@ -1070,7 +1213,7 @@ const AppointmentPage = () => {
         </div>
       )}
 
-      {/* Modal para convertir cita en procedimiento */}
+      {/* Modal para convertir cita en procedimiento - MODIFICADO */}
       {showConvertModal && selectedAppointment && (
         <div className="modal-overlay">
           <div className="modal-content">
@@ -1095,14 +1238,23 @@ const AppointmentPage = () => {
               </button>
             </div>
             
+            {/* Información de la cita con advertencia si ya tiene procedimiento */}
             <div className="appointment-info">
               <h4>Información de la cita:</h4>
               <p><strong>Paciente:</strong> {selectedAppointment.patient_name}</p>
               <p><strong>Fecha:</strong> {formatDateTime(selectedAppointment.appointment_date)}</p>
               <p><strong>Tipo:</strong> {selectedAppointment.is_orthodontics ? 'Ortodoncia' : 'Procedimiento Regular'}</p>
               <p><strong>Consulta:</strong> {selectedAppointment.query_type}</p>
+              
+              {hasProcedure(selectedAppointment) && (
+                <div className="warning-alert">
+                  <FontAwesomeIcon icon={faLock} />
+                  <strong>¡ATENCIÓN!</strong> Esta cita ya tiene un procedimiento registrado y no puede ser modificada.
+                </div>
+              )}
             </div>
             
+            {/* Formulario deshabilitado si ya tiene procedimiento */}
             <form onSubmit={handleConvertToProcedure} className="procedure-form">
               <div className="form-group">
                 <label className="form-label">Descripción del procedimiento:</label>
@@ -1116,6 +1268,7 @@ const AppointmentPage = () => {
                   })}
                   className="form-input"
                   placeholder="Ej: Limpieza dental, ajuste de brackets, etc."
+                  disabled={hasProcedure(selectedAppointment)}
                 />
               </div>
 
@@ -1135,6 +1288,7 @@ const AppointmentPage = () => {
                   })}
                   className="form-input"
                   placeholder="0.00"
+                  disabled={hasProcedure(selectedAppointment)}
                 />
               </div>
 
@@ -1150,6 +1304,7 @@ const AppointmentPage = () => {
                     payment_method: e.target.value
                   })}
                   className="form-select"
+                  disabled={hasProcedure(selectedAppointment)}
                 >
                   {PAYMENT_METHODS.map(method => (
                     <option key={method} value={method}>{method}</option>
@@ -1168,6 +1323,7 @@ const AppointmentPage = () => {
                   className="form-textarea"
                   placeholder="Notas sobre el procedimiento..."
                   rows="3"
+                  disabled={hasProcedure(selectedAppointment)}
                 />
               </div>
 
@@ -1192,13 +1348,19 @@ const AppointmentPage = () => {
                     });
                   }}
                 >
-                  Cancelar
+                  {hasProcedure(selectedAppointment) ? 'Cerrar' : 'Cancelar'}
                 </button>
-                <button type="submit" className="btn-submit">
+                <button 
+                  type="submit" 
+                  className="btn-submit"
+                  disabled={hasProcedure(selectedAppointment)}
+                >
                   <FontAwesomeIcon icon={faCheckCircle} />
-                  {selectedAppointment.is_orthodontics ? 
-                    'Registrar Ortodoncia' : 
-                    'Registrar Procedimiento'}
+                  {hasProcedure(selectedAppointment) ? 
+                    'Ya registrado' : 
+                    (selectedAppointment.is_orthodontics ? 
+                      'Registrar Ortodoncia' : 
+                      'Registrar Procedimiento')}
                 </button>
               </div>
             </form>

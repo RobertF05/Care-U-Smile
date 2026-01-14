@@ -352,79 +352,242 @@ const fetchProcedures = async (filters = {}) => {
   };
 
   // ========== GASTOS ==========
-  const fetchBills = async (filters = {}) => {
-    try {
-      const queryParams = new URLSearchParams(filters).toString();
-      const endpoint = queryParams ? `/bills?${queryParams}` : '/bills';
-      const data = await apiFetch(endpoint);
-      
-      setBills(data.data);
-      
-      // Calcular total de gastos
-      const totalExpenses = data.data.reduce((sum, bill) => sum + (bill.amount || 0), 0);
-      setStats(prev => ({ ...prev, totalExpenses }));
-      
-      return data;
-    } catch (error) {
-      console.error('Error cargando gastos:', error);
-      return { success: false, error: error.message };
-    }
-  };
+const fetchBills = async (filters = {}) => {
+  try {
+    const queryParams = new URLSearchParams(filters).toString();
+    const endpoint = queryParams ? `/bills?${queryParams}` : '/bills';
+    const data = await apiFetch(endpoint);
+    
+    setBills(data.data || []);
+    
+    // Calcular total de gastos
+    const totalExpenses = (data.data || []).reduce((sum, bill) => sum + (bill.amount || 0), 0);
+    setStats(prev => ({ ...prev, totalExpenses }));
+    
+    return data;
+  } catch (error) {
+    console.error('Error cargando gastos:', error);
+    return { success: false, error: error.message };
+  }
+};
 
-  const getRecurrentBills = async () => {
-    try {
-      const data = await apiFetch('/bills/recurrent/all');
-      return data;
-    } catch (error) {
-      console.error('Error obteniendo gastos recurrentes:', error);
-      return { success: false, error: error.message };
+const getBillById = async (id) => {
+  try {
+    const data = await apiFetch(`/bills/${id}`);
+    return data;
+  } catch (error) {
+    console.error('Error obteniendo gasto:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+const createBill = async (billData) => {
+  try {
+    console.log('📝 Datos del gasto a crear:', billData);
+    
+    const data = await apiFetch('/bills', {
+      method: 'POST',
+      body: JSON.stringify(billData),
+    });
+    
+    console.log('✅ Gasto creado exitosamente:', data);
+    
+    setBills(prev => [...prev, data.data]);
+    
+    // Actualizar estadísticas
+    setStats(prev => ({ 
+      ...prev, 
+      totalExpenses: prev.totalExpenses + (data.data.amount || 0) 
+    }));
+    
+    return data;
+  } catch (error) {
+    console.error('❌ Error detallado creando gasto:', {
+      error: error.message,
+      billData,
+      timestamp: new Date().toISOString()
+    });
+    setError('Error al crear gasto: ' + error.message);
+    return { success: false, error: error.message };
+  }
+};
+
+const updateBill = async (id, billData) => {
+  try {
+    const data = await apiFetch(`/bills/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(billData),
+    });
+    
+    // Actualizar el estado local
+    setBills(prev => 
+      prev.map(bill => bill.bill_ID === id ? data.data : bill)
+    );
+    
+    // Recalcular estadísticas
+    const updatedBills = bills.map(bill => 
+      bill.bill_ID === id ? data.data : bill
+    );
+    const totalExpenses = updatedBills.reduce((sum, bill) => sum + (bill.amount || 0), 0);
+    setStats(prev => ({ ...prev, totalExpenses }));
+    
+    return data;
+  } catch (error) {
+    console.error('Error actualizando gasto:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+const deleteBill = async (id) => {
+  try {
+    const data = await apiFetch(`/bills/${id}`, {
+      method: 'DELETE',
+    });
+    
+    // Encontrar el gasto a eliminar para actualizar estadísticas
+    const billToDelete = bills.find(bill => bill.bill_ID === id);
+    
+    // Actualizar el estado local
+    setBills(prev => prev.filter(bill => bill.bill_ID !== id));
+    
+    // Actualizar estadísticas
+    if (billToDelete) {
+      setStats(prev => ({ 
+        ...prev, 
+        totalExpenses: prev.totalExpenses - (billToDelete.amount || 0) 
+      }));
     }
-  };
+    
+    return data;
+  } catch (error) {
+    console.error('Error eliminando gasto:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+const getRecurrentBills = async () => {
+  try {
+    const data = await apiFetch('/bills/recurrent/all');
+    return data;
+  } catch (error) {
+    console.error('Error obteniendo gastos recurrentes:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+const getExpenseStats = async (startDate, endDate) => {
+  try {
+    const queryParams = new URLSearchParams({ startDate, endDate }).toString();
+    const data = await apiFetch(`/bills/stats/expenses?${queryParams}`);
+    return data;
+  } catch (error) {
+    console.error('Error obteniendo estadísticas de gastos:', error);
+    return { success: false, error: error.message };
+  }
+};
 
   // ========== CIERRES MENSUALES ==========
-  const fetchMonthlyClosings = async () => {
-    try {
-      const data = await apiFetch('/monthly-closings');
-      
-      setMonthlyClosings(data.data);
-      
-      // Obtener último cierre
-      if (data.data.length > 0) {
-        const lastClosing = data.data[0]; // Ordenados descendente
-        setStats(prev => ({ 
-          ...prev, 
-          monthlyIncome: lastClosing.total_general_income || 0 
-        }));
-      }
-      
-      return data;
-    } catch (error) {
-      console.error('Error cargando cierres:', error);
-      return { success: false, error: error.message };
+const fetchMonthlyClosings = async () => {
+  try {
+    const data = await apiFetch('/monthly-closings');
+    
+    setMonthlyClosings(data.data || []);
+    
+    // Obtener último cierre
+    if (data.data && data.data.length > 0) {
+      const lastClosing = data.data[0]; // Ordenados descendente
+      setStats(prev => ({ 
+        ...prev, 
+        monthlyIncome: lastClosing.total_general_income || 0 
+      }));
     }
-  };
+    
+    return data;
+  } catch (error) {
+    console.error('Error cargando cierres:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+const getMonthlyClosingById = async (id) => {
+  try {
+    const data = await apiFetch(`/monthly-closings/${id}`);
+    return data;
+  } catch (error) {
+    console.error('Error obteniendo cierre:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// En AppContext.jsx, actualiza createMonthlyClosing:
+const createMonthlyClosing = async (closingData) => {
+  try {
+    console.log('📝 Datos del cierre a crear:', closingData);
+    
+    const data = await apiFetch('/monthly-closings', {
+      method: 'POST',
+      body: JSON.stringify(closingData),
+    });
+    
+    console.log('✅ Cierre creado exitosamente:', data);
+    
+    // Asegurar que los datos sean consistentes
+    const formattedClosing = {
+      ...data.data,
+      closing_ID: data.data.closing_ID || data.data.id,
+      id: data.data.closing_ID || data.data.id,
+      // Asegurar cálculos correctos
+      total_clinic_income: (data.data.total_general_income || 0) + (data.data.total_clinical_orthodontic_income || 0),
+      total_expenses_including_doctor: (data.data.total_fixed_expenses || 0) + (data.data.total_variable_expenses || 0)
+    };
+    
+    setMonthlyClosings(prev => [formattedClosing, ...prev]);
+    
+    return data;
+  } catch (error) {
+    console.error('❌ Error detallado creando cierre:', {
+      error: error.message,
+      closingData,
+      timestamp: new Date().toISOString()
+    });
+    setError('Error al crear cierre: ' + error.message);
+    return { success: false, error: error.message };
+  }
+};
+
+const getFinancialSummary = async (startDate, endDate) => {
+  try {
+    const queryParams = new URLSearchParams({ startDate, endDate }).toString();
+    const data = await apiFetch(`/monthly-closings/summary/financial?${queryParams}`);
+    return data;
+  } catch (error) {
+    console.error('Error obteniendo resumen financiero:', error);
+    return { success: false, error: error.message };
+  }
+};
 
   // ========== CARGA INICIAL ==========
-  useEffect(() => {
-    if (user) {
-      // Cargar datos iniciales
-      const loadInitialData = async () => {
-        await Promise.all([
-          fetchPatients(),
-          fetchAppointments(),
-          fetchProceduresNormal(), // Cambiado a fetchProceduresNormal
-          fetchMonthlyClosings(),
-          // Obtener estadísticas del mes actual
-          getIncomeStats(
-            new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
-            new Date().toISOString().split('T')[0]
-          )
-        ]);
-      };
-      
-      loadInitialData();
-    }
-  }, [user]);
+useEffect(() => {
+  if (user) {
+    // Cargar datos iniciales
+    const loadInitialData = async () => {
+      await Promise.all([
+        fetchPatients(),
+        fetchAppointments(),
+        fetchProceduresNormal(),
+        fetchBills(), // ← AÑADIR ESTA LÍNEA
+        fetchMonthlyClosings(),
+        // Obtener estadísticas del mes actual
+        getIncomeStats(
+          new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
+          new Date().toISOString().split('T')[0]
+        )
+      ]);
+    };
+    
+    loadInitialData();
+  }
+}, [user]);
 
   const value = {
     // Estados
@@ -461,10 +624,18 @@ const fetchProcedures = async (filters = {}) => {
     
     // Gastos
     fetchBills,
+    getBillById,
+    createBill,
+    updateBill,
+    deleteBill,
     getRecurrentBills,
+    getExpenseStats,
     
     // Cierres
     fetchMonthlyClosings,
+    getMonthlyClosingById,
+    createMonthlyClosing,
+    getFinancialSummary,
     
     // Utilerías
     clearError: () => setError(null),

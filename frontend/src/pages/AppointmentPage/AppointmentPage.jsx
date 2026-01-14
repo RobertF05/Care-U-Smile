@@ -274,11 +274,11 @@ const AppointmentPage = () => {
   };
 
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('es-CR', {
-      style: 'currency',
-      currency: 'CRC'
-    }).format(amount || 0);
-  };
+  return new Intl.NumberFormat('es-NI', {
+    style: 'currency',
+    currency: 'NIO'
+  }).format(amount || 0);
+};
 
   // Funciones para citas
   const toggleExpandAppointment = (appointmentId) => {
@@ -1274,7 +1274,7 @@ const AppointmentPage = () => {
 
               <div className="form-group">
                 <label className="form-label">
-                  <FontAwesomeIcon icon={faMoneyBillWave} /> Costo total (CRC):
+                  <FontAwesomeIcon icon={faMoneyBillWave} /> Costo total (NIO):
                 </label>
                 <input
                   type="number"

@@ -228,41 +228,47 @@ const Procedure = {
     return data;
   },
 
-  // Estadísticas de ingresos
   async getIncomeStats(startDate, endDate) {
-    // Obtener todos los procedimientos en el período
-    const { data, error } = await supabaseAdmin
-      .from('procedures')
-      .select('total_cost, is_orthodontics')
-      .gte('procedure_date', startDate)
-      .lte('procedure_date', endDate);
+  // Obtener todos los procedimientos del período
+  const { data, error } = await supabaseAdmin
+    .from('procedures')
+    .select('total_cost, is_orthodontics')
+    .gte('procedure_date', startDate)
+    .lte('procedure_date', endDate);
+  
+  if (error) throw error;
+  
+  let generalIncome = 0; // Procedimientos generales (100% clínica)
+  let clinicOrthodonticIncome = 0; // 40% de ortodoncia (clínica)
+  let doctorOrthodonticIncome = 0; // 60% de ortodoncia (doctora - GASTO)
+  let totalOrthodontic = 0; // Total ortodoncia (100%)
+  
+  data.forEach(procedure => {
+    const cost = procedure.total_cost || 0;
     
-    if (error) throw error;
-    
-    let totalGeneral = 0;
-    let totalOrtho = 0;
-    let orthoCount = 0;
-    let generalCount = 0;
-    
-    data.forEach(proc => {
-      if (proc.is_orthodontics) {
-        totalOrtho += proc.total_cost;
-        orthoCount++;
-      } else {
-        totalGeneral += proc.total_cost;
-        generalCount++;
-      }
-    });
-    
-    return {
-      total_income: totalGeneral + totalOrtho,
-      clinic_income: totalGeneral + (totalOrtho * 0.4),
-      doctor_income: totalOrtho * 0.6,
-      total_procedures: data.length,
-      orthodontics_count: orthoCount,
-      general_count: generalCount
-    };
-  },
+    if (procedure.is_orthodontics) {
+      // Ortodoncia: 40% clínica, 60% doctora
+      clinicOrthodonticIncome += cost * 0.4;
+      doctorOrthodonticIncome += cost * 0.6;
+      totalOrthodontic += cost;
+    } else {
+      // Procedimientos generales: 100% clínica
+      generalIncome += cost;
+    }
+  });
+  
+  // IMPORTANTE: clinic_income NO debe incluir generalIncome duplicado
+  // clinic_income ya ES generalIncome + clinicOrthodonticIncome
+  const clinicIncome = generalIncome + clinicOrthodonticIncome;
+  
+  return {
+    general_income: generalIncome, // Solo procedimientos generales
+    clinic_income: clinicIncome, // Lo que recibe la clínica (generales + 40% ortodoncia)
+    doctor_income: doctorOrthodonticIncome, // Lo que se paga a doctora (GASTO)
+    total_orthodontic: totalOrthodontic,
+    total_all_procedures: generalIncome + totalOrthodontic
+  };
+},
 
   // Contar procedimientos totales
   async count() {

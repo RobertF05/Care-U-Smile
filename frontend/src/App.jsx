@@ -6,6 +6,8 @@ import PatientsPage from './pages/PatientsPage/PatientsPage.jsx'
 import ProceduresPage from './pages/ProceduresPage/ProceduresPage.jsx';
 import OrthodonticsPage from './pages/OrthodonticsPage/OrthodonticsPage.jsx';
 import AppointmentPage from './pages/AppointmentPage/AppointmentPage.jsx';
+import MonthlyClosingsPage from './pages/MonthlyClosingsPage/MonthlyClosingsPage.jsx';
+import BillsPage from './pages/BillsPage/BillsPage.jsx';
 import Login from './pages/LoginPage/LoginPage.jsx'
 import { AuthContext } from './context/AuthContext' // ✅ Importar el contexto
 import './App.css'
@@ -51,19 +53,9 @@ function App() {
       case 'citas':
         return <AppointmentPage />
       case 'gastos':
-        return (
-          <div className="page-content">
-            <h1>💰 Gastos</h1>
-            <p>Control de gastos - Próximamente</p>
-          </div>
-        )
+        return <BillsPage />
       case 'informes':
-        return (
-          <div className="page-content">
-            <h1>📊 Informes</h1>
-            <p>Reportes y estadísticas - Próximamente</p>
-          </div>
-        )
+        return <MonthlyClosingsPage />
       case 'configuracion':
         return (
           <div className="page-content">

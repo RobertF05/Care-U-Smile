@@ -1,0 +1,789 @@
+/* Variables específicas para cierres */
+:root {
+  --profit-green: #4CAF50;
+  --loss-red: #F44336;
+  --income-blue: #2196F3;
+  --expense-orange: #FF9800;
+  --text-primary: #37474F;
+  --text-secondary: #78909C;
+  --bg-primary: #FFFFFF;
+  --bg-secondary: #F8F9FA;
+  --border-color: #E0E0E0;
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.15);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.2);
+  --border-radius-sm: 8px;
+  --border-radius-md: 12px;
+  --border-radius-lg: 16px;
+}
+
+/* Contenedor principal */
+.closings-container {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem;
+  animation: fadeIn 0.5s ease;
+  box-sizing: border-box;
+}
+
+/* Header (reutilizado de BillsPage con ajustes) */
+.closings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
+.header-left h2 {
+  color: #2196F3;
+  font-size: 2.2rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.header-icon {
+  font-size: 2rem;
+  color: #2196F3;
+}
+
+.subtitle {
+  color: var(--text-secondary);
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+/* Botones */
+.primary-btn {
+  background: linear-gradient(135deg, #2196F3, #1976D2);
+  color: white;
+  box-shadow: var(--shadow-md);
+}
+
+.primary-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+/* Filtros (reutilizado de BillsPage) */
+.filter-section {
+  background: var(--bg-secondary);
+  border-radius: var(--border-radius-lg);
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  border: 1px solid var(--border-color);
+  animation: slideDown 0.3s ease;
+}
+
+/* Estadísticas rápidas */
+.quick-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2.5rem;
+}
+
+.stat-card {
+  background: var(--bg-primary);
+  border-radius: var(--border-radius-md);
+  padding: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  box-shadow: var(--shadow-sm);
+  border: 2px solid transparent;
+  transition: all 0.3s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-5px);
+  box-shadow: var(--shadow-md);
+}
+
+.stat-card.total {
+  border-color: #2196F3;
+}
+
+.stat-card.income {
+  border-color: #4CAF50;
+}
+
+.stat-card.expenses {
+  border-color: #FF9800;
+}
+
+.stat-card.profit {
+  border-color: #9C27B0;
+}
+
+.stat-icon {
+  width: 60px;
+  height: 60px;
+  border-radius: var(--border-radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.8rem;
+}
+
+.stat-card.total .stat-icon {
+  background: rgba(33, 150, 243, 0.1);
+  color: #2196F3;
+}
+
+.stat-card.income .stat-icon {
+  background: rgba(76, 175, 80, 0.1);
+  color: #4CAF50;
+}
+
+.stat-card.expenses .stat-icon {
+  background: rgba(255, 152, 0, 0.1);
+  color: #FF9800;
+}
+
+.stat-card.profit .stat-icon {
+  background: rgba(156, 39, 176, 0.1);
+  color: #9C27B0;
+}
+
+.stat-content {
+  flex: 1;
+}
+
+.stat-value {
+  display: block;
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+  margin-bottom: 0.25rem;
+}
+
+.stat-label {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+/* Estadísticas de desempeño */
+.performance-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-bottom: 2.5rem;
+}
+
+.performance-card {
+  background: var(--bg-primary);
+  border-radius: var(--border-radius-md);
+  padding: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  box-shadow: var(--shadow-sm);
+  border: 2px solid transparent;
+}
+
+.performance-card.best {
+  border-color: #4CAF50;
+}
+
+.performance-card.worst {
+  border-color: #F44336;
+}
+
+.performance-card svg {
+  font-size: 2.5rem;
+}
+
+.performance-card.best svg {
+  color: #4CAF50;
+}
+
+.performance-card.worst svg {
+  color: #F44336;
+}
+
+.performance-content {
+  flex: 1;
+}
+
+.performance-title {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.performance-value {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* Sin cierres */
+.no-closings {
+  text-align: center;
+  padding: 4rem 2rem;
+  background: var(--bg-secondary);
+  border-radius: var(--border-radius-lg);
+  border: 3px dashed var(--border-color);
+}
+
+.no-closings-icon {
+  font-size: 4rem;
+  color: var(--border-color);
+  margin-bottom: 1.5rem;
+}
+
+.no-closings h3 {
+  color: var(--text-primary);
+  margin-bottom: 0.75rem;
+  font-size: 1.5rem;
+}
+
+.no-closings p {
+  color: var(--text-secondary);
+  margin: 0 0 2rem 0;
+  font-size: 1.1rem;
+}
+
+/* Lista de cierres */
+.closings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* Tarjeta de cierre */
+.closing-card {
+  background: var(--bg-primary);
+  border-radius: var(--border-radius-md);
+  padding: 1.5rem;
+  border: 2px solid var(--border-color);
+  border-left-width: 6px;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.3s ease;
+}
+
+.closing-card:hover {
+  border-color: #2196F3;
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.closing-main-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.5rem;
+}
+
+.closing-left {
+  flex: 1;
+}
+
+.closing-period h4 {
+  color: var(--text-primary);
+  font-size: 1.3rem;
+  margin: 0 0 0.5rem 0;
+  font-weight: 700;
+}
+
+.closing-date {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.closing-comment {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  padding: 0.5rem;
+  background: var(--bg-secondary);
+  border-radius: var(--border-radius-sm);
+  border-left: 3px solid #2196F3;
+}
+
+.closing-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1rem;
+}
+
+.closing-profit {
+  text-align: right;
+}
+
+.profit-value {
+  display: block;
+  font-size: 1.8rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.profit-label {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.5rem;
+}
+
+.profit-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.8rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.profit-indicator.positive {
+  background: rgba(76, 175, 80, 0.1);
+  color: #4CAF50;
+}
+
+.profit-indicator.negative {
+  background: rgba(244, 67, 54, 0.1);
+  color: #F44336;
+}
+
+.closing-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.action-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 1rem;
+}
+
+.action-btn.view {
+  background: rgba(33, 150, 243, 0.1);
+  color: #2196F3;
+}
+
+.action-btn.view:hover {
+  background: #2196F3;
+  color: white;
+  transform: scale(1.1);
+}
+
+.action-btn.print {
+  background: rgba(96, 125, 139, 0.1);
+  color: #607D8B;
+}
+
+.action-btn.print:hover {
+  background: #607D8B;
+  color: white;
+  transform: scale(1.1);
+}
+
+.action-btn.download {
+  background: rgba(76, 175, 80, 0.1);
+  color: #4CAF50;
+}
+
+.action-btn.download:hover {
+  background: #4CAF50;
+  color: white;
+  transform: scale(1.1);
+}
+
+.expand-icon {
+  color: var(--text-secondary);
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  padding: 0.5rem;
+  border-radius: 50%;
+  margin-left: 0.5rem;
+}
+
+.expand-icon:hover {
+  color: #2196F3;
+  background: rgba(33, 150, 243, 0.1);
+}
+
+/* Detalles expandidos */
+.closing-details {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 2px solid var(--border-color);
+  animation: slideDown 0.3s ease;
+}
+
+.financial-summary h5 {
+  color: var(--text-primary);
+  margin-bottom: 1rem;
+  font-size: 1rem;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.summary-item {
+  background: var(--bg-secondary);
+  border-radius: var(--border-radius-sm);
+  padding: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-left: 4px solid transparent;
+}
+
+.summary-item.income {
+  border-left-color: #4CAF50;
+}
+
+.summary-item.income-ortho {
+  border-left-color: #2196F3;
+}
+
+.summary-item.income-doctor {
+  border-left-color: #673AB7;
+}
+
+.summary-item.expense-fixed {
+  border-left-color: #FF9800;
+}
+
+.summary-item.expense-variable {
+  border-left-color: #FF5722;
+}
+
+.summary-item.total-expenses {
+  border-left-color: #F44336;
+}
+
+.summary-label {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.summary-value {
+  font-weight: 700;
+  color: var(--text-primary);
+  font-size: 1.1rem;
+}
+
+.net-profit-summary {
+  background: var(--bg-primary);
+  border-radius: var(--border-radius-md);
+  padding: 1.5rem;
+  border: 2px solid var(--border-color);
+}
+
+.net-profit-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.net-profit-label {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.net-profit-percentage {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+.percentage-value {
+  font-weight: 700;
+  color: var(--text-primary);
+  font-size: 1.1rem;
+}
+
+/* Modal de detalles */
+.detail-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.detail-section {
+  background: var(--bg-secondary);
+  border-radius: var(--border-radius-md);
+  padding: 1.5rem;
+}
+
+.detail-section h4 {
+  color: var(--text-primary);
+  margin-bottom: 1.5rem;
+  font-size: 1.2rem;
+  border-bottom: 2px solid var(--border-color);
+  padding-bottom: 0.75rem;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.detail-item.full {
+  grid-column: 1 / -1;
+}
+
+.detail-label {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.detail-value {
+  color: var(--text-primary);
+  font-weight: 500;
+  font-size: 1rem;
+}
+
+/* Desglose financiero */
+.financial-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.breakdown-section {
+  background: var(--bg-primary);
+  border-radius: var(--border-radius-md);
+  padding: 1.5rem;
+  border: 2px solid var(--border-color);
+}
+
+.breakdown-section h5 {
+  color: var(--text-primary);
+  margin-bottom: 1rem;
+  font-size: 1.1rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.5rem;
+}
+
+.breakdown-section.income {
+  border-color: #4CAF50;
+}
+
+.breakdown-section.expenses {
+  border-color: #FF9800;
+}
+
+.breakdown-section.summary {
+  border-color: #9C27B0;
+}
+
+.breakdown-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--bg-secondary);
+}
+
+.breakdown-item:last-child {
+  border-bottom: none;
+}
+
+.breakdown-item small {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-left: 0.5rem;
+}
+
+.breakdown-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 0;
+  margin-top: 0.5rem;
+  border-top: 2px solid var(--border-color);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.breakdown-final {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 0;
+  margin-top: 1rem;
+  border-top: 3px solid var(--border-color);
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.profit-margin {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 0;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
+.margin-value {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.detail-actions {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  padding-top: 2rem;
+  border-top: 2px solid var(--border-color);
+}
+
+/* Notas del formulario */
+.form-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: rgba(33, 150, 243, 0.1);
+  border-radius: var(--border-radius-sm);
+  border-left: 4px solid #2196F3;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+}
+
+.form-note svg {
+  color: #2196F3;
+  font-size: 1.2rem;
+  margin-top: 0.1rem;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .closings-container {
+    padding: 1.5rem;
+  }
+  
+  .closing-main-info {
+    flex-direction: column;
+  }
+  
+  .closing-right {
+    width: 100%;
+    align-items: stretch;
+  }
+  
+  .closing-profit {
+    text-align: center;
+  }
+  
+  .financial-breakdown {
+    gap: 1.5rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .closings-container {
+    padding: 1rem;
+  }
+  
+  .closings-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .header-right {
+    flex-direction: column;
+  }
+  
+  .performance-stats {
+    grid-template-columns: 1fr;
+  }
+  
+  .summary-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .modal-content {
+    padding: 1.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .quick-stats {
+    grid-template-columns: 1fr;
+  }
+  
+  .stat-card {
+    flex-direction: column;
+    text-align: center;
+    gap: 1rem;
+  }
+  
+  .detail-actions {
+    flex-direction: column;
+  }
+  
+  .secondary-btn {
+    width: 100%;
+  }
+}
+
+/* En MonthlyClosingsPage.css, añade: */
+.doctor-note {
+  color: #9C27B0;
+  font-weight: 600;
+}
+
+.breakdown-item.highlight {
+  background: rgba(156, 39, 176, 0.1);
+  border-left: 3px solid #9C27B0;
+  padding: 0.75rem;
+  margin: 0.5rem 0;
+  border-radius: 4px;
+}

@@ -20,7 +20,7 @@ const monthlyClosingController = {
     }
   },
 
-  // Obtener cierre por ID
+  // Obtener cierre por ID - CORREGIDO
   getById: async (req, res) => {
     try {
       const { id } = req.params;
@@ -33,9 +33,15 @@ const monthlyClosingController = {
         });
       }
       
+      // Asegurar que el ID tenga el formato correcto
+      const formattedClosing = {
+        ...closing,
+        id: closing.closing_ID || closing.id  // Mantener compatibilidad
+      };
+      
       res.json({ 
         success: true, 
-        data: closing 
+        data: formattedClosing 
       });
     } catch (error) {
       console.error('Error al obtener cierre:', error);
@@ -87,10 +93,17 @@ const monthlyClosingController = {
       
       const newClosing = await MonthlyClosing.create(closingData);
       
+      // Formatear respuesta
+      const formattedClosing = {
+        ...newClosing,
+        closing_ID: newClosing.closing_ID,
+        id: newClosing.closing_ID
+      };
+      
       res.status(201).json({ 
         success: true, 
         message: 'Cierre mensual creado exitosamente',
-        data: newClosing 
+        data: formattedClosing 
       });
     } catch (error) {
       console.error('Error al crear cierre:', error);
@@ -129,7 +142,7 @@ const monthlyClosingController = {
   }
 };
 
-// Funciones auxiliares
+// Funciones auxiliares (se mantienen igual)
 function getMonthNumber(month) {
   const months = {
     'ENERO': '01', 'FEBRERO': '02', 'MARZO': '03', 'ABRIL': '04',

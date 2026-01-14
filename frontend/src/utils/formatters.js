@@ -1,9 +1,8 @@
 // frontend/src/utils/formatters.js
 export const formatCurrency = (amount) => {
-  return new Intl.NumberFormat('es-CR', {
+  return new Intl.NumberFormat('es-NI', {
     style: 'currency',
-    currency: 'CRC',
-    minimumFractionDigits: 2
+    currency: 'NIO'
   }).format(amount || 0);
 };
 

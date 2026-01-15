@@ -145,9 +145,6 @@ const DashboardPage = () => {
             </div>
             <div className="card-body">
               <div className="card-value">{stat.value}</div>
-              <p className="card-change" style={{ color: stat.change.startsWith('+') ? '#66BB6A' : '#EF5350' }}>
-                {stat.change} este mes
-              </p>
             </div>
           </div>
         ))}

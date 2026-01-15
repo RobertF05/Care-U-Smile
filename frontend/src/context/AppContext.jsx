@@ -288,7 +288,6 @@ export const AppProvider = ({ children }) => {
   };
 
   // Función general para todos los procedimientos (deprecada)
-  // En tu AppContext.jsx, actualiza la función fetchProcedures:
 const fetchProcedures = async (filters = {}) => {
   try {
     const queryParams = new URLSearchParams(filters).toString();
@@ -519,7 +518,6 @@ const getMonthlyClosingById = async (id) => {
   }
 };
 
-// En AppContext.jsx, actualiza createMonthlyClosing:
 const createMonthlyClosing = async (closingData) => {
   try {
     console.log('📝 Datos del cierre a crear:', closingData);
@@ -575,7 +573,7 @@ useEffect(() => {
         fetchPatients(),
         fetchAppointments(),
         fetchProceduresNormal(),
-        fetchBills(), // ← AÑADIR ESTA LÍNEA
+        fetchBills(), 
         fetchMonthlyClosings(),
         // Obtener estadísticas del mes actual
         getIncomeStats(

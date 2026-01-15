@@ -154,15 +154,6 @@ export default function ProceduresPage() {
             <p className="stat-subtitle">{filteredProcedures.length} procedimientos</p>
           </div>
         </div>
-        
-        <div className="stat-card avg-income">
-          <div className="stat-icon">📊</div>
-          <div className="stat-content">
-            <h3>Costo Promedio</h3>
-            <p className="stat-value">{formatCurrency(statsData.averageCost)}</p>
-            <p className="stat-subtitle">Por procedimiento</p>
-          </div>
-        </div>
       </div>
 
       {/* Filtros por fecha */}

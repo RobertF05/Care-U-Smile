@@ -9,6 +9,7 @@ import procedureRoutes from './routes/procedureRoutes.js';
 import appointmentRoutes from './routes/appointmentRoutes.js';
 import billRoutes from './routes/billRoutes.js';
 import monthlyClosingRoutes from './routes/monthlyClosingRoutes.js';
+import systemSettingsRoutes from './routes/systemSettingsRoutes.js';
 
 // Importar y probar conexión
 import { testConnection } from './config/supabase.js';
@@ -61,6 +62,7 @@ app.use('/api/procedures', procedureRoutes);
 app.use('/api/appointments', appointmentRoutes);
 app.use('/api/bills', billRoutes);
 app.use('/api/monthly-closings', monthlyClosingRoutes);
+app.use('/api/settings', systemSettingsRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {

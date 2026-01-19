@@ -127,8 +127,10 @@ const procedureController = {
       
       // Transformar datos y calcular ganancias
       const transformedData = data.map(item => {
-        const clinic_income = item.total_cost * 0.4;
-        const doctor_income = item.total_cost * 0.6;
+        const clinicPercentage = item.clinic_payment_percentage || 40;
+        const doctorPercentage = item.doctor_payment_percentage || 60;
+        const clinic_income = item.total_cost * clinicPercentage / 100;
+        const doctor_income = item.total_cost * doctorPercentage / 100;
         
         return {
           ...item,

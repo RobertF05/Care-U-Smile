@@ -517,3 +517,337 @@
     min-width: 800px;
   }
 }
+
+/* Nuevos estilos para ProceduresPage */
+
+/* Tarjeta de ingresos en USD */
+.stat-card.total-income-usd {
+  border-color: #FFA726;
+}
+
+.stat-card.total-income-usd .stat-icon {
+  background: linear-gradient(135deg, #FFF3E0, #FFE0B2);
+  color: #FF9800;
+}
+
+/* Tarjeta de doctor externo */
+.stat-card.external-doctor {
+  border-color: #7E57C2;
+}
+
+.stat-card.external-doctor .stat-icon {
+  background: linear-gradient(135deg, #F3E5F5, #E1BEE7);
+  color: #7E57C2;
+}
+
+/* Estilos para costo en USD */
+.cost-usd-cell {
+  text-align: right;
+  padding-right: 15px !important;
+}
+
+.cost-usd {
+  font-weight: 600;
+  color: #FF9800;
+  font-size: 0.95rem;
+}
+
+.cost-na {
+  color: #78909C;
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
+/* Estilos para doctor externo en tabla */
+.external-doctor-cell {
+  min-width: 150px;
+}
+
+.external-doctor-info {
+  padding: 4px 0;
+}
+
+.external-doctor-name {
+  font-weight: 500;
+  color: #37474F;
+  font-size: 0.9rem;
+  margin-bottom: 2px;
+}
+
+.external-doctor-specialty {
+  color: #78909C;
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
+.no-external-doctor {
+  color: #78909C;
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
+/* Estilos para pago de doctor externo */
+.external-doctor-payment-cell {
+  text-align: right;
+  padding-right: 15px !important;
+}
+
+.payment-info {
+  padding: 4px 0;
+}
+
+.payment-amount {
+  font-weight: 600;
+  color: #7E57C2;
+  font-size: 0.95rem;
+}
+
+.no-payment {
+  color: #B0BEC5;
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
+/* Ajustar anchos de columna */
+.procedures-table th:nth-child(5) { min-width: 120px; } /* Costo USD */
+.procedures-table th:nth-child(8) { min-width: 150px; } /* Doctor Externo */
+.procedures-table th:nth-child(9) { min-width: 120px; } /* Pago Doctor */
+
+@media (max-width: 1200px) {
+  .procedures-table {
+    min-width: 1400px;
+  }
+}
+
+/* Nuevos estilos para ProceduresPage */
+
+/* Tarjeta de total del procedimiento */
+.stat-card.total-procedure {
+  border-color: #42A5F5;
+}
+
+.stat-card.total-procedure .stat-icon {
+  background: linear-gradient(135deg, #E3F2FD, #BBDEFB);
+  color: #42A5F5;
+}
+
+/* Celdas de pagos */
+.payment-cordobas-cell,
+.payment-dollars-cell {
+  text-align: right;
+  padding-right: 15px !important;
+  min-width: 130px;
+}
+
+.payment-amount-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.payment-amount.cordobas {
+  font-weight: 600;
+  color: #4CAF50;
+  font-size: 0.95rem;
+}
+
+.payment-amount.dollars {
+  font-weight: 600;
+  color: #FF9800;
+  font-size: 0.95rem;
+}
+
+.payment-method-badge {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.method-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.method-badge.efectivo {
+  background-color: rgba(76, 175, 80, 0.1);
+  color: #2E7D32;
+  border: 1px solid rgba(76, 175, 80, 0.3);
+}
+
+.method-badge.pos {
+  background-color: rgba(33, 150, 243, 0.1);
+  color: #1565C0;
+  border: 1px solid rgba(33, 150, 243, 0.3);
+}
+
+.method-badge.transferencia {
+  background-color: rgba(156, 39, 176, 0.1);
+  color: #7B1FA2;
+  border: 1px solid rgba(156, 39, 176, 0.3);
+}
+
+.method-badge.cheque {
+  background-color: rgba(255, 152, 0, 0.1);
+  color: #EF6C00;
+  border: 1px solid rgba(255, 152, 0, 0.3);
+}
+
+.method-badge.default {
+  background-color: rgba(158, 158, 158, 0.1);
+  color: #616161;
+  border: 1px solid rgba(158, 158, 158, 0.3);
+}
+
+.method-badge.mixto {
+  background-color: rgba(255, 87, 34, 0.1);
+  color: #D84315;
+  border: 1px solid rgba(255, 87, 34, 0.3);
+}
+
+/* Celda de total del procedimiento */
+.total-procedure-cell {
+  text-align: right;
+  padding-right: 15px !important;
+  min-width: 120px;
+}
+
+.total-procedure-amount {
+  font-weight: 700;
+  color: #37474F;
+  font-size: 1rem;
+}
+
+.mixed-payment-indicator {
+  margin-top: 2px;
+}
+
+.mixed-payment-indicator small {
+  color: #FF9800;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+/* Métodos de pago (resumen) */
+.payment-methods-cell {
+  min-width: 120px;
+}
+
+.payment-methods-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.main-method {
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding: 3px 8px;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.main-method.efectivo {
+  background-color: rgba(76, 175, 80, 0.1);
+  color: #2E7D32;
+}
+
+.main-method.pos {
+  background-color: rgba(33, 150, 243, 0.1);
+  color: #1565C0;
+}
+
+.main-method.transferencia {
+  background-color: rgba(156, 39, 176, 0.1);
+  color: #7B1FA2;
+}
+
+.main-method.cheque {
+  background-color: rgba(255, 152, 0, 0.1);
+  color: #EF6C00;
+}
+
+.main-method.mixto {
+  background-color: rgba(255, 87, 34, 0.1);
+  color: #D84315;
+  font-weight: 700;
+}
+
+.main-method.default {
+  background-color: rgba(158, 158, 158, 0.1);
+  color: #616161;
+}
+
+.mixed-details small {
+  color: #78909C;
+  font-size: 0.7rem;
+  text-align: center;
+  display: block;
+}
+
+/* Doctor externo */
+.external-doctor-cell {
+  min-width: 150px;
+}
+
+.external-doctor-info {
+  padding: 4px 0;
+}
+
+.external-doctor-name {
+  font-weight: 500;
+  color: #37474F;
+  font-size: 0.9rem;
+  margin-bottom: 2px;
+}
+
+.external-doctor-specialty {
+  color: #78909C;
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
+/* Pago doctor externo */
+.external-doctor-payment-cell {
+  min-width: 120px;
+  text-align: right;
+  padding-right: 15px !important;
+}
+
+.payment-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.payment-type small {
+  color: #78909C;
+  font-size: 0.75rem;
+}
+
+/* Indicadores de no pago */
+.no-payment,
+.no-external-doctor {
+  color: #B0BEC5;
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
+/* Ajustar anchos de columna */
+.procedures-table th:nth-child(5) { min-width: 130px; } /* Pago C$ */
+.procedures-table th:nth-child(6) { min-width: 130px; } /* Pago US$ */
+.procedures-table th:nth-child(7) { min-width: 120px; } /* Total (C$) */
+.procedures-table th:nth-child(8) { min-width: 120px; } /* Métodos de Pago */
+.procedures-table th:nth-child(9) { min-width: 150px; } /* Doctor Externo */
+.procedures-table th:nth-child(10) { min-width: 120px; } /* Pago Doctor */
+
+@media (max-width: 1400px) {
+  .procedures-table {
+    min-width: 1500px;
+  }
+}

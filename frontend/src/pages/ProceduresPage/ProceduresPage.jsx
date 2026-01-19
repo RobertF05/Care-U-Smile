@@ -1,4 +1,3 @@
-// frontend/src/pages/ProceduresPage/ProceduresPage.jsx
 import { useContext, useState, useEffect } from "react";
 import { AppContext } from "../../context/AppContext";
 import { AuthContext } from "../../context/AuthContext";
@@ -77,17 +76,43 @@ export default function ProceduresPage() {
         procedure.procedure_description?.toLowerCase().includes(searchTerm) ||
         procedure.patient_name?.toLowerCase().includes(searchTerm) ||
         procedure.patient_identification?.includes(searchTerm) ||
-        procedure.original_query_type?.toLowerCase().includes(searchTerm)
+        (procedure.external_doctor_name?.toLowerCase() || '').includes(searchTerm)
       );
     });
 
   // Calcular estadísticas
   const calculateStats = () => {
-    const totalIncome = filteredProcedures.reduce((sum, proc) => sum + (proc.total_cost || 0), 0);
+    const totalCordobas = filteredProcedures.reduce((sum, proc) => sum + (proc.amount_cordobas || proc.total_cost || 0), 0);
+    const totalDollars = filteredProcedures.reduce((sum, proc) => sum + (proc.amount_dollars || proc.total_cost_USD || 0), 0);
+    const totalProcedure = filteredProcedures.reduce((sum, proc) => sum + (proc.total_procedure || 0), 0);
+    
+    // Calcular pagos a doctores externos
+    const externalDoctorPayments = filteredProcedures.reduce((sum, proc) => 
+      sum + (proc.external_doctor_payment || 0), 0);
+    const externalDoctorCount = filteredProcedures.filter(proc => 
+      proc.theres_external_doctor || proc.external_doctor
+    ).length;
+    
+    // Métodos de pago más utilizados
+    const paymentMethods = {};
+    filteredProcedures.forEach(proc => {
+      if (proc.payment_method_cordobas) {
+        paymentMethods[proc.payment_method_cordobas] = (paymentMethods[proc.payment_method_cordobas] || 0) + 1;
+      }
+      if (proc.payment_method_dollars) {
+        paymentMethods[proc.payment_method_dollars] = (paymentMethods[proc.payment_method_dollars] || 0) + 1;
+      }
+    });
     
     return {
-      totalIncome,
-      averageCost: filteredProcedures.length > 0 ? totalIncome / filteredProcedures.length : 0
+      totalCordobas,
+      totalDollars,
+      totalProcedure,
+      externalDoctorPayments,
+      externalDoctorCount,
+      averageProcedure: filteredProcedures.length > 0 ? totalProcedure / filteredProcedures.length : 0,
+      procedureCount: filteredProcedures.length,
+      paymentMethods
     };
   };
 
@@ -95,6 +120,38 @@ export default function ProceduresPage() {
   
   // Manejar errores
   const error = localError || contextError;
+
+  // Formatear moneda en dólares
+  const formatCurrencyUSD = (amount) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD'
+    }).format(amount || 0);
+  };
+
+  // Obtener el método de pago principal
+  const getMainPaymentMethod = (procedure) => {
+    if (procedure.payment_method_cordobas && procedure.payment_method_dollars) {
+      return 'Mixto';
+    }
+    return procedure.payment_method_cordobas || procedure.payment_method_dollars || procedure.payment_method || 'No especificado';
+  };
+
+  // Obtener desglose de pagos
+  const getPaymentBreakdown = (procedure) => {
+    const cordobas = procedure.amount_cordobas || procedure.total_cost || 0;
+    const dollars = procedure.amount_dollars || procedure.total_cost_USD || 0;
+    const totalProcedure = procedure.total_procedure || 0;
+    
+    return {
+      cordobas,
+      dollars,
+      totalProcedure,
+      hasCordobas: cordobas > 0,
+      hasDollars: dollars > 0,
+      isMixed: cordobas > 0 && dollars > 0
+    };
+  };
 
   if (loading && procedures.length === 0) {
     return (
@@ -129,7 +186,7 @@ export default function ProceduresPage() {
           <div className="search-wrapper">
             <input
               className="search-box"
-              placeholder="Buscar por descripción, paciente o cédula..."
+              placeholder="Buscar por descripción, paciente, cédula o doctor..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -144,14 +201,43 @@ export default function ProceduresPage() {
         </div>
       </div>
 
-      {/* Estadísticas */}
+      {/* Estadísticas actualizadas */}
       <div className="stats-cards">
         <div className="stat-card total-income">
           <div className="stat-icon">💰</div>
           <div className="stat-content">
-            <h3>Ingresos Totales</h3>
-            <p className="stat-value">{formatCurrency(statsData.totalIncome)}</p>
-            <p className="stat-subtitle">{filteredProcedures.length} procedimientos</p>
+            <h3>Total en Córdobas</h3>
+            <p className="stat-value">{formatCurrency(statsData.totalCordobas)}</p>
+            <p className="stat-subtitle">C$ depositados</p>
+          </div>
+        </div>
+        
+        <div className="stat-card total-income-usd">
+          <div className="stat-icon">💵</div>
+          <div className="stat-content">
+            <h3>Total en Dólares</h3>
+            <p className="stat-value">{formatCurrencyUSD(statsData.totalDollars)}</p>
+            <p className="stat-subtitle">US$ depositados</p>
+          </div>
+        </div>
+        
+        <div className="stat-card total-procedure">
+          <div className="stat-icon">📊</div>
+          <div className="stat-content">
+            <h3>Total del Procedimiento</h3>
+            <p className="stat-value">{formatCurrency(statsData.totalProcedure)}</p>
+            <p className="stat-subtitle">Sumatoria total (C$)</p>
+          </div>
+        </div>
+        
+        <div className="stat-card external-doctor">
+          <div className="stat-icon">👨‍⚕️</div>
+          <div className="stat-content">
+            <h3>Doctores Externos</h3>
+            <p className="stat-value">{statsData.externalDoctorCount}</p>
+            <p className="stat-subtitle">
+              Pagos: {formatCurrency(statsData.externalDoctorPayments)}
+            </p>
           </div>
         </div>
       </div>
@@ -187,7 +273,7 @@ export default function ProceduresPage() {
         </div>
       </div>
 
-      {/* Tabla de procedimientos */}
+      {/* Tabla de procedimientos actualizada */}
       <div className="procedures-section">
         <h3>Lista de Procedimientos ({filteredProcedures.length})</h3>
         
@@ -211,54 +297,150 @@ export default function ProceduresPage() {
                   <th>Paciente</th>
                   <th>Cédula</th>
                   <th>Descripción</th>
-                  <th>Costo Total</th>
-                  <th>Forma de Pago</th>
-                  <th>Origen</th>
+                  <th>Pago C$</th>
+                  <th>Pago US$</th>
+                  <th>Total (C$)</th>
+                  <th>Métodos de Pago</th>
+                  <th>Doctor Externo</th>
+                  <th>Pago Doctor</th>
                   <th>Observaciones</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredProcedures.map((procedure) => (
-                  <tr key={procedure.procedure_ID}>
-                    <td>
-                      {procedure.procedure_date ? formatDate(procedure.procedure_date) : "N/A"}
-                    </td>
-                    <td className="patient-cell">
-                      <strong>{procedure.patient_name || "Paciente no especificado"}</strong>
-                    </td>
-                    <td className="patient-id">
-                      {procedure.patient_identification || "N/A"}
-                    </td>
-                    <td className="description-cell">
-                      <div className="description-content">
-                        <strong>{procedure.procedure_description || "Sin descripción"}</strong>
-                        {procedure.original_query_type && (
-                          <div className="original-appointment">
-                            <small>Origen: {procedure.original_query_type}</small>
+                {filteredProcedures.map((procedure) => {
+                  const paymentBreakdown = getPaymentBreakdown(procedure);
+                  const mainPaymentMethod = getMainPaymentMethod(procedure);
+                  const hasExternalDoctor = procedure.theres_external_doctor || procedure.external_doctor;
+                  
+                  return (
+                    <tr key={procedure.procedure_ID}>
+                      <td>
+                        {procedure.procedure_date ? formatDate(procedure.procedure_date) : "N/A"}
+                      </td>
+                      <td className="patient-cell">
+                        <strong>{procedure.patient_name || "Paciente no especificado"}</strong>
+                      </td>
+                      <td className="patient-id">
+                        {procedure.patient_identification || "N/A"}
+                      </td>
+                      <td className="description-cell">
+                        <div className="description-content">
+                          <strong>{procedure.procedure_description || "Sin descripción"}</strong>
+                        </div>
+                      </td>
+                      
+                      {/* Pagos en Córdobas */}
+                      <td className="payment-cordobas-cell">
+                        {paymentBreakdown.hasCordobas ? (
+                          <div className="payment-amount-container">
+                            <span className="payment-amount cordobas">
+                              {formatCurrency(paymentBreakdown.cordobas)}
+                            </span>
+                            <div className="payment-method-badge">
+                              <span className={`method-badge ${procedure.payment_method_cordobas?.toLowerCase() || 'default'}`}>
+                                {procedure.payment_method_cordobas || "—"}
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="no-payment">—</span>
+                        )}
+                      </td>
+                      
+                      {/* Pagos en Dólares */}
+                      <td className="payment-dollars-cell">
+                        {paymentBreakdown.hasDollars ? (
+                          <div className="payment-amount-container">
+                            <span className="payment-amount dollars">
+                              {formatCurrencyUSD(paymentBreakdown.dollars)}
+                            </span>
+                            <div className="payment-method-badge">
+                              <span className={`method-badge ${procedure.payment_method_dollars?.toLowerCase() || 'default'}`}>
+                                {procedure.payment_method_dollars || "—"}
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="no-payment">—</span>
+                        )}
+                      </td>
+                      
+                      {/* Total del Procedimiento */}
+                      <td className="total-procedure-cell">
+                        <div className="total-procedure-amount">
+                          <strong>{formatCurrency(paymentBreakdown.totalProcedure)}</strong>
+                        </div>
+                        {paymentBreakdown.isMixed && (
+                          <div className="mixed-payment-indicator">
+                            <small>Pago mixto</small>
                           </div>
                         )}
-                      </div>
-                    </td>
-                    <td className="cost-cell">
-                      <strong>{formatCurrency(procedure.total_cost)}</strong>
-                    </td>
-                    <td>
-                      <span className={`payment-badge payment-${procedure.payment_method?.toLowerCase() || 'unknown'}`}>
-                        {procedure.payment_method || "No especificado"}
-                      </span>
-                    </td>
-                    <td>
-                      {procedure.original_query_type ? (
-                        <span className="origin-badge">Desde cita</span>
-                      ) : (
-                        <span className="origin-badge direct">Directo</span>
-                      )}
-                    </td>
-                    <td className="observations-cell">
-                      {procedure.observations || "Ninguna"}
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      
+                      {/* Métodos de Pago (resumen) */}
+                      <td className="payment-methods-cell">
+                        <div className="payment-methods-summary">
+                          <span className={`main-method ${mainPaymentMethod.toLowerCase()}`}>
+                            {mainPaymentMethod}
+                          </span>
+                          {paymentBreakdown.isMixed && (
+                            <div className="mixed-details">
+                              <small>
+                                {procedure.payment_method_cordobas && procedure.payment_method_dollars 
+                                  ? `${procedure.payment_method_cordobas} + ${procedure.payment_method_dollars}`
+                                  : 'Múltiples métodos'}
+                              </small>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      
+                      {/* Doctor Externo */}
+                      <td className="external-doctor-cell">
+                        {hasExternalDoctor ? (
+                          <div className="external-doctor-info">
+                            <div className="external-doctor-name">
+                              <strong>{procedure.external_doctor_name || procedure.external_doctor || "Doctor externo"}</strong>
+                            </div>
+                            {procedure.external_doctor_specialty && (
+                              <div className="external-doctor-specialty">
+                                <small>{procedure.external_doctor_specialty}</small>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="no-external-doctor">—</span>
+                        )}
+                      </td>
+                      
+                      {/* Pago Doctor Externo */}
+                      <td className="external-doctor-payment-cell">
+                        {hasExternalDoctor && procedure.external_doctor_payment ? (
+                          <div className="payment-info">
+                            <span className="payment-amount">
+                              {formatCurrency(procedure.external_doctor_payment)}
+                            </span>
+                            {procedure.external_doctor_payment_type && (
+                              <div className="payment-type">
+                                <small>
+                                  {procedure.external_doctor_payment_type === 'percentage' 
+                                    ? `${procedure.external_doctor_payment_value}%`
+                                    : procedure.external_doctor_payment_currency || 'C$'}
+                                </small>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="no-payment">—</span>
+                        )}
+                      </td>
+                      
+                      <td className="observations-cell">
+                        {procedure.observations || "Ninguna"}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

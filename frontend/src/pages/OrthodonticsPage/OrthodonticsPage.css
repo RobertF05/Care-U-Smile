@@ -592,3 +592,439 @@
     min-width: 1000px;
   }
 }
+
+/* Nuevos estilos para OrthodonticsPage */
+
+/* Tarjeta de doctor externo en ganancias */
+.earnings-card.external-doctor {
+  border-top-color: #7E57C2;
+}
+
+.earnings-card.external-doctor .earnings-icon {
+  background: linear-gradient(135deg, #F3E5F5, #E1BEE7);
+  color: #7E57C2;
+}
+
+.earnings-subtitle {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #78909C;
+  margin-top: 4px;
+}
+
+/* Estilos para porcentajes */
+.percentage-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.percentage-badge.clinic {
+  background: rgba(76, 175, 80, 0.1);
+  color: #4CAF50;
+}
+
+.percentage-badge.doctor {
+  background: rgba(156, 39, 176, 0.1);
+  color: #9C27B0;
+}
+
+/* Celdas de porcentajes */
+.clinic-percentage-cell,
+.doctor-percentage-cell {
+  text-align: center;
+}
+
+/* Celdas de ganancias mejoradas */
+.clinic-earnings-cell,
+.doctor-earnings-cell {
+  padding: 12px !important;
+}
+
+.earnings-detail {
+  margin-top: 2px;
+}
+
+.earnings-detail small {
+  color: #78909C;
+  font-size: 0.8rem;
+}
+
+/* Estilos para costo USD en ortodoncia */
+.cost-usd-cell {
+  text-align: right;
+  padding-right: 15px !important;
+}
+
+.cost-usd {
+  font-weight: 600;
+  color: #FF9800;
+  font-size: 0.95rem;
+}
+
+.cost-na {
+  color: #78909C;
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
+/* Estilos para doctor externo */
+.external-doctor-cell {
+  min-width: 150px;
+}
+
+.external-doctor-info {
+  padding: 4px 0;
+}
+
+.external-doctor-name {
+  font-weight: 500;
+  color: #37474F;
+  font-size: 0.9rem;
+  margin-bottom: 2px;
+}
+
+.external-doctor-specialty {
+  color: #78909C;
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
+/* Estilos para pago de doctor externo */
+.external-doctor-payment-cell {
+  min-width: 120px;
+}
+
+.payment-percentage {
+  margin-top: 2px;
+}
+
+.payment-percentage small {
+  color: #78909C;
+  font-size: 0.75rem;
+}
+
+/* Ajustar anchos de columna para ortodoncia */
+.orthodontics-table th:nth-child(5) { min-width: 120px; } /* Costo USD */
+.orthodontics-table th:nth-child(6) { min-width: 120px; } /* Costo C$ */
+.orthodontics-table th:nth-child(7) { min-width: 100px; } /* % Clínica */
+.orthodontics-table th:nth-child(8) { min-width: 140px; } /* Ganancia Clínica */
+.orthodontics-table th:nth-child(9) { min-width: 100px; } /* % Doctora */
+.orthodontics-table th:nth-child(10) { min-width: 140px; } /* Ganancia Doctora */
+.orthodontics-table th:nth-child(11) { min-width: 150px; } /* Doctor Externo */
+.orthodontics-table th:nth-child(12) { min-width: 120px; } /* Pago Doctor */
+
+@media (max-width: 1400px) {
+  .orthodontics-table {
+    min-width: 1600px;
+  }
+}
+
+@media (max-width: 768px) {
+  .earnings-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .earnings-card {
+    padding: 15px;
+  }
+  
+  .earnings-icon {
+    width: 50px;
+    height: 50px;
+    font-size: 24px;
+  }
+  
+  .earnings-value {
+    font-size: 18px;
+  }
+}
+
+/* Nuevos estilos para OrthodonticsPage */
+
+/* Celdas de pagos */
+.payment-cordobas-cell,
+.payment-dollars-cell {
+  text-align: right;
+  padding-right: 15px !important;
+  min-width: 120px;
+}
+
+.payment-amount-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.payment-amount.cordobas {
+  font-weight: 600;
+  color: #4CAF50;
+  font-size: 0.9rem;
+}
+
+.payment-amount.dollars {
+  font-weight: 600;
+  color: #FF9800;
+  font-size: 0.9rem;
+}
+
+.payment-method-badge {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.method-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.method-badge.efectivo {
+  background-color: rgba(76, 175, 80, 0.1);
+  color: #2E7D32;
+  border: 1px solid rgba(76, 175, 80, 0.2);
+}
+
+.method-badge.pos {
+  background-color: rgba(33, 150, 243, 0.1);
+  color: #1565C0;
+  border: 1px solid rgba(33, 150, 243, 0.2);
+}
+
+.method-badge.transferencia {
+  background-color: rgba(156, 39, 176, 0.1);
+  color: #7B1FA2;
+  border: 1px solid rgba(156, 39, 176, 0.2);
+}
+
+.method-badge.cheque {
+  background-color: rgba(255, 152, 0, 0.1);
+  color: #EF6C00;
+  border: 1px solid rgba(255, 152, 0, 0.2);
+}
+
+.method-badge.default {
+  background-color: rgba(158, 158, 158, 0.1);
+  color: #616161;
+  border: 1px solid rgba(158, 158, 158, 0.2);
+}
+
+/* Total del procedimiento */
+.total-procedure-cell {
+  text-align: right;
+  padding-right: 15px !important;
+  min-width: 110px;
+}
+
+.total-procedure-amount {
+  font-weight: 700;
+  color: #37474F;
+  font-size: 0.95rem;
+}
+
+.mixed-payment-indicator small {
+  color: #FF9800;
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+/* Métodos de pago */
+.payment-methods-cell {
+  min-width: 110px;
+}
+
+.payment-methods-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.main-method {
+  font-weight: 600;
+  font-size: 0.8rem;
+  padding: 3px 6px;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.main-method.efectivo {
+  background-color: rgba(76, 175, 80, 0.1);
+  color: #2E7D32;
+}
+
+.main-method.pos {
+  background-color: rgba(33, 150, 243, 0.1);
+  color: #1565C0;
+}
+
+.main-method.transferencia {
+  background-color: rgba(156, 39, 176, 0.1);
+  color: #7B1FA2;
+}
+
+.main-method.cheque {
+  background-color: rgba(255, 152, 0, 0.1);
+  color: #EF6C00;
+}
+
+.main-method.mixto {
+  background-color: rgba(255, 87, 34, 0.1);
+  color: #D84315;
+  font-weight: 700;
+}
+
+.main-method.default {
+  background-color: rgba(158, 158, 158, 0.1);
+  color: #616161;
+}
+
+.mixed-details small {
+  color: #78909C;
+  font-size: 0.65rem;
+  text-align: center;
+  display: block;
+}
+
+/* Porcentajes y ganancias */
+.clinic-percentage-cell,
+.doctor-percentage-cell {
+  text-align: center;
+  min-width: 80px;
+}
+
+.percentage-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.percentage-badge.clinic {
+  background: rgba(76, 175, 80, 0.1);
+  color: #4CAF50;
+}
+
+.percentage-badge.doctor {
+  background: rgba(156, 39, 176, 0.1);
+  color: #9C27B0;
+}
+
+.clinic-earnings-cell,
+.doctor-earnings-cell {
+  text-align: right;
+  padding-right: 15px !important;
+  min-width: 120px;
+}
+
+.earnings-amount {
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.earnings-amount.clinic {
+  color: #4CAF50;
+}
+
+.earnings-amount.doctor {
+  color: #9C27B0;
+}
+
+.earnings-detail small {
+  color: #78909C;
+  font-size: 0.7rem;
+}
+
+/* Doctor externo */
+.external-doctor-cell {
+  min-width: 140px;
+}
+
+.external-doctor-info {
+  padding: 4px 0;
+}
+
+.external-doctor-name {
+  font-weight: 500;
+  color: #37474F;
+  font-size: 0.85rem;
+  margin-bottom: 2px;
+}
+
+.external-doctor-specialty {
+  color: #78909C;
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+/* Pago doctor externo */
+.external-doctor-payment-cell {
+  min-width: 110px;
+  text-align: right;
+  padding-right: 15px !important;
+}
+
+.payment-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.payment-type small {
+  color: #78909C;
+  font-size: 0.7rem;
+}
+
+/* Indicadores de no pago */
+.no-payment,
+.no-external-doctor {
+  color: #B0BEC5;
+  font-style: italic;
+  font-size: 0.85rem;
+}
+
+/* Ajustar anchos de columna */
+.orthodontics-table th:nth-child(5) { min-width: 120px; } /* Pago C$ */
+.orthodontics-table th:nth-child(6) { min-width: 120px; } /* Pago US$ */
+.orthodontics-table th:nth-child(7) { min-width: 110px; } /* Total (C$) */
+.orthodontics-table th:nth-child(8) { min-width: 110px; } /* Métodos de Pago */
+.orthodontics-table th:nth-child(9) { min-width: 80px; } /* % Clínica */
+.orthodontics-table th:nth-child(10) { min-width: 120px; } /* Ganancia Clínica */
+.orthodontics-table th:nth-child(11) { min-width: 80px; } /* % Doctora */
+.orthodontics-table th:nth-child(12) { min-width: 120px; } /* Ganancia Doctora */
+.orthodontics-table th:nth-child(13) { min-width: 140px; } /* Doctor Externo */
+.orthodontics-table th:nth-child(14) { min-width: 110px; } /* Pago Doctor */
+
+@media (max-width: 1600px) {
+  .orthodontics-table {
+    min-width: 1800px;
+  }
+}
+
+@media (max-width: 768px) {
+  .earnings-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .earnings-card {
+    padding: 15px;
+  }
+  
+  .earnings-icon {
+    width: 50px;
+    height: 50px;
+    font-size: 24px;
+  }
+  
+  .earnings-value {
+    font-size: 18px;
+  }
+}

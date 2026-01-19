@@ -22,11 +22,14 @@ import {
   faChevronUp,
   faEdit,
   faTrash,
-  faCalendarCheck,
   faExchangeAlt,
   faMoneyBillWave,
   faCreditCard,
-  faLock
+  faLock,
+  faPercentage,
+  faDollarSign,
+  faUserDoctor,
+  faFileMedical
 } from '@fortawesome/free-solid-svg-icons';
 import { AppContext } from '../../context/AppContext';
 import { AuthContext } from '../../context/AuthContext';
@@ -40,7 +43,7 @@ const TIME_FILTERS = {
   ALL: 'all'
 };
 
-// Estados de citas (sin CONFIRMED)
+// Estados de citas
 const APPOINTMENT_STATUS = {
   SCHEDULED: 'scheduled',
   COMPLETED: 'completed',
@@ -50,8 +53,9 @@ const APPOINTMENT_STATUS = {
 // Métodos de pago
 const PAYMENT_METHODS = [
   'Efectivo',
-  'POS',
-  'Transferencia'
+  'Tarjeta',
+  'Transferencia',
+  'Mixto'
 ];
 
 const AppointmentPage = () => {
@@ -65,7 +69,8 @@ const AppointmentPage = () => {
     updateAppointment,
     deleteAppointment,
     fetchPatients,
-    convertAppointmentToProcedure
+    convertAppointmentToProcedure,
+    apiFetch
   } = useContext(AppContext);
 
   // Estados
@@ -81,8 +86,12 @@ const AppointmentPage = () => {
   const [patientSearchTerm, setPatientSearchTerm] = useState('');
   const [showPatientSearch, setShowPatientSearch] = useState(false);
   const [filteredPatients, setFilteredPatients] = useState([]);
+  const [currentSettings, setCurrentSettings] = useState({
+    exchange_rate: 36.5,
+    clinic_payment: 40,
+    doctor_payment: 60
+  });
   
-  // Referencia para el buscador de pacientes
   const patientSearchRef = useRef(null);
 
   // Formulario de nueva cita
@@ -94,21 +103,107 @@ const AppointmentPage = () => {
     observations: ''
   });
 
-  // Formulario para convertir a procedimiento
-  const [procedureForm, setProcedureForm] = useState({
-    procedure_description: '',
-    total_cost: '',
-    payment_method: 'Efectivo',
-    observations: ''
-  });
+  // En el estado inicial del procedureForm, cambia:
+const [procedureForm, setProcedureForm] = useState({
+  procedure_description: '',
+  amount_cordobas: '',
+  amount_dollars: '',
+  payment_method_cordobas: 'Efectivo',
+  payment_method_dollars: 'Efectivo',
+  exchange_rate: 36.5,
+  external_doctor: false,
+  external_doctor_name: '',
+  external_doctor_specialty: '',
+  external_doctor_payment_type: 'percentage',
+  external_doctor_payment_value: '',
+  external_doctor_payment_currency: 'C$',
+  clinic_payment_percentage: 40,
+  doctor_payment_percentage: 60,
+  observations: ''
+});
 
   // Cargar datos iniciales
   useEffect(() => {
     if (user) {
       fetchAppointments();
       fetchPatients();
+      loadCurrentSettings();
     }
   }, [user]);
+
+  // Cargar configuración actual
+  const loadCurrentSettings = async () => {
+    try {
+      const response = await apiFetch('/settings/current');
+      if (response.success && response.data) {
+        setCurrentSettings({
+          exchange_rate: response.data.exchange_rate || 36.5,
+          clinic_payment: response.data.clinic_payment || 40,
+          doctor_payment: response.data.doctor_payment || 60
+        });
+        
+        setProcedureForm(prev => ({
+          ...prev,
+          exchange_rate: response.data.exchange_rate || 36.5,
+          clinic_payment_percentage: response.data.clinic_payment || 40,
+          doctor_payment_percentage: response.data.doctor_payment || 60
+        }));
+      }
+    } catch (error) {
+      console.error('Error cargando configuración:', error);
+    }
+  };
+
+  // En AppointmentPage.jsx, añade estas funciones antes del return:
+
+// Calcular total en córdobas
+const calculateTotalCordobas = () => {
+  const cordobas = parseFloat(procedureForm.amount_cordobas) || 0;
+  const dollars = parseFloat(procedureForm.amount_dollars) || 0;
+  const exchangeRate = parseFloat(procedureForm.exchange_rate) || 1;
+  
+  return cordobas + (dollars * exchangeRate);
+};
+
+// Calcular total en dólares
+const calculateTotalDollars = () => {
+  const cordobas = parseFloat(procedureForm.amount_cordobas) || 0;
+  const dollars = parseFloat(procedureForm.amount_dollars) || 0;
+  const exchangeRate = parseFloat(procedureForm.exchange_rate) || 1;
+  
+  return dollars + (cordobas / exchangeRate);
+};
+
+// Calcular total del procedimiento (suma de ambos)
+const calculateTotalProcedure = () => {
+  const cordobas = parseFloat(procedureForm.amount_cordobas) || 0;
+  const dollars = parseFloat(procedureForm.amount_dollars) || 0;
+  const exchangeRate = parseFloat(procedureForm.exchange_rate) || 1;
+  
+  return cordobas + (dollars * exchangeRate);
+};
+
+// Manejar cambios en los pagos
+const handlePaymentChange = (field, value) => {
+  const updatedForm = { ...procedureForm };
+  updatedForm[field] = value;
+  
+  // Si cambia el tipo de cambio, recalcular dólares
+  if (field === 'exchange_rate') {
+    const newRate = parseFloat(value) || 1;
+    updatedForm.exchange_rate = newRate;
+  }
+  
+  setProcedureForm(updatedForm);
+};
+
+// Formatear moneda en dólares
+const formatCurrencyUSD = (amount) => {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD'
+  }).format(amount || 0);
+};
 
   // Filtrar pacientes cuando cambia el término de búsqueda
   useEffect(() => {
@@ -142,6 +237,13 @@ const AppointmentPage = () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
+
+  // Cargar configuración cuando se abre modal de conversión
+  useEffect(() => {
+    if (showConvertModal) {
+      loadCurrentSettings();
+    }
+  }, [showConvertModal]);
 
   // Filtrar citas
   const filteredAppointments = useMemo(() => {
@@ -274,11 +376,11 @@ const AppointmentPage = () => {
   };
 
   const formatCurrency = (amount) => {
-  return new Intl.NumberFormat('es-NI', {
-    style: 'currency',
-    currency: 'NIO'
-  }).format(amount || 0);
-};
+    return new Intl.NumberFormat('es-NI', {
+      style: 'currency',
+      currency: 'NIO'
+    }).format(amount || 0);
+  };
 
   // Funciones para citas
   const toggleExpandAppointment = (appointmentId) => {
@@ -317,12 +419,70 @@ const AppointmentPage = () => {
     setShowPatientSearch(false);
   };
 
+  // Manejar cambios en los campos de costo
+  const handleCostChange = (field, value) => {
+    const numValue = parseFloat(value) || 0;
+    let updatedForm = { ...procedureForm };
+    
+    if (field === 'total_cost_usd') {
+      updatedForm.total_cost_usd = value;
+      updatedForm.total_cost = (numValue * updatedForm.exchange_rate).toFixed(2);
+    } else if (field === 'total_cost') {
+      updatedForm.total_cost = value;
+      updatedForm.total_cost_usd = (numValue / updatedForm.exchange_rate).toFixed(2);
+    } else if (field === 'exchange_rate') {
+      updatedForm.exchange_rate = numValue;
+      if (updatedForm.total_cost_usd) {
+        updatedForm.total_cost = (parseFloat(updatedForm.total_cost_usd) * numValue).toFixed(2);
+      }
+    }
+    
+    setProcedureForm(updatedForm);
+  };
+
+  // Manejar cambios en pago de doctor externo
+  const handleExternalDoctorPaymentChange = (field, value) => {
+    let updatedForm = { ...procedureForm };
+    
+    if (field === 'payment_type') {
+      updatedForm.external_doctor_payment_type = value;
+      updatedForm.external_doctor_payment_value = '';
+    } else {
+      updatedForm[field] = value;
+    }
+    
+    // Validar que el pago no exceda el costo total
+    if (field === 'external_doctor_payment_value' && value) {
+      const totalCost = parseFloat(updatedForm.total_cost) || 0;
+      const paymentValue = parseFloat(value) || 0;
+      
+      if (updatedForm.external_doctor_payment_type === 'percentage') {
+        if (paymentValue > 100) {
+          alert('El porcentaje no puede ser mayor a 100%');
+          updatedForm.external_doctor_payment_value = '100';
+        }
+      } else {
+        // Para cantidad fija, convertir a córdobas si es en dólares
+        let paymentInCordobas = paymentValue;
+        if (updatedForm.external_doctor_payment_currency === 'US$') {
+          paymentInCordobas = paymentValue * updatedForm.exchange_rate;
+        }
+        
+        if (paymentInCordobas > totalCost) {
+          alert('El pago al doctor externo no puede ser mayor al costo total del procedimiento');
+          updatedForm.external_doctor_payment_value = '';
+        }
+      }
+    }
+    
+    setProcedureForm(updatedForm);
+  };
+
   // Crear nueva cita
   const handleAddAppointment = async (e) => {
     e.preventDefault();
     
     try {
-      // Asegurar que el nombre del servicio sea "Ortodoncia" si el switch está activado
       const appointmentData = {
         Patient_ID: parseInt(newAppointment.patient_id),
         appointment_date: new Date(newAppointment.appointment_date).toISOString(),
@@ -331,11 +491,8 @@ const AppointmentPage = () => {
         observations: newAppointment.observations || null
       };
 
-      console.log('📤 Enviando datos de cita:', appointmentData);
-      
       await createAppointment(appointmentData);
       
-      // Resetear formulario
       setNewAppointment({
         patient_id: '',
         appointment_date: '',
@@ -356,7 +513,7 @@ const AppointmentPage = () => {
     }
   };
 
-  // Actualizar cita (solo estado) - Con validación de procedimiento
+  // Actualizar cita
   const handleUpdateAppointment = async (appointmentId, newState) => {
     try {
       const appointment = appointments.find(a => a.appointment_ID === appointmentId);
@@ -385,7 +542,7 @@ const AppointmentPage = () => {
     }
   };
 
-  // Eliminar cita - Con validación de procedimiento
+  // Eliminar cita
   const handleDeleteAppointment = async (appointmentId) => {
     const appointment = appointments.find(a => a.appointment_ID === appointmentId);
     if (hasProcedure(appointment)) {
@@ -405,56 +562,116 @@ const AppointmentPage = () => {
     }
   };
 
-  // Convertir cita en procedimiento - Con validación
+  // Convertir cita en procedimiento
   const handleConvertToProcedure = async (e) => {
-    e.preventDefault();
+  e.preventDefault();
+  
+  if (!selectedAppointment) return;
+  
+  if (hasProcedure(selectedAppointment)) {
+    alert('Esta cita ya tiene un procedimiento registrado');
+    setShowConvertModal(false);
+    return;
+  }
+  
+  try {
+    // Calcular valores
+    const totalCordobas = parseFloat(procedureForm.amount_cordobas) || 0;
+    const totalDollars = parseFloat(procedureForm.amount_dollars) || 0;
+    const exchangeRate = parseFloat(procedureForm.exchange_rate) || 1;
+    const totalProcedure = totalCordobas + (totalDollars * exchangeRate);
     
-    if (!selectedAppointment) return;
-    
-    if (hasProcedure(selectedAppointment)) {
-      alert('Esta cita ya tiene un procedimiento registrado');
-      setShowConvertModal(false);
-      return;
-    }
-    
-    try {
-      await convertAppointmentToProcedure(
-        selectedAppointment.appointment_ID,
-        {
-          ...procedureForm,
-          total_cost: parseFloat(procedureForm.total_cost)
-        }
-      );
-      
-      // Cerrar modal y resetear formulario
-      setShowConvertModal(false);
-      setProcedureForm({
-        procedure_description: '',
-        total_cost: '',
-        payment_method: 'Efectivo',
-        observations: ''
-      });
-      
-      // Recargar citas
-      fetchAppointments();
-      
-      // Mostrar mensaje de éxito
-      alert('✅ Procedimiento registrado exitosamente');
-      
-      // Redirigir a la página correspondiente
-      if (selectedAppointment.is_orthodontics) {
-        window.location.href = '/orthodontics';
+    // Calcular pago de doctor externo
+    let externalDoctorPayment = null;
+    if (procedureForm.external_doctor && procedureForm.external_doctor_payment_value) {
+      if (procedureForm.external_doctor_payment_type === 'percentage') {
+        externalDoctorPayment = (totalProcedure * parseFloat(procedureForm.external_doctor_payment_value) / 100);
       } else {
-        window.location.href = '/procedures';
+        if (procedureForm.external_doctor_payment_currency === 'US$') {
+          externalDoctorPayment = parseFloat(procedureForm.external_doctor_payment_value) * exchangeRate;
+        } else {
+          externalDoctorPayment = parseFloat(procedureForm.external_doctor_payment_value);
+        }
       }
-      
-    } catch (error) {
-      console.error('Error al registrar procedimiento:', error);
-      alert(`❌ Error: ${error.message}`);
     }
-  };
+    
+    // Preparar datos para enviar
+    const procedureData = {
+      procedure_description: procedureForm.procedure_description,
+      total_cost: totalCordobas, // cantidad en córdobas
+      total_cost_USD: totalDollars, // cantidad en dólares
+      total_procedure: totalProcedure, // sumatoria de ambos convertidos a córdobas
+      payment_method: procedureForm.payment_method_cordobas || procedureForm.payment_method_dollars, // método principal
+      amount_cordobas: totalCordobas,
+      amount_dollars: totalDollars,
+      payment_method_cordobas: procedureForm.payment_method_cordobas,
+      payment_method_dollars: procedureForm.payment_method_dollars,
+      observations: procedureForm.observations,
+      external_doctor: procedureForm.external_doctor_name,
+      external_doctor_payment: externalDoctorPayment,
+      theres_external_doctor: procedureForm.external_doctor,
+      external_doctor_name: procedureForm.external_doctor_name,
+      external_doctor_specialty: procedureForm.external_doctor_specialty,
+      external_doctor_payment_type: procedureForm.external_doctor_payment_type,
+      external_doctor_payment_value: procedureForm.external_doctor_payment_value,
+      external_doctor_payment_currency: procedureForm.external_doctor_payment_currency
+    };
+    
+    // Solo añadir porcentajes si es ortodoncia
+    if (selectedAppointment.is_orthodontics) {
+      procedureData.clinic_payment_percentage = procedureForm.clinic_payment_percentage;
+      procedureData.doctor_payment_percentage = procedureForm.doctor_payment_percentage;
+    } else {
+      procedureData.clinic_payment_percentage = 100;
+      procedureData.doctor_payment_percentage = 0;
+    }
+    
+    console.log('Datos del procedimiento:', procedureData);
+    
+    await convertAppointmentToProcedure(
+      selectedAppointment.appointment_ID,
+      procedureData
+    );
+    
+    // Resetear formulario
+    setShowConvertModal(false);
+    setProcedureForm({
+      procedure_description: '',
+      amount_cordobas: '',
+      amount_dollars: '',
+      payment_method_cordobas: 'Efectivo',
+      payment_method_dollars: 'Efectivo',
+      exchange_rate: currentSettings.exchange_rate,
+      external_doctor: false,
+      external_doctor_name: '',
+      external_doctor_specialty: '',
+      external_doctor_payment_type: 'percentage',
+      external_doctor_payment_value: '',
+      external_doctor_payment_currency: 'C$',
+      clinic_payment_percentage: currentSettings.clinic_payment,
+      doctor_payment_percentage: currentSettings.doctor_payment,
+      observations: ''
+    });
+    
+    // Recargar citas
+    fetchAppointments();
+    
+    alert('✅ Procedimiento registrado exitosamente');
+    
+    // Redirigir
+    if (selectedAppointment.is_orthodontics) {
+      window.location.href = '/orthodontics';
+    } else {
+      window.location.href = '/procedures';
+    }
+    
+  } catch (error) {
+    console.error('Error al registrar procedimiento:', error);
+    alert(`❌ Error: ${error.message}`);
+  }
+};
 
-  // Abrir modal para convertir cita - Con validación
+  // Abrir modal para convertir cita
   const openConvertModal = (appointment) => {
     if (hasProcedure(appointment)) {
       alert('Esta cita ya tiene un procedimiento registrado');
@@ -470,7 +687,17 @@ const AppointmentPage = () => {
     setProcedureForm({
       procedure_description: appointment.query_type || '',
       total_cost: '',
+      total_cost_usd: '',
+      exchange_rate: currentSettings.exchange_rate,
       payment_method: 'Efectivo',
+      external_doctor: false,
+      external_doctor_name: '',
+      external_doctor_specialty: '',
+      external_doctor_payment_type: 'percentage',
+      external_doctor_payment_value: '',
+      external_doctor_payment_currency: 'C$',
+      clinic_payment_percentage: appointment.is_orthodontics ? currentSettings.clinic_payment : 100,
+      doctor_payment_percentage: appointment.is_orthodontics ? currentSettings.doctor_payment : 0,
       observations: appointment.observations || ''
     });
     setShowConvertModal(true);
@@ -478,9 +705,9 @@ const AppointmentPage = () => {
 
   const getStatusColor = (status) => {
     const colors = {
-      [APPOINTMENT_STATUS.SCHEDULED]: '#FFA726', // naranja
-      [APPOINTMENT_STATUS.COMPLETED]: '#66BB6A', // verde
-      [APPOINTMENT_STATUS.CANCELLED]: '#EF5350', // rojo
+      [APPOINTMENT_STATUS.SCHEDULED]: '#FFA726',
+      [APPOINTMENT_STATUS.COMPLETED]: '#66BB6A',
+      [APPOINTMENT_STATUS.CANCELLED]: '#EF5350',
     };
     return colors[status] || '#78909C';
   };
@@ -761,7 +988,7 @@ const AppointmentPage = () => {
         </div>
       </div>
 
-      {/* Lista de citas - DISEÑO HORIZONTAL PARA PC */}
+      {/* Lista de citas */}
       {filteredAppointments.length === 0 ? (
         <div className="no-appointments">
           <div className="no-appointments-icon">
@@ -790,15 +1017,14 @@ const AppointmentPage = () => {
               style={{ borderLeftColor: getStatusColor(appointment.state) }}
             >
               <div className="appointment-card-content">
-                {/* Fila horizontal principal - COMPACTADA */}
                 <div className="appointment-main-row compact-view">
-                  {/* Columna 1: Fecha y hora - COMPACTADA */}
+                  {/* Fecha y hora */}
                   <div className="appointment-column date-column compact">
                     <div className="appointment-date-short compact">{formatDateShort(appointment.appointment_date)}</div>
                     <div className="appointment-time compact">{formatTime(appointment.appointment_date)}</div>
                   </div>
 
-                  {/* Columna 2: Paciente - COMPACTADA */}
+                  {/* Paciente */}
                   <div className="appointment-column patient-column compact">
                     <div className="appointment-patient-name compact">
                       <FontAwesomeIcon icon={faUser} />
@@ -812,7 +1038,7 @@ const AppointmentPage = () => {
                     </div>
                   </div>
 
-                  {/* Columna 3: Servicio - COMPACTADA */}
+                  {/* Servicio */}
                   <div className="appointment-column service-column compact">
                     <div className="appointment-service-info compact">
                       <FontAwesomeIcon icon={faStethoscope} />
@@ -832,7 +1058,7 @@ const AppointmentPage = () => {
                     </div>
                   </div>
 
-                  {/* Columna 4: Estado - COMPACTADA */}
+                  {/* Estado */}
                   <div className="appointment-column status-column compact">
                     <div 
                       className="appointment-status-badge compact"
@@ -852,7 +1078,7 @@ const AppointmentPage = () => {
                     )}
                   </div>
 
-                  {/* Columna 5: Acciones - MODIFICADA */}
+                  {/* Acciones */}
                   <div className="appointment-column actions-column compact">
                     <div className="appointment-actions-horizontal">
                       {/* Botón para convertir en procedimiento */}
@@ -867,7 +1093,7 @@ const AppointmentPage = () => {
                         </button>
                       )}
                       
-                      {/* Botones de estado - con validación */}
+                      {/* Botones de estado */}
                       <div className="status-actions-horizontal">
                         {appointment.state === 'scheduled' && !hasProcedure(appointment) && (
                           <>
@@ -898,13 +1124,12 @@ const AppointmentPage = () => {
                         )}
                       </div>
                       
-                      {/* Botones de editar/eliminar (solo si no tiene procedimiento) */}
+                      {/* Botones de editar/eliminar */}
                       {canEditAppointment(appointment) && (
                         <div className="edit-delete-actions">
                           <button 
                             className="action-btn-small edit-btn"
                             onClick={() => {
-                              // Aquí podrías implementar la edición completa
                               alert('La edición de citas está disponible');
                             }}
                             title="Editar cita"
@@ -1019,7 +1244,7 @@ const AppointmentPage = () => {
         </div>
       )}
 
-      {/* Modal para agregar cita - MODIFICADO CON BUSCADOR */}
+      {/* Modal para agregar cita */}
       {showAddModal && (
         <div className="modal-overlay">
           <div className="modal-content">
@@ -1040,7 +1265,6 @@ const AppointmentPage = () => {
             </div>
             
             <form onSubmit={handleAddAppointment} className="appointment-form">
-              {/* Switch para ortodoncia - MODIFICADO */}
               <div className="form-group">
                 <label className="form-label">
                   <div className="switch-container">
@@ -1060,7 +1284,6 @@ const AppointmentPage = () => {
                 </label>
               </div>
 
-              {/* Campo de nombre del servicio - MODIFICADO */}
               <div className="form-group">
                 <label className="form-label">Nombre del servicio:</label>
                 <input
@@ -1083,7 +1306,7 @@ const AppointmentPage = () => {
                 )}
               </div>
 
-              {/* Paciente CON BUSCADOR MEJORADO */}
+              {/* Paciente */}
               <div className="form-group" ref={patientSearchRef}>
                 <label className="form-label">Paciente:</label>
                 <div className="patient-search-container">
@@ -1213,160 +1436,388 @@ const AppointmentPage = () => {
         </div>
       )}
 
-      {/* Modal para convertir cita en procedimiento - MODIFICADO */}
-      {showConvertModal && selectedAppointment && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h3>
-                <FontAwesomeIcon icon={faExchangeAlt} />
-                Registrar Procedimiento
-              </h3>
-              <button 
-                className="close-modal-btn"
-                onClick={() => {
-                  setShowConvertModal(false);
-                  setProcedureForm({
-                    procedure_description: '',
-                    total_cost: '',
-                    payment_method: 'Efectivo',
-                    observations: ''
-                  });
-                }}
-              >
-                <FontAwesomeIcon icon={faTimes} />
-              </button>
-            </div>
+      {/* Modal para convertir cita en procedimiento */}
+{showConvertModal && selectedAppointment && (
+  <div className="modal-overlay">
+    <div className="modal-content large-modal">
+      <div className="modal-header">
+        <h3>
+          <FontAwesomeIcon icon={faExchangeAlt} />
+          Registrar Procedimiento
+        </h3>
+        <button 
+          className="close-modal-btn"
+          onClick={() => {
+            setShowConvertModal(false);
+            setProcedureForm({
+              procedure_description: '',
+              amount_cordobas: '',
+              amount_dollars: '',
+              payment_method_cordobas: 'Efectivo',
+              payment_method_dollars: 'Efectivo',
+              exchange_rate: currentSettings.exchange_rate,
+              external_doctor: false,
+              external_doctor_name: '',
+              external_doctor_specialty: '',
+              external_doctor_payment_type: 'percentage',
+              external_doctor_payment_value: '',
+              external_doctor_payment_currency: 'C$',
+              clinic_payment_percentage: currentSettings.clinic_payment,
+              doctor_payment_percentage: currentSettings.doctor_payment,
+              observations: ''
+            });
+          }}
+        >
+          <FontAwesomeIcon icon={faTimes} />
+        </button>
+      </div>
+      
+      <div className="appointment-info">
+        <h4>Información de la cita:</h4>
+        <p><strong>Paciente:</strong> {selectedAppointment.patient_name}</p>
+        <p><strong>Fecha:</strong> {formatDateTime(selectedAppointment.appointment_date)}</p>
+        <p><strong>Tipo:</strong> {selectedAppointment.is_orthodontics ? 'Ortodoncia' : 'Procedimiento Regular'}</p>
+        <p><strong>Consulta:</strong> {selectedAppointment.query_type}</p>
+      </div>
+      
+      <form onSubmit={handleConvertToProcedure} className="procedure-form">
+        <div className="form-section">
+          <h4>Detalles del Procedimiento</h4>
+          
+          <div className="form-group">
+            <label className="form-label">Descripción del procedimiento:</label>
+            <input
+              type="text"
+              required
+              value={procedureForm.procedure_description}
+              onChange={(e) => setProcedureForm({
+                ...procedureForm,
+                procedure_description: e.target.value
+              })}
+              className="form-input"
+              placeholder="Ej: Limpieza dental, ajuste de brackets, etc."
+            />
+          </div>
+          
+          {/* Sección de pagos mixtos */}
+          <div className="mixed-payment-section">
+            <h5>Pagos Mixtos (Córdobas y Dólares)</h5>
             
-            {/* Información de la cita con advertencia si ya tiene procedimiento */}
-            <div className="appointment-info">
-              <h4>Información de la cita:</h4>
-              <p><strong>Paciente:</strong> {selectedAppointment.patient_name}</p>
-              <p><strong>Fecha:</strong> {formatDateTime(selectedAppointment.appointment_date)}</p>
-              <p><strong>Tipo:</strong> {selectedAppointment.is_orthodontics ? 'Ortodoncia' : 'Procedimiento Regular'}</p>
-              <p><strong>Consulta:</strong> {selectedAppointment.query_type}</p>
+            <div className="payment-row">
+              <div className="payment-column">
+                <div className="form-group">
+                  <label className="form-label">
+                    <FontAwesomeIcon icon={faMoneyBillWave} /> Cantidad en Córdobas (C$):
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={procedureForm.amount_cordobas}
+                    onChange={(e) => handlePaymentChange('amount_cordobas', e.target.value)}
+                    className="form-input"
+                    placeholder="0.00"
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label className="form-label">Método de Pago (C$):</label>
+                  <select
+                    value={procedureForm.payment_method_cordobas}
+                    onChange={(e) => setProcedureForm({
+                      ...procedureForm,
+                      payment_method_cordobas: e.target.value
+                    })}
+                    className="form-select"
+                  >
+                    <option value="">Seleccionar...</option>
+                    <option value="Efectivo">Efectivo</option>
+                    <option value="POS">POS (Tarjeta)</option>
+                    <option value="Transferencia">Transferencia</option>
+                    <option value="Cheque">Cheque</option>
+                  </select>
+                </div>
+              </div>
               
-              {hasProcedure(selectedAppointment) && (
-                <div className="warning-alert">
-                  <FontAwesomeIcon icon={faLock} />
-                  <strong>¡ATENCIÓN!</strong> Esta cita ya tiene un procedimiento registrado y no puede ser modificada.
+              <div className="payment-column">
+                <div className="form-group">
+                  <label className="form-label">
+                    <FontAwesomeIcon icon={faDollarSign} /> Cantidad en Dólares (US$):
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={procedureForm.amount_dollars}
+                    onChange={(e) => handlePaymentChange('amount_dollars', e.target.value)}
+                    className="form-input"
+                    placeholder="0.00"
+                  />
                 </div>
-              )}
+                
+                <div className="form-group">
+                  <label className="form-label">Método de Pago (USD):</label>
+                  <select
+                    value={procedureForm.payment_method_dollars}
+                    onChange={(e) => setProcedureForm({
+                      ...procedureForm,
+                      payment_method_dollars: e.target.value
+                    })}
+                    className="form-select"
+                  >
+                    <option value="">Seleccionar...</option>
+                    <option value="Efectivo">Efectivo</option>
+                    <option value="POS">POS (Tarjeta)</option>
+                    <option value="Transferencia">Transferencia</option>
+                    <option value="Cheque">Cheque</option>
+                  </select>
+                </div>
+              </div>
             </div>
             
-            {/* Formulario deshabilitado si ya tiene procedimiento */}
-            <form onSubmit={handleConvertToProcedure} className="procedure-form">
-              <div className="form-group">
-                <label className="form-label">Descripción del procedimiento:</label>
-                <input
-                  type="text"
-                  required
-                  value={procedureForm.procedure_description}
-                  onChange={(e) => setProcedureForm({
-                    ...procedureForm,
-                    procedure_description: e.target.value
-                  })}
-                  className="form-input"
-                  placeholder="Ej: Limpieza dental, ajuste de brackets, etc."
-                  disabled={hasProcedure(selectedAppointment)}
-                />
+            {/* Tipo de cambio */}
+            <div className="form-group">
+              <label className="form-label">
+                <FontAwesomeIcon icon={faExchangeAlt} /> Tipo de Cambio (C$ por US$):
+              </label>
+              <input
+                type="number"
+                min="0.0001"
+                step="0.0001"
+                value={procedureForm.exchange_rate}
+                onChange={(e) => handlePaymentChange('exchange_rate', e.target.value)}
+                className="form-input"
+                placeholder="36.5000"
+              />
+            </div>
+            
+            {/* Totales calculados */}
+            <div className="totals-section">
+              <div className="total-row">
+                <span className="total-label">Total en Córdobas (C$):</span>
+                <span className="total-value">
+                  {formatCurrency(calculateTotalCordobas())}
+                </span>
               </div>
-
-              <div className="form-group">
-                <label className="form-label">
-                  <FontAwesomeIcon icon={faMoneyBillWave} /> Costo total (NIO):
-                </label>
-                <input
-                  type="number"
-                  required
-                  min="0"
-                  step="0.01"
-                  value={procedureForm.total_cost}
-                  onChange={(e) => setProcedureForm({
-                    ...procedureForm,
-                    total_cost: e.target.value
-                  })}
-                  className="form-input"
-                  placeholder="0.00"
-                  disabled={hasProcedure(selectedAppointment)}
-                />
+              
+              <div className="total-row">
+                <span className="total-label">Total en Dólares (US$):</span>
+                <span className="total-value">
+                  {formatCurrencyUSD(calculateTotalDollars())}
+                </span>
               </div>
-
-              <div className="form-group">
-                <label className="form-label">
-                  <FontAwesomeIcon icon={faCreditCard} /> Forma de pago:
-                </label>
-                <select
-                  required
-                  value={procedureForm.payment_method}
-                  onChange={(e) => setProcedureForm({
-                    ...procedureForm,
-                    payment_method: e.target.value
-                  })}
-                  className="form-select"
-                  disabled={hasProcedure(selectedAppointment)}
-                >
-                  {PAYMENT_METHODS.map(method => (
-                    <option key={method} value={method}>{method}</option>
-                  ))}
-                </select>
+              
+              <div className="total-row total-procedure">
+                <span className="total-label">Total del Procedimiento (C$):</span>
+                <span className="total-value">
+                  {formatCurrency(calculateTotalProcedure())}
+                </span>
               </div>
-
-              <div className="form-group">
-                <label className="form-label">Observaciones adicionales:</label>
-                <textarea
-                  value={procedureForm.observations}
-                  onChange={(e) => setProcedureForm({
-                    ...procedureForm,
-                    observations: e.target.value
-                  })}
-                  className="form-textarea"
-                  placeholder="Notas sobre el procedimiento..."
-                  rows="3"
-                  disabled={hasProcedure(selectedAppointment)}
-                />
+              
+              <div className="total-breakdown">
+                <small>
+                  * C$ {procedureForm.amount_cordobas || '0.00'} ({procedureForm.payment_method_cordobas || 'Sin método'})<br />
+                  * US$ {procedureForm.amount_dollars || '0.00'} ({procedureForm.payment_method_dollars || 'Sin método'})<br />
+                  * Tipo de cambio: C$ {procedureForm.exchange_rate} por US$ 1
+                </small>
               </div>
-
-              {selectedAppointment.is_orthodontics && (
-                <div className="ortho-info-alert">
-                  <FontAwesomeIcon icon={faUserMd} />
-                  <span>Este procedimiento se registrará como tratamiento de ortodoncia (40% clínica, 60% doctora)</span>
-                </div>
-              )}
-
-              <div className="form-actions">
-                <button 
-                  type="button" 
-                  className="btn-cancel"
-                  onClick={() => {
-                    setShowConvertModal(false);
-                    setProcedureForm({
-                      procedure_description: '',
-                      total_cost: '',
-                      payment_method: 'Efectivo',
-                      observations: ''
-                    });
-                  }}
-                >
-                  {hasProcedure(selectedAppointment) ? 'Cerrar' : 'Cancelar'}
-                </button>
-                <button 
-                  type="submit" 
-                  className="btn-submit"
-                  disabled={hasProcedure(selectedAppointment)}
-                >
-                  <FontAwesomeIcon icon={faCheckCircle} />
-                  {hasProcedure(selectedAppointment) ? 
-                    'Ya registrado' : 
-                    (selectedAppointment.is_orthodontics ? 
-                      'Registrar Ortodoncia' : 
-                      'Registrar Procedimiento')}
-                </button>
-              </div>
-            </form>
+            </div>
           </div>
         </div>
-      )}
+        
+        {/* Sección de Doctor Externo (mantenemos igual) */}
+        <div className="form-section">
+          <div className="toggle-section">
+            <label className="toggle-label">
+              <input
+                type="checkbox"
+                checked={procedureForm.external_doctor}
+                onChange={(e) => setProcedureForm({
+                  ...procedureForm,
+                  external_doctor: e.target.checked,
+                  external_doctor_name: e.target.checked ? procedureForm.external_doctor_name : '',
+                  external_doctor_specialty: e.target.checked ? procedureForm.external_doctor_specialty : ''
+                })}
+              />
+              <span>¿Hubo participación de doctor externo?</span>
+            </label>
+          </div>
+          
+          {procedureForm.external_doctor && (
+            <div className="external-doctor-section">
+              <div className="form-group">
+                <label className="form-label">Nombre del Doctor Externo:</label>
+                <input
+                  type="text"
+                  value={procedureForm.external_doctor_name}
+                  onChange={(e) => setProcedureForm({
+                    ...procedureForm,
+                    external_doctor_name: e.target.value
+                  })}
+                  className="form-input"
+                  placeholder="Dr. Nombre Apellido"
+                />
+              </div>
+              
+              <div className="form-group">
+                <label className="form-label">Especialidad:</label>
+                <input
+                  type="text"
+                  value={procedureForm.external_doctor_specialty}
+                  onChange={(e) => setProcedureForm({
+                    ...procedureForm,
+                    external_doctor_specialty: e.target.value
+                  })}
+                  className="form-input"
+                  placeholder="Ej: Cirujano maxilofacial, Endodoncista, etc."
+                />
+              </div>
+              
+              <div className="form-group">
+                <label className="form-label">Tipo de Pago al Doctor:</label>
+                <div className="payment-type-buttons">
+                  <button
+                    type="button"
+                    className={`payment-type-btn ${procedureForm.external_doctor_payment_type === 'percentage' ? 'active' : ''}`}
+                    onClick={() => handleExternalDoctorPaymentChange('external_doctor_payment_type', 'percentage')}
+                  >
+                    Porcentaje del total
+                  </button>
+                  <button
+                    type="button"
+                    className={`payment-type-btn ${procedureForm.external_doctor_payment_type === 'fixed' ? 'active' : ''}`}
+                    onClick={() => handleExternalDoctorPaymentChange('external_doctor_payment_type', 'fixed')}
+                  >
+                    Cantidad fija
+                  </button>
+                </div>
+              </div>
+              
+              <div className="form-group">
+                <label className="form-label">
+                  {procedureForm.external_doctor_payment_type === 'percentage' ? 'Porcentaje:' : 'Cantidad:'}
+                </label>
+                <div className="payment-input-container">
+                  {procedureForm.external_doctor_payment_type === 'fixed' && (
+                    <select
+                      value={procedureForm.external_doctor_payment_currency}
+                      onChange={(e) => handleExternalDoctorPaymentChange('external_doctor_payment_currency', e.target.value)}
+                      className="currency-select"
+                    >
+                      <option value="C$">C$</option>
+                      <option value="US$">US$</option>
+                    </select>
+                  )}
+                  <input
+                    type="number"
+                    min="0"
+                    step={procedureForm.external_doctor_payment_type === 'percentage' ? "0.1" : "0.01"}
+                    max={procedureForm.external_doctor_payment_type === 'percentage' ? "100" : ""}
+                    value={procedureForm.external_doctor_payment_value}
+                    onChange={(e) => handleExternalDoctorPaymentChange('external_doctor_payment_value', e.target.value)}
+                    className="form-input"
+                    placeholder={procedureForm.external_doctor_payment_type === 'percentage' ? '0.0%' : '0.00'}
+                  />
+                  {procedureForm.external_doctor_payment_type === 'percentage' && <span className="input-suffix">%</span>}
+                </div>
+                <small className="form-help-text">
+                  {procedureForm.external_doctor_payment_type === 'percentage' 
+                    ? `Equivalente: ${(calculateTotalProcedure() * parseFloat(procedureForm.external_doctor_payment_value || 0) / 100).toFixed(2)} C$`
+                    : procedureForm.external_doctor_payment_currency === 'US$'
+                      ? `Equivalente: ${(parseFloat(procedureForm.external_doctor_payment_value || 0) * procedureForm.exchange_rate).toFixed(2)} C$`
+                      : ''}
+                </small>
+              </div>
+            </div>
+          )}
+        </div>
+        
+        {/* Para ortodoncia, mostrar porcentajes de distribución */}
+        {selectedAppointment.is_orthodontics && (
+          <div className="form-section">
+            <h4>
+              <FontAwesomeIcon icon={faPercentage} />
+              Distribución de Ortodoncia
+            </h4>
+            <div className="ortho-distribution-info">
+              <div className="distribution-item clinic">
+                <span className="distribution-label">Clínica:</span>
+                <span className="distribution-value">{procedureForm.clinic_payment_percentage}%</span>
+                <small>Basado en configuración actual</small>
+              </div>
+              <div className="distribution-item doctor">
+                <span className="distribution-label">Doctora Ortodoncia:</span>
+                <span className="distribution-value">{procedureForm.doctor_payment_percentage}%</span>
+                <small>Basado en configuración actual</small>
+              </div>
+            </div>
+            <div className="ortho-calculations">
+              <small>
+                * Total del procedimiento: {formatCurrency(calculateTotalProcedure())} <br />
+                * Clínica recibirá: {formatCurrency((calculateTotalProcedure() * procedureForm.clinic_payment_percentage / 100) - (procedureForm.external_doctor ? parseFloat(procedureForm.external_doctor_payment_value || 0) : 0))} <br />
+                * Doctora ortodoncia recibirá: {formatCurrency(calculateTotalProcedure() * procedureForm.doctor_payment_percentage / 100)}
+              </small>
+            </div>
+          </div>
+        )}
+        
+        <div className="form-group">
+          <label className="form-label">Observaciones adicionales:</label>
+          <textarea
+            value={procedureForm.observations}
+            onChange={(e) => setProcedureForm({
+              ...procedureForm,
+              observations: e.target.value
+            })}
+            className="form-textarea"
+            placeholder="Notas sobre el procedimiento..."
+            rows="3"
+          />
+        </div>
+        
+        <div className="form-actions">
+          <button 
+            type="button" 
+            className="btn-cancel"
+            onClick={() => {
+              setShowConvertModal(false);
+              setProcedureForm({
+                procedure_description: '',
+                amount_cordobas: '',
+                amount_dollars: '',
+                payment_method_cordobas: 'Efectivo',
+                payment_method_dollars: 'Efectivo',
+                exchange_rate: currentSettings.exchange_rate,
+                external_doctor: false,
+                external_doctor_name: '',
+                external_doctor_specialty: '',
+                external_doctor_payment_type: 'percentage',
+                external_doctor_payment_value: '',
+                external_doctor_payment_currency: 'C$',
+                clinic_payment_percentage: currentSettings.clinic_payment,
+                doctor_payment_percentage: currentSettings.doctor_payment,
+                observations: ''
+              });
+            }}
+          >
+            Cancelar
+          </button>
+          <button 
+            type="submit" 
+            className="btn-submit"
+            disabled={!procedureForm.procedure_description || 
+                      (!procedureForm.amount_cordobas && !procedureForm.amount_dollars)}
+          >
+            <FontAwesomeIcon icon={faCheckCircle} />
+            {selectedAppointment.is_orthodontics ? 
+              'Registrar Ortodoncia' : 
+              'Registrar Procedimiento'}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+)}
     </div>
   );
 };

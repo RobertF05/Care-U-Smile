@@ -21,7 +21,7 @@ const Procedure = {
           appointment_date
         )
       `, { count: 'exact' })
-      .eq('is_orthodontics', false) // Solo procedimientos regulares
+      .eq('is_orthodontics', false)
       .order('procedure_date', { ascending: false });
     
     // Aplicar filtros
@@ -80,7 +80,7 @@ const Procedure = {
           appointment_date
         )
       `, { count: 'exact' })
-      .eq('is_orthodontics', true) // Solo ortodoncia
+      .eq('is_orthodontics', true)
       .order('procedure_date', { ascending: false });
     
     // Aplicar filtros
@@ -104,8 +104,8 @@ const Procedure = {
     
     // Transformar datos y calcular ganancias
     const transformedData = data.map(item => {
-      const clinic_income = item.total_cost * 0.4;
-      const doctor_income = item.total_cost * 0.6;
+      const clinic_income = item.total_cost * (item.clinic_payment_percentage || 40) / 100;
+      const doctor_income = item.total_cost * (item.doctor_payment_percentage || 60) / 100;
       
       return {
         ...item,
@@ -150,9 +150,12 @@ const Procedure = {
     
     if (error) throw error;
     
-    // Calcular ingresos si es ortodoncia
-    const clinic_income = data.is_orthodontics ? data.total_cost * 0.4 : data.total_cost;
-    const doctor_income = data.is_orthodontics ? data.total_cost * 0.6 : 0;
+    // Calcular ingresos basados en porcentajes
+    const clinicPercentage = data.is_orthodontics ? (data.clinic_payment_percentage || 40) : 100;
+    const doctorPercentage = data.is_orthodontics ? (data.doctor_payment_percentage || 60) : 0;
+    
+    const clinic_income = data.total_cost * clinicPercentage / 100;
+    const doctor_income = data.total_cost * doctorPercentage / 100;
     
     return {
       ...data,
@@ -180,8 +183,11 @@ const Procedure = {
     if (error) throw error;
     
     // Calcular ingresos para respuesta
-    const clinic_income = data.is_orthodontics ? data.total_cost * 0.4 : data.total_cost;
-    const doctor_income = data.is_orthodontics ? data.total_cost * 0.6 : 0;
+    const clinicPercentage = data.is_orthodontics ? (data.clinic_payment_percentage || 40) : 100;
+    const doctorPercentage = data.is_orthodontics ? (data.doctor_payment_percentage || 60) : 0;
+    
+    const clinic_income = data.total_cost * clinicPercentage / 100;
+    const doctor_income = data.total_cost * doctorPercentage / 100;
     
     return {
       ...data,
@@ -228,47 +234,60 @@ const Procedure = {
     return data;
   },
 
+  // Obtener estadísticas de ingresos
   async getIncomeStats(startDate, endDate) {
-  // Obtener todos los procedimientos del período
-  const { data, error } = await supabaseAdmin
-    .from('procedures')
-    .select('total_cost, is_orthodontics')
-    .gte('procedure_date', startDate)
-    .lte('procedure_date', endDate);
-  
-  if (error) throw error;
-  
-  let generalIncome = 0; // Procedimientos generales (100% clínica)
-  let clinicOrthodonticIncome = 0; // 40% de ortodoncia (clínica)
-  let doctorOrthodonticIncome = 0; // 60% de ortodoncia (doctora - GASTO)
-  let totalOrthodontic = 0; // Total ortodoncia (100%)
-  
-  data.forEach(procedure => {
-    const cost = procedure.total_cost || 0;
+    // Primero obtener la configuración actual de porcentajes
+    const { data: settingsData } = await supabaseAdmin
+      .from('settings')
+      .select('*')
+      .order('setting_ID', { ascending: false })
+      .limit(1)
+      .single();
     
-    if (procedure.is_orthodontics) {
-      // Ortodoncia: 40% clínica, 60% doctora
-      clinicOrthodonticIncome += cost * 0.4;
-      doctorOrthodonticIncome += cost * 0.6;
-      totalOrthodontic += cost;
-    } else {
-      // Procedimientos generales: 100% clínica
-      generalIncome += cost;
-    }
-  });
-  
-  // IMPORTANTE: clinic_income NO debe incluir generalIncome duplicado
-  // clinic_income ya ES generalIncome + clinicOrthodonticIncome
-  const clinicIncome = generalIncome + clinicOrthodonticIncome;
-  
-  return {
-    general_income: generalIncome, // Solo procedimientos generales
-    clinic_income: clinicIncome, // Lo que recibe la clínica (generales + 40% ortodoncia)
-    doctor_income: doctorOrthodonticIncome, // Lo que se paga a doctora (GASTO)
-    total_orthodontic: totalOrthodontic,
-    total_all_procedures: generalIncome + totalOrthodontic
-  };
-},
+    const clinicPercentage = settingsData?.clinic_payment || 40;
+    const doctorPercentage = settingsData?.doctor_payment || 60;
+    
+    // Obtener todos los procedimientos del período
+    const { data, error } = await supabaseAdmin
+      .from('procedures')
+      .select('total_cost, is_orthodontics, clinic_payment_percentage, doctor_payment_percentage')
+      .gte('procedure_date', startDate)
+      .lte('procedure_date', endDate);
+    
+    if (error) throw error;
+    
+    let generalIncome = 0;
+    let clinicOrthodonticIncome = 0;
+    let doctorOrthodonticIncome = 0;
+    let totalOrthodontic = 0;
+    
+    data.forEach(procedure => {
+      const cost = procedure.total_cost || 0;
+      
+      if (procedure.is_orthodontics) {
+        // Usar porcentajes específicos del procedimiento o los globales
+        const procClinicPercentage = procedure.clinic_payment_percentage || clinicPercentage;
+        const procDoctorPercentage = procedure.doctor_payment_percentage || doctorPercentage;
+        
+        clinicOrthodonticIncome += cost * procClinicPercentage / 100;
+        doctorOrthodonticIncome += cost * procDoctorPercentage / 100;
+        totalOrthodontic += cost;
+      } else {
+        // Procedimientos generales: 100% clínica
+        generalIncome += cost;
+      }
+    });
+    
+    const clinicIncome = generalIncome + clinicOrthodonticIncome;
+    
+    return {
+      general_income: generalIncome,
+      clinic_income: clinicIncome,
+      doctor_income: doctorOrthodonticIncome,
+      total_orthodontic: totalOrthodontic,
+      total_all_procedures: generalIncome + totalOrthodontic
+    };
+  },
 
   // Contar procedimientos totales
   async count() {

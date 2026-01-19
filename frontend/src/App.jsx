@@ -8,7 +8,8 @@ import OrthodonticsPage from './pages/OrthodonticsPage/OrthodonticsPage.jsx';
 import AppointmentPage from './pages/AppointmentPage/AppointmentPage.jsx';
 import MonthlyClosingsPage from './pages/MonthlyClosingsPage/MonthlyClosingsPage.jsx';
 import BillsPage from './pages/BillsPage/BillsPage.jsx';
-import Login from './pages/LoginPage/LoginPage.jsx'
+import SettingsPage from './pages/SettingsPage/SettingsPage.jsx';
+import Login from './pages/LoginPage/LoginPage.jsx';
 import { AuthContext } from './context/AuthContext' // ✅ Importar el contexto
 import './App.css'
 
@@ -57,12 +58,7 @@ function App() {
       case 'informes':
         return <MonthlyClosingsPage />
       case 'configuracion':
-        return (
-          <div className="page-content">
-            <h1>⚙️ Configuración</h1>
-            <p>Ajustes del sistema - Próximamente</p>
-          </div>
-        )
+        return <SettingsPage />
       default:
         return <Dashboard />
     }

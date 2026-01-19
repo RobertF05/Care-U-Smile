@@ -248,78 +248,105 @@ const appointmentController = {
   },
 
   // Convertir cita en procedimiento
-  convertToProcedure: async (req, res) => {
-    try {
-      const { id } = req.params;
-      const procedureData = req.body;
-      
-      // 1. Obtener la cita
-      const { data: appointment, error: appointmentError } = await supabaseAdmin
-        .from('clinical_appointments')
-        .select('*')
-        .eq('appointment_ID', id) // <-- MAYÚSCULA
-        .single();
-      
-      if (appointmentError || !appointment) {
-        return res.status(404).json({ 
-          success: false, 
-          error: 'Cita no encontrada' 
-        });
-      }
-      
-      // Validar que la cita esté completada
-      if (appointment.state !== 'completed') {
-        return res.status(400).json({ 
-          success: false, 
-          error: 'Solo se pueden convertir citas completadas en procedimientos' 
-        });
-      }
-      
-      // Validar datos del procedimiento
-      if (!procedureData.procedure_description || !procedureData.total_cost || !procedureData.payment_method) {
-        return res.status(400).json({ 
-          success: false, 
-          error: 'Descripción, costo y forma de pago son requeridos' 
-        });
-      }
-      
-      // 2. Crear el procedimiento
-      const { data: procedure, error: procedureError } = await supabaseAdmin
-        .from('procedures')
-        .insert([{
-          appointment_ID: id,
-          Patient_ID: appointment.Patient_ID, // <-- MAYÚSCULA
-          procedure_date: appointment.appointment_date,
-          procedure_description: procedureData.procedure_description,
-          total_cost: parseFloat(procedureData.total_cost),
-          payment_method: procedureData.payment_method,
-          is_orthodontics: appointment.is_orthodontics,
-          observations: procedureData.observations || appointment.observations,
-          creation_date: new Date().toISOString()
-        }])
-        .select()
-        .single();
-      
-      if (procedureError) throw procedureError;
-      
-      res.json({ 
-        success: true, 
-        message: appointment.is_orthodontics ? 
-          'Tratamiento de ortodoncia registrado exitosamente' : 
-          'Procedimiento registrado exitosamente',
-        data: {
-          appointment,
-          procedure
-        }
-      });
-    } catch (error) {
-      console.error('Error al convertir cita en procedimiento:', error);
-      res.status(500).json({ 
+convertToProcedure: async (req, res) => {
+  try {
+    const { id } = req.params;
+    const procedureData = req.body;
+    
+    // 1. Obtener la cita
+    const { data: appointment, error: appointmentError } = await supabaseAdmin
+      .from('clinical_appointments')
+      .select('*')
+      .eq('appointment_ID', id)
+      .single();
+    
+    if (appointmentError || !appointment) {
+      return res.status(404).json({ 
         success: false, 
-        error: error.message || 'Error al registrar procedimiento' 
+        error: 'Cita no encontrada' 
       });
     }
-  },
+    
+    // Validar datos mínimos
+    if (!procedureData.procedure_description) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Descripción del procedimiento es requerida' 
+      });
+    }
+    
+    // Validar que haya al menos un método de pago
+    if (!procedureData.payment_method_cordobas && !procedureData.payment_method_dollars) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Debe especificar al menos un método de pago' 
+      });
+    }
+    
+    // Preparar datos para insertar
+    const procedureToInsert = {
+      appointment_ID: id,
+      Patient_ID: appointment.Patient_ID,
+      procedure_date: appointment.appointment_date,
+      procedure_description: procedureData.procedure_description,
+      total_cost: procedureData.total_cost || 0, // cantidad en córdobas
+      total_cost_USD: procedureData.total_cost_USD || 0, // cantidad en dólares
+      total_procedure: procedureData.total_procedure || 0, // sumatoria total
+      payment_method: procedureData.payment_method || 'Mixto',
+      is_orthodontics: appointment.is_orthodontics,
+      observations: procedureData.observations || appointment.observations,
+      creation_date: new Date().toISOString(),
+      // Campos de pagos múltiples
+      amount_cordobas: procedureData.amount_cordobas || 0,
+      amount_dollars: procedureData.amount_dollars || 0,
+      payment_method_cordobas: procedureData.payment_method_cordobas || null,
+      payment_method_dollars: procedureData.payment_method_dollars || null,
+      // Campos de doctor externo
+      external_doctor: procedureData.external_doctor || null,
+      external_doctor_payment: procedureData.external_doctor_payment || null,
+      theres_external_doctor: procedureData.theres_external_doctor || false,
+      external_doctor_name: procedureData.external_doctor_name || null,
+      external_doctor_specialty: procedureData.external_doctor_specialty || null,
+      external_doctor_payment_type: procedureData.external_doctor_payment_type || 'fixed',
+      external_doctor_payment_value: procedureData.external_doctor_payment_value || null,
+      external_doctor_payment_currency: procedureData.external_doctor_payment_currency || 'C$',
+      // Campos de porcentajes
+      clinic_payment_percentage: procedureData.clinic_payment_percentage || 
+        (appointment.is_orthodontics ? 40 : 100),
+      doctor_payment_percentage: procedureData.doctor_payment_percentage || 
+        (appointment.is_orthodontics ? 60 : 0)
+    };
+    
+    // 2. Crear el procedimiento
+    const { data: procedure, error: procedureError } = await supabaseAdmin
+      .from('procedures')
+      .insert([procedureToInsert])
+      .select()
+      .single();
+    
+    if (procedureError) {
+      console.error('Error detallado al crear procedimiento:', procedureError);
+      throw new Error(`Error al crear procedimiento: ${procedureError.message}`);
+    }
+    
+    res.json({ 
+      success: true, 
+      message: appointment.is_orthodontics ? 
+        'Tratamiento de ortodoncia registrado exitosamente' : 
+        'Procedimiento registrado exitosamente',
+      data: {
+        appointment,
+        procedure
+      }
+    });
+  } catch (error) {
+    console.error('Error al convertir cita en procedimiento:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Error al registrar procedimiento' 
+    });
+  }
+},
 
   // Eliminar cita - USANDO appointment_ID (MAYÚSCULA)
   delete: async (req, res) => {

@@ -150,6 +150,43 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  // ========== INFORMACIÓN MÉDICA DE PACIENTES ==========
+const getPatientMedicalInfo = async (patientId) => {
+  try {
+    const data = await apiFetch(`/patients/${patientId}/medical-info`);
+    return data;
+  } catch (error) {
+    console.error('Error obteniendo información médica:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+const createPatientMedicalInfo = async (patientId, medicalData) => {
+  try {
+    const data = await apiFetch(`/patients/${patientId}/medical-info`, {
+      method: 'POST',
+      body: JSON.stringify(medicalData),
+    });
+    return data;
+  } catch (error) {
+    console.error('Error creando información médica:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+const updatePatientMedicalInfo = async (patientId, medicalData) => {
+  try {
+    const data = await apiFetch(`/patients/${patientId}/medical-info`, {
+      method: 'PUT',
+      body: JSON.stringify(medicalData),
+    });
+    return data;
+  } catch (error) {
+    console.error('Error actualizando información médica:', error);
+    return { success: false, error: error.message };
+  }
+};
+
   // ========== CITAS ==========
   const fetchAppointments = async (filters = {}) => {
     try {
@@ -604,6 +641,11 @@ useEffect(() => {
     createPatient,
     updatePatient,
     deletePatient,
+    
+    // Información médica de pacientes
+    getPatientMedicalInfo,
+    createPatientMedicalInfo,
+    updatePatientMedicalInfo,
     
     // Citas
     fetchAppointments,

@@ -78,3 +78,8 @@ export const calculateAge = (birthdate) => {
   
   return age;
 };
+
+export const formatBoolean = (value) => {
+  if (value === null || value === undefined) return "N/A";
+  return value ? "Sí" : "No";
+};

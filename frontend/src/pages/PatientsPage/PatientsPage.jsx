@@ -1,7 +1,7 @@
 // frontend/src/pages/PatientPage/PatientPage.jsx
 import { useContext, useState, useEffect } from "react";
 import { AppContext } from "../../context/AppContext";
-import { formatDate, formatPhone, calculateAge, formatFullName } from "../../utils/formatters";
+import { formatDate, formatPhone, calculateAge, formatFullName, formatBoolean } from "../../utils/formatters";
 import "./PatientsPage.css";
 
 export default function PatientsPage() {
@@ -11,13 +11,17 @@ export default function PatientsPage() {
     createPatient, 
     updatePatient, 
     deletePatient,
-    loading,
-    apiFetch
+    getPatientMedicalInfo,
+    createPatientMedicalInfo,
+    updatePatientMedicalInfo,
+    loading
   } = useContext(AppContext);
   
   const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(null);
+  const [viewModalOpen, setViewModalOpen] = useState(null);
   const [formData, setFormData] = useState({
+    // Información personal
     first_name: "",
     middle_name: "",
     first_last_name: "",
@@ -27,9 +31,28 @@ export default function PatientsPage() {
     email: "",
     profession: "",
     address: "",
-    birthdate: ""
+    birthdate: "",
+    
+    // Información médica
+    emergency_contact_name: "",
+    emergency_contact_relationship: "",
+    emergency_contact_phone: "",
+    oral_health_status: "",
+    last_dental_visit: "",
+    medical_conditions: "",
+    allergies: "",
+    current_medications: "",
+    previous_anesthesia: false,
+    anesthesia_notes: "",
+    smokes: false,
+    drinks_alcohol: false,
+    other_substances: "",
+    substance_frequency: "",
+    general_notes: ""
   });
   const [editingPatient, setEditingPatient] = useState(null);
+  const [viewingPatient, setViewingPatient] = useState(null);
+  const [patientMedicalInfo, setPatientMedicalInfo] = useState(null);
   const [notification, setNotification] = useState({ show: false, message: "", type: "" });
   const [deleteConfirm, setDeleteConfirm] = useState(null);
 
@@ -50,7 +73,6 @@ export default function PatientsPage() {
       );
     })
     .sort((a, b) => {
-      // Ordenar por primer nombre (alfabético)
       const nameA = a.first_name?.toLowerCase() || '';
       const nameB = b.first_name?.toLowerCase() || '';
       return nameA.localeCompare(nameB);
@@ -66,10 +88,10 @@ export default function PatientsPage() {
 
   // Manejar cambios en el formulario
   const handleFormChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: value
+      [name]: type === 'checkbox' ? checked : value
     }));
   };
 
@@ -86,7 +108,22 @@ export default function PatientsPage() {
       email: "",
       profession: "",
       address: "",
-      birthdate: ""
+      birthdate: "",
+      emergency_contact_name: "",
+      emergency_contact_relationship: "",
+      emergency_contact_phone: "",
+      oral_health_status: "",
+      last_dental_visit: "",
+      medical_conditions: "",
+      allergies: "",
+      current_medications: "",
+      previous_anesthesia: false,
+      anesthesia_notes: "",
+      smokes: false,
+      drinks_alcohol: false,
+      other_substances: "",
+      substance_frequency: "",
+      general_notes: ""
     });
     setModalOpen("add");
   };
@@ -104,12 +141,54 @@ export default function PatientsPage() {
       email: patient.email || "",
       profession: patient.profession || "",
       address: patient.address || "",
-      birthdate: patient.birthdate ? patient.birthdate.split('T')[0] : ""
+      birthdate: patient.birthdate ? patient.birthdate.split('T')[0] : "",
+      emergency_contact_name: "",
+      emergency_contact_relationship: "",
+      emergency_contact_phone: "",
+      oral_health_status: "",
+      last_dental_visit: "",
+      medical_conditions: "",
+      allergies: "",
+      current_medications: "",
+      previous_anesthesia: false,
+      anesthesia_notes: "",
+      smokes: false,
+      drinks_alcohol: false,
+      other_substances: "",
+      substance_frequency: "",
+      general_notes: ""
     });
+    
+    // Cargar información médica si existe
+    loadMedicalInfo(patient.Patient_ID);
     setModalOpen("edit");
   };
 
-  // Cerrar modal
+  // Abrir modal para ver paciente (solo lectura)
+  const openViewModal = async (patient) => {
+    setViewingPatient(patient);
+    
+    // Cargar información médica
+    await loadMedicalInfo(patient.Patient_ID);
+    setViewModalOpen(true);
+  };
+
+  // Cargar información médica
+  const loadMedicalInfo = async (patientId) => {
+    try {
+      const result = await getPatientMedicalInfo(patientId);
+      if (result.success && result.data) {
+        setPatientMedicalInfo(result.data);
+      } else {
+        setPatientMedicalInfo(null);
+      }
+    } catch (error) {
+      console.error("Error cargando información médica:", error);
+      setPatientMedicalInfo(null);
+    }
+  };
+
+  // Cerrar modal de edición
   const closeModal = () => {
     setModalOpen(null);
     setEditingPatient(null);
@@ -123,8 +202,31 @@ export default function PatientsPage() {
       email: "",
       profession: "",
       address: "",
-      birthdate: ""
+      birthdate: "",
+      emergency_contact_name: "",
+      emergency_contact_relationship: "",
+      emergency_contact_phone: "",
+      oral_health_status: "",
+      last_dental_visit: "",
+      medical_conditions: "",
+      allergies: "",
+      current_medications: "",
+      previous_anesthesia: false,
+      anesthesia_notes: "",
+      smokes: false,
+      drinks_alcohol: false,
+      other_substances: "",
+      substance_frequency: "",
+      general_notes: ""
     });
+    setPatientMedicalInfo(null);
+  };
+
+  // Cerrar modal de vista
+  const closeViewModal = () => {
+    setViewModalOpen(false);
+    setViewingPatient(null);
+    setPatientMedicalInfo(null);
   };
 
   // Validar formulario
@@ -141,16 +243,72 @@ export default function PatientsPage() {
     if (!validateForm()) return;
 
     try {
-      const patientData = {
-        ...formData,
-        number_phone: formData.number_phone ? Number(formData.number_phone) : null
+      // Separar datos personales y médicos
+      const { 
+        emergency_contact_name,
+        emergency_contact_relationship,
+        emergency_contact_phone,
+        oral_health_status,
+        last_dental_visit,
+        medical_conditions,
+        allergies,
+        current_medications,
+        previous_anesthesia,
+        anesthesia_notes,
+        smokes,
+        drinks_alcohol,
+        other_substances,
+        substance_frequency,
+        general_notes,
+        ...patientData 
+      } = formData;
+
+      // Preparar datos personales
+      const personalData = {
+        ...patientData,
+        number_phone: patientData.number_phone ? Number(patientData.number_phone) : null
+      };
+
+      // Preparar datos médicos
+      const medicalInfoData = {
+        emergency_contact_name,
+        emergency_contact_relationship,
+        emergency_contact_phone,
+        oral_health_status,
+        last_dental_visit,
+        medical_conditions,
+        allergies,
+        current_medications,
+        previous_anesthesia,
+        anesthesia_notes,
+        smokes,
+        drinks_alcohol,
+        other_substances,
+        substance_frequency,
+        general_notes
       };
 
       let result;
       if (editingPatient) {
-        result = await updatePatient(editingPatient.Patient_ID, patientData);
+        // Actualizar datos personales
+        result = await updatePatient(editingPatient.Patient_ID, personalData);
+        
+        // Actualizar información médica (usar PUT para upsert)
+        if (result.success) {
+          await updatePatientMedicalInfo(editingPatient.Patient_ID, medicalInfoData);
+        }
       } else {
-        result = await createPatient(patientData);
+        // Crear paciente
+        result = await createPatient(personalData);
+        
+        // Crear información médica si hay datos
+        const hasMedicalData = Object.values(medicalInfoData).some(value => 
+          value !== "" && value !== false && value !== null && value !== undefined
+        );
+        
+        if (result.success && result.data.Patient_ID && hasMedicalData) {
+          await createPatientMedicalInfo(result.data.Patient_ID, medicalInfoData);
+        }
       }
 
       if (result.success) {
@@ -160,12 +318,12 @@ export default function PatientsPage() {
             : "Paciente agregado exitosamente"
         );
         closeModal();
-        fetchPatients(); // Recargar la lista
+        fetchPatients();
       } else {
         showNotification(result.error || "Error al guardar paciente", "error");
       }
     } catch (error) {
-      showNotification("Error al guardar paciente", "error");
+      showNotification("Error al guardar paciente: " + error.message, "error");
       console.error("Error saving patient:", error);
     }
   };
@@ -195,6 +353,21 @@ export default function PatientsPage() {
     } finally {
       setDeleteConfirm(null);
     }
+  };
+
+  // Función para formatear valores booleanos
+  const formatBooleanValue = (value) => {
+    return value ? "Sí" : "No";
+  };
+
+  // Función para formatear salud bucal
+  const formatOralHealth = (status) => {
+    const statusMap = {
+      'buena': 'Buena',
+      'regular': 'Regular',
+      'mala': 'Mala'
+    };
+    return statusMap[status] || 'No especificado';
   };
 
   // Estado de carga
@@ -237,120 +410,511 @@ export default function PatientsPage() {
         </div>
       )}
 
-      {/* Modal para agregar/editar paciente */}
+      {/* Modal para VER paciente (solo lectura) */}
+      {viewModalOpen && viewingPatient && (
+        <div className="modal-backdrop" onClick={closeViewModal}>
+          <div className="modal-content view-modal" onClick={e => e.stopPropagation()}>
+            <h3>Información Completa del Paciente</h3>
+            
+            <div className="patient-view-container">
+              {/* Información Personal */}
+              <div className="view-section">
+                <h4>Información Personal</h4>
+                <div className="view-grid">
+                  <div className="view-item">
+                    <span className="view-label">Nombre Completo:</span>
+                    <span className="view-value">{formatFullName(viewingPatient)}</span>
+                  </div>
+                  <div className="view-item">
+                    <span className="view-label">Cédula:</span>
+                    <span className="view-value">{viewingPatient.identification || "N/A"}</span>
+                  </div>
+                  <div className="view-item">
+                    <span className="view-label">Teléfono:</span>
+                    <span className="view-value">{viewingPatient.number_phone ? formatPhone(viewingPatient.number_phone) : "N/A"}</span>
+                  </div>
+                  <div className="view-item">
+                    <span className="view-label">Email:</span>
+                    <span className="view-value">{viewingPatient.email || "N/A"}</span>
+                  </div>
+                  <div className="view-item">
+                    <span className="view-label">Profesión:</span>
+                    <span className="view-value">{viewingPatient.profession || "N/A"}</span>
+                  </div>
+                  <div className="view-item">
+                    <span className="view-label">Fecha de Nacimiento:</span>
+                    <span className="view-value">
+                      {viewingPatient.birthdate 
+                        ? `${formatDate(viewingPatient.birthdate)} (${calculateAge(viewingPatient.birthdate)} años)`
+                        : "N/A"}
+                    </span>
+                  </div>
+                  <div className="view-item full-width">
+                    <span className="view-label">Dirección:</span>
+                    <span className="view-value address-value">{viewingPatient.address || "N/A"}</span>
+                  </div>
+                  <div className="view-item">
+                    <span className="view-label">Fecha de Registro:</span>
+                    <span className="view-value">{formatDate(viewingPatient.creation_date)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Información Médica */}
+              {patientMedicalInfo && (
+                <div className="view-section">
+                  <h4>Información Médica y de Emergencia</h4>
+                  
+                  {/* Contacto de Emergencia */}
+                  <div className="view-subsection">
+                    <h5>Contacto de Emergencia</h5>
+                    <div className="view-grid">
+                      <div className="view-item">
+                        <span className="view-label">Nombre:</span>
+                        <span className="view-value">{patientMedicalInfo.emergency_contact_name || "N/A"}</span>
+                      </div>
+                      <div className="view-item">
+                        <span className="view-label">Parentesco:</span>
+                        <span className="view-value">{patientMedicalInfo.emergency_contact_relationship || "N/A"}</span>
+                      </div>
+                      <div className="view-item">
+                        <span className="view-label">Teléfono:</span>
+                        <span className="view-value">{patientMedicalInfo.emergency_contact_phone || "N/A"}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Salud Bucal */}
+                  <div className="view-subsection">
+                    <h5>Salud Bucal</h5>
+                    <div className="view-grid">
+                      <div className="view-item">
+                        <span className="view-label">Estado:</span>
+                        <span className="view-value">{formatOralHealth(patientMedicalInfo.oral_health_status)}</span>
+                      </div>
+                      <div className="view-item">
+                        <span className="view-label">Última Visita:</span>
+                        <span className="view-value">
+                          {patientMedicalInfo.last_dental_visit 
+                            ? formatDate(patientMedicalInfo.last_dental_visit)
+                            : "N/A"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Historial Médico */}
+                  <div className="view-subsection">
+                    <h5>Historial Médico</h5>
+                    <div className="view-grid">
+                      <div className="view-item full-width">
+                        <span className="view-label">Enfermedades Importantes:</span>
+                        <span className="view-value multiline">{patientMedicalInfo.medical_conditions || "N/A"}</span>
+                      </div>
+                      <div className="view-item full-width">
+                        <span className="view-label">Alergias a Medicamentos:</span>
+                        <span className="view-value multiline">{patientMedicalInfo.allergies || "N/A"}</span>
+                      </div>
+                      <div className="view-item full-width">
+                        <span className="view-label">Medicamentos Actuales:</span>
+                        <span className="view-value multiline">{patientMedicalInfo.current_medications || "N/A"}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Anestesia */}
+                  <div className="view-subsection">
+                    <h5>Historial de Anestesia</h5>
+                    <div className="view-grid">
+                      <div className="view-item">
+                        <span className="view-label">Anestesiado Anteriormente:</span>
+                        <span className="view-value">{formatBooleanValue(patientMedicalInfo.previous_anesthesia)}</span>
+                      </div>
+                      {patientMedicalInfo.previous_anesthesia && (
+                        <div className="view-item full-width">
+                          <span className="view-label">Notas sobre Anestesia:</span>
+                          <span className="view-value multiline">{patientMedicalInfo.anesthesia_notes || "N/A"}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Hábitos */}
+                  <div className="view-subsection">
+                    <h5>Hábitos</h5>
+                    <div className="view-grid">
+                      <div className="view-item">
+                        <span className="view-label">Fuma:</span>
+                        <span className="view-value">{formatBooleanValue(patientMedicalInfo.smokes)}</span>
+                      </div>
+                      <div className="view-item">
+                        <span className="view-label">Bebidas Alcohólicas:</span>
+                        <span className="view-value">{formatBooleanValue(patientMedicalInfo.drinks_alcohol)}</span>
+                      </div>
+                      <div className="view-item">
+                        <span className="view-label">Otras Sustancias:</span>
+                        <span className="view-value">{patientMedicalInfo.other_substances || "N/A"}</span>
+                      </div>
+                      <div className="view-item">
+                        <span className="view-label">Frecuencia de Consumo:</span>
+                        <span className="view-value">{patientMedicalInfo.substance_frequency || "N/A"}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Notas Generales */}
+                  {patientMedicalInfo.general_notes && (
+                    <div className="view-subsection">
+                      <h5>Notas Adicionales</h5>
+                      <div className="view-item full-width">
+                        <span className="view-value multiline">{patientMedicalInfo.general_notes}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Si no hay información médica */}
+              {!patientMedicalInfo && (
+                <div className="view-section">
+                  <h4>Información Médica</h4>
+                  <p className="no-medical-info">No hay información médica registrada para este paciente.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="modal-actions">
+              <button className="btn-cancel" onClick={closeViewModal}>
+                Cerrar
+              </button>
+              <button 
+                className="btn-confirm" 
+                onClick={() => {
+                  closeViewModal();
+                  openEditModal(viewingPatient);
+                }}
+              >
+                Editar Paciente
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para AGREGAR/EDITAR paciente */}
       {modalOpen && (
         <div className="modal-backdrop" onClick={closeModal}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <h3>{editingPatient ? "Editar Paciente" : "Agregar Nuevo Paciente"}</h3>
             
-            <div className="form-row">
-              <div className="form-group">
-                <label>Primer Nombre *</label>
-                <input
-                  type="text"
-                  name="first_name"
-                  value={formData.first_name}
-                  onChange={handleFormChange}
-                  required
-                />
-              </div>
+            {/* Sección de información personal */}
+            <div className="personal-info-section">
+              <h4>Información Personal</h4>
               
-              <div className="form-group">
-                <label>Segundo Nombre</label>
-                <input
-                  type="text"
-                  name="middle_name"
-                  value={formData.middle_name}
-                  onChange={handleFormChange}
-                />
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Primer Nombre *</label>
+                  <input
+                    type="text"
+                    name="first_name"
+                    value={formData.first_name}
+                    onChange={handleFormChange}
+                    required
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label>Segundo Nombre</label>
+                  <input
+                    type="text"
+                    name="middle_name"
+                    value={formData.middle_name}
+                    onChange={handleFormChange}
+                  />
+                </div>
               </div>
-            </div>
 
-            <div className="form-row">
-              <div className="form-group">
-                <label>Primer Apellido *</label>
-                <input
-                  type="text"
-                  name="first_last_name"
-                  value={formData.first_last_name}
-                  onChange={handleFormChange}
-                  required
-                />
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Primer Apellido *</label>
+                  <input
+                    type="text"
+                    name="first_last_name"
+                    value={formData.first_last_name}
+                    onChange={handleFormChange}
+                    required
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label>Segundo Apellido</label>
+                  <input
+                    type="text"
+                    name="second_last_name"
+                    value={formData.second_last_name}
+                    onChange={handleFormChange}
+                  />
+                </div>
               </div>
-              
-              <div className="form-group">
-                <label>Segundo Apellido</label>
-                <input
-                  type="text"
-                  name="second_last_name"
-                  value={formData.second_last_name}
-                  onChange={handleFormChange}
-                />
-              </div>
-            </div>
 
-            <div className="form-row">
-              <div className="form-group">
-                <label>Cédula o Identificación *</label>
-                <input
-                  type="text"
-                  name="identification"
-                  value={formData.identification}
-                  onChange={handleFormChange}
-                  required
-                />
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Cédula o Identificación *</label>
+                  <input
+                    type="text"
+                    name="identification"
+                    value={formData.identification}
+                    onChange={handleFormChange}
+                    required
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label>Fecha de Nacimiento</label>
+                  <input
+                    type="date"
+                    name="birthdate"
+                    value={formData.birthdate}
+                    onChange={handleFormChange}
+                  />
+                </div>
               </div>
-              
+
               <div className="form-group">
-                <label>Fecha de Nacimiento</label>
+                <label>Teléfono</label>
                 <input
-                  type="date"
-                  name="birthdate"
-                  value={formData.birthdate}
-                  onChange={handleFormChange}
-                />
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label>Teléfono</label>
-              <input
-                type="tel"
-                name="number_phone"
-                value={formData.number_phone}
-                onChange={handleFormChange}
-              />
-            </div>
-
-            <div className="form-group">
-              <label>Correo Electrónico</label>
-              <input
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleFormChange}
-              />
-            </div>
-
-            <div className="form-row">
-              <div className="form-group">
-                <label>Profesión</label>
-                <input
-                  type="text"
-                  name="profession"
-                  value={formData.profession}
+                  type="tel"
+                  name="number_phone"
+                  value={formData.number_phone}
                   onChange={handleFormChange}
                 />
               </div>
-              
+
+              <div className="form-group">
+                <label>Correo Electrónico</label>
+                <input
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleFormChange}
+                />
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Profesión</label>
+                  <input
+                    type="text"
+                    name="profession"
+                    value={formData.profession}
+                    onChange={handleFormChange}
+                  />
+                </div>
+              </div>
+
               <div className="form-group address-field">
                 <label>Dirección</label>
                 <textarea
-                    name="address"
-                    value={formData.address}
+                  name="address"
+                  value={formData.address}
+                  onChange={handleFormChange}
+                  rows="3"
+                  className="address-textarea"
+                />
+              </div>
+            </div>
+
+            {/* Sección de información médica */}
+            <div className="medical-info-section">
+              <h4>Información Médica y de Emergencia</h4>
+              
+              {/* Contacto de Emergencia */}
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Contacto de Emergencia (Nombre)</label>
+                  <input
+                    type="text"
+                    name="emergency_contact_name"
+                    value={formData.emergency_contact_name}
                     onChange={handleFormChange}
-                    rows="3"
-                    className="address-textarea"
+                    placeholder="Nombre del contacto"
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label>Parentesco</label>
+                  <input
+                    type="text"
+                    name="emergency_contact_relationship"
+                    value={formData.emergency_contact_relationship}
+                    onChange={handleFormChange}
+                    placeholder="Ej: Padre, Madre, Cónyuge"
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Teléfono de Emergencia</label>
+                <input
+                  type="tel"
+                  name="emergency_contact_phone"
+                  value={formData.emergency_contact_phone}
+                  onChange={handleFormChange}
+                  placeholder="Número de teléfono"
+                />
+              </div>
+              
+              {/* Salud Bucal */}
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Salud Bucal</label>
+                  <select
+                    name="oral_health_status"
+                    value={formData.oral_health_status}
+                    onChange={handleFormChange}
+                  >
+                    <option value="">Seleccionar...</option>
+                    <option value="buena">Buena</option>
+                    <option value="regular">Regular</option>
+                    <option value="mala">Mala</option>
+                  </select>
+                </div>
+                
+                <div className="form-group">
+                  <label>Última Visita al Odontólogo</label>
+                  <input
+                    type="date"
+                    name="last_dental_visit"
+                    value={formData.last_dental_visit}
+                    onChange={handleFormChange}
+                  />
+                </div>
+              </div>
+              
+              {/* Historial Médico */}
+              <div className="form-group">
+                <label>Enfermedades Importantes</label>
+                <textarea
+                  name="medical_conditions"
+                  value={formData.medical_conditions}
+                  onChange={handleFormChange}
+                  rows="2"
+                  placeholder="¿Padece o ha padecido alguna enfermedad que considere importante dar a conocer?"
+                />
+              </div>
+              
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Alergias a Medicamentos</label>
+                  <textarea
+                    name="allergies"
+                    value={formData.allergies}
+                    onChange={handleFormChange}
+                    rows="2"
+                    placeholder="¿Es alérgico a algún medicamento?"
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label>Medicamentos Actuales</label>
+                  <textarea
+                    name="current_medications"
+                    value={formData.current_medications}
+                    onChange={handleFormChange}
+                    rows="2"
+                    placeholder="¿Está tomando algún medicamento?"
+                  />
+                </div>
+              </div>
+              
+              {/* Anestesia */}
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      name="previous_anesthesia"
+                      checked={formData.previous_anesthesia}
+                      onChange={handleFormChange}
+                    />
+                    ¿Ha sido anestesiado anteriormente?
+                  </label>
+                </div>
+              </div>
+              
+              {formData.previous_anesthesia && (
+                <div className="form-group">
+                  <label>Notas sobre Anestesia</label>
+                  <textarea
+                    name="anesthesia_notes"
+                    value={formData.anesthesia_notes}
+                    onChange={handleFormChange}
+                    rows="2"
+                    placeholder="Detalles sobre experiencias previas con anestesia..."
+                  />
+                </div>
+              )}
+              
+              {/* Hábitos */}
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      name="smokes"
+                      checked={formData.smokes}
+                      onChange={handleFormChange}
+                    />
+                    ¿Fuma?
+                  </label>
+                </div>
+                
+                <div className="form-group">
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      name="drinks_alcohol"
+                      checked={formData.drinks_alcohol}
+                      onChange={handleFormChange}
+                    />
+                    ¿Ingiere bebidas alcohólicas?
+                  </label>
+                </div>
+              </div>
+              
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Otras Sustancias</label>
+                  <input
+                    type="text"
+                    name="other_substances"
+                    value={formData.other_substances}
+                    onChange={handleFormChange}
+                    placeholder="¿Otro tipo de sustancia?"
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label>Frecuencia de Consumo</label>
+                  <input
+                    type="text"
+                    name="substance_frequency"
+                    value={formData.substance_frequency}
+                    onChange={handleFormChange}
+                    placeholder="¿Cada cuánto consume?"
+                  />
+                </div>
+              </div>
+              
+              {/* Notas Generales */}
+              <div className="form-group">
+                <label>Notas Adicionales</label>
+                <textarea
+                  name="general_notes"
+                  value={formData.general_notes}
+                  onChange={handleFormChange}
+                  rows="3"
+                  placeholder="Notas adicionales sobre el paciente..."
                 />
               </div>
             </div>
@@ -435,7 +999,6 @@ export default function PatientsPage() {
                   <th>Nombre Completo</th>
                   <th>Cédula</th>
                   <th>Teléfono</th>
-                  <th>Correo</th>
                   <th>Edad</th>
                   <th>Fecha de Registro</th>
                   <th>Acciones</th>
@@ -459,19 +1022,19 @@ export default function PatientsPage() {
                       {patient.number_phone ? formatPhone(patient.number_phone) : "N/A"}
                     </td>
                     <td>
-                      {patient.email ? (
-                        <a href={`mailto:${patient.email}`} className="patient-email">
-                          {patient.email}
-                        </a>
-                      ) : "N/A"}
-                    </td>
-                    <td>
                       {patient.birthdate ? `${calculateAge(patient.birthdate)} años` : "N/A"}
                     </td>
                     <td>
                       {patient.creation_date ? formatDate(patient.creation_date) : "N/A"}
                     </td>
                     <td className="actions-cell">
+                      <button 
+                        className="btn-view"
+                        onClick={() => openViewModal(patient)}
+                        title="Ver información completa"
+                      >
+                        👁️ Ver
+                      </button>
                       <button 
                         className="btn-edit"
                         onClick={() => openEditModal(patient)}

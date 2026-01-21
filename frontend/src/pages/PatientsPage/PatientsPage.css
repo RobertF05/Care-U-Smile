@@ -692,3 +692,412 @@
   z-index: 1000;
   box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
+
+/* Estilos para la sección de información médica */
+.personal-info-section,
+.medical-info-section {
+  margin-bottom: 25px;
+  padding-bottom: 20px;
+  border-bottom: 2px solid #E0E0E0;
+}
+
+.personal-info-section h4,
+.medical-info-section h4 {
+  color: #42A5F5;
+  font-size: 16px;
+  margin-bottom: 15px;
+  font-weight: 600;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #E0E0E0;
+}
+
+.medical-info-section h4 {
+  color: #4DB6AC;
+}
+
+/* Checkboxes personalizados */
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding: 10px 0;
+  font-weight: 400;
+  color: #455A64;
+  transition: all 0.2s ease;
+}
+
+.checkbox-label:hover {
+  color: #37474F;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  border: 2px solid #BDBDBD;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  appearance: none;
+  background-color: white;
+  position: relative;
+}
+
+.checkbox-label input[type="checkbox"]:checked {
+  background-color: #42A5F5;
+  border-color: #42A5F5;
+}
+
+.checkbox-label input[type="checkbox"]:checked::after {
+  content: '✓';
+  position: absolute;
+  color: white;
+  font-size: 14px;
+  font-weight: bold;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.checkbox-label input[type="checkbox"]:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(66, 165, 245, 0.2);
+}
+
+/* Estilos para textareas en formulario médico */
+.form-group textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #E0E0E0;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 60px;
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+  line-height: 1.5;
+}
+
+.form-group textarea:focus {
+  outline: none;
+  border-color: #42A5F5;
+  box-shadow: 0 0 0 3px rgba(66, 165, 245, 0.1);
+}
+
+.form-group textarea::placeholder {
+  color: #78909C;
+  opacity: 0.7;
+}
+
+/* Estilos para selects */
+.form-group select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #E0E0E0;
+  border-radius: 8px;
+  font-size: 14px;
+  background-color: white;
+  color: #37474F;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2378909C' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14L2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 12px;
+}
+
+.form-group select:focus {
+  outline: none;
+  border-color: #42A5F5;
+  box-shadow: 0 0 0 3px rgba(66, 165, 245, 0.1);
+}
+
+.form-group select option {
+  padding: 8px;
+  background-color: white;
+}
+
+/* Responsividad para formularios médicos */
+@media (max-width: 768px) {
+  .medical-info-section .form-row {
+    flex-direction: column;
+    gap: 0;
+  }
+  
+  .checkbox-label {
+    padding: 8px 0;
+  }
+}
+
+/* Mejora para modal con mucha información */
+.modal-content {
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+/* Separación entre secciones */
+.personal-info-section + .medical-info-section {
+  margin-top: 20px;
+}
+
+/* Campos requeridos */
+.form-group label[for*="first_name"],
+.form-group label[for*="first_last_name"],
+.form-group label[for*="identification"] {
+  position: relative;
+}
+
+.form-group label[for*="first_name"]::after,
+.form-group label[for*="first_last_name"]::after,
+.form-group label[for*="identification"]::after {
+  content: "*";
+  color: #EF5350;
+  margin-left: 4px;
+}
+
+/* Placeholders mejorados */
+.form-group input::placeholder,
+.form-group textarea::placeholder {
+  color: #90A4AE;
+  font-size: 13px;
+}
+
+/* Estilo para campos deshabilitados condicionales */
+.form-group input:disabled,
+.form-group textarea:disabled,
+.form-group select:disabled {
+  background-color: #F5F5F5;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* Animación para mostrar/ocultar campos condicionales */
+.form-group {
+  transition: all 0.3s ease;
+}
+
+/* Mejora para campos de fecha */
+.form-group input[type="date"] {
+  padding: 9px 12px;
+  font-family: inherit;
+}
+
+/* Estilo para el campo de dirección ya existente */
+.address-textarea {
+  min-height: 80px;
+}
+
+/* frontend/src/pages/PatientPage/PatientPage.css */
+/* Añade estos estilos al archivo existente */
+
+/* Botón para ver información */
+.btn-view {
+  background-color: #4DB6AC;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-view:hover {
+  background-color: #26A69A;
+  transform: translateY(-1px);
+}
+
+/* Modal de vista (solo lectura) */
+.view-modal {
+  max-width: 800px;
+  max-height: 85vh;
+}
+
+.patient-view-container {
+  margin-top: 20px;
+}
+
+.view-section {
+  margin-bottom: 25px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #E0E0E0;
+}
+
+.view-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.view-section h4 {
+  color: #42A5F5;
+  font-size: 18px;
+  margin-bottom: 15px;
+  font-weight: 600;
+}
+
+.view-subsection {
+  margin-bottom: 15px;
+}
+
+.view-subsection:last-child {
+  margin-bottom: 0;
+}
+
+.view-subsection h5 {
+  color: #4DB6AC;
+  font-size: 14px;
+  margin-bottom: 10px;
+  font-weight: 500;
+  padding-left: 8px;
+  border-left: 3px solid #4DB6AC;
+}
+
+.view-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 15px;
+}
+
+.view-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.view-item.full-width {
+  grid-column: 1 / -1;
+}
+
+.view-label {
+  font-size: 12px;
+  color: #78909C;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.view-value {
+  font-size: 14px;
+  color: #37474F;
+  font-weight: 400;
+  padding: 8px;
+  background-color: #F8F9FA;
+  border-radius: 6px;
+  border: 1px solid #E0E0E0;
+}
+
+.view-value.multiline {
+  white-space: pre-wrap;
+  line-height: 1.5;
+  min-height: 60px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.view-value.address-value {
+  min-height: 40px;
+}
+
+.no-medical-info {
+  text-align: center;
+  padding: 20px;
+  color: #78909C;
+  font-style: italic;
+  background-color: #F8F9FA;
+  border-radius: 8px;
+  border: 1px dashed #E0E0E0;
+}
+
+/* Estilos para la tabla de acciones */
+.actions-cell {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* Ajuste de tamaño para botones en tabla */
+.btn-view, .btn-edit, .btn-delete {
+  padding: 6px 10px;
+  font-size: 11px;
+  min-width: 70px;
+  justify-content: center;
+}
+
+/* Responsividad para modal de vista */
+@media (max-width: 768px) {
+  .view-modal {
+    max-width: 95vw;
+    max-height: 90vh;
+  }
+  
+  .view-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  
+  .actions-cell {
+    flex-direction: column;
+    gap: 5px;
+  }
+  
+  .btn-view, .btn-edit, .btn-delete {
+    width: 100%;
+    min-width: auto;
+  }
+}
+
+/* Scrollbar personalizado para modal */
+.modal-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.modal-content::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.modal-content::-webkit-scrollbar-thumb {
+  background: #BDBDBD;
+  border-radius: 4px;
+}
+
+.modal-content::-webkit-scrollbar-thumb:hover {
+  background: #9E9E9E;
+}
+
+/* Estilo para checkbox en formulario */
+.checkbox-label input[type="checkbox"] {
+  margin-right: 8px;
+}
+
+/* Espaciado mejorado en modal */
+.form-group {
+  margin-bottom: 15px;
+}
+
+.personal-info-section,
+.medical-info-section {
+  margin-bottom: 25px;
+}
+
+/* Mejora visual para secciones */
+.personal-info-section h4,
+.medical-info-section h4 {
+  background: linear-gradient(90deg, #42A5F5, #E3F2FD);
+  padding: 10px 15px;
+  border-radius: 8px;
+  margin: -10px -10px 20px -10px;
+  color: white;
+}
+
+.medical-info-section h4 {
+  background: linear-gradient(90deg, #4DB6AC, #E0F2F1);
+}

@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 // Importar rutas
 import authRoutes from './routes/authRoutes.js';
 import patientRoutes from './routes/patientRoutes.js';
+import patientMedicalInfoRoutes from './routes/patientMedicalInfoRoutes.js'; // <-- Importado
 import procedureRoutes from './routes/procedureRoutes.js';
 import appointmentRoutes from './routes/appointmentRoutes.js';
 import billRoutes from './routes/billRoutes.js';
@@ -57,7 +58,8 @@ app.get('/health', async (req, res) => {
 
 // Rutas API
 app.use('/api/auth', authRoutes);
-app.use('/api/patients', patientRoutes);
+app.use('/api/patients', patientRoutes);  // ✅ Rutas CRUD de pacientes
+app.use('/api/patients', patientMedicalInfoRoutes);  // ✅ Rutas de info médica (mismo prefijo)
 app.use('/api/procedures', procedureRoutes);
 app.use('/api/appointments', appointmentRoutes);
 app.use('/api/bills', billRoutes);

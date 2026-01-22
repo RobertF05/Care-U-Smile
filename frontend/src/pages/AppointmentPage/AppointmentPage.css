@@ -1885,3 +1885,92 @@ input:checked + .slider:before {
     gap: 1rem;
   }
 }
+
+/* Añade al final de AppointmentPage.css */
+
+/* Estilos para el modal de conversión automática */
+.auto-convert-message {
+  text-align: center;
+  padding: 2rem;
+}
+
+.success-icon {
+  font-size: 4rem;
+  color: #66BB6A;
+  margin-bottom: 1.5rem;
+}
+
+.auto-convert-message h4 {
+  color: #37474F;
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.auto-convert-message p {
+  color: #666;
+  line-height: 1.6;
+  margin-bottom: 1rem;
+}
+
+.info-text {
+  background: #e3f2fd;
+  padding: 1rem;
+  border-radius: 8px;
+  border-left: 4px solid #42A5F5;
+}
+
+.auto-convert-actions {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin: 2rem 0;
+}
+
+.skip-option {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #e0e0e0;
+}
+
+.btn-skip {
+  background: none;
+  border: none;
+  color: #78909C;
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 0.5rem;
+  transition: all 0.3s ease;
+}
+
+.btn-skip:hover {
+  color: #EF5350;
+  text-decoration: underline;
+}
+
+.skip-option small {
+  display: block;
+  margin-top: 0.5rem;
+  color: #999;
+  font-size: 0.8rem;
+}
+
+/* Estilos para botones deshabilitados */
+.action-btn-small:disabled,
+.status-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.action-btn-small:disabled:hover,
+.status-action-btn:disabled:hover {
+  background: inherit !important;
+  color: inherit !important;
+}
+
+/* Estilos para modal de edición */
+.appointment-form .form-input:disabled {
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+  opacity: 0.7;
+}

@@ -114,18 +114,53 @@ const Appointment = {
     return data;
   },
 
-  // Actualizar cita - USANDO appointment_ID (MAYÚSCULA)
-  async update(id, appointmentData) {
-    const { data, error } = await supabaseAdmin
-      .from('clinical_appointments')
-      .update(appointmentData)
-      .eq('appointment_ID', id) // <-- MAYÚSCULA
-      .select()
+  // appointmentModel.js - Actualizar el método update
+async update(id, appointmentData) {
+  // Primero obtener la cita actual para verificar su estado
+  const { data: currentAppointment, error: fetchError } = await supabaseAdmin
+    .from('clinical_appointments')
+    .select('state, appointment_ID')
+    .eq('appointment_ID', id)
+    .single();
+  
+  if (fetchError) throw fetchError;
+  
+  // Verificar si la cita ya está completada
+  if (currentAppointment.state === 'completed') {
+    throw new Error('No se puede editar una cita que ya está completada');
+  }
+  
+  // Verificar si la cita ya tiene un procedimiento asociado
+  if (currentAppointment.state === 'completed') {
+    const { data: procedure, error: procError } = await supabaseAdmin
+      .from('procedures')
+      .select('procedure_ID')
+      .eq('appointment_ID', id)
       .single();
     
-    if (error) throw error;
-    return data;
-  },
+    if (!procError && procedure) {
+      throw new Error('No se puede editar una cita que ya tiene un procedimiento registrado');
+    }
+  }
+  
+  // Si pasa las validaciones, actualizar la cita
+  const { data, error } = await supabaseAdmin
+    .from('clinical_appointments')
+    .update(appointmentData)
+    .eq('appointment_ID', id)
+    .select(`
+      *,
+      patients (
+        first_name,
+        first_last_name,
+        identification
+      )
+    `)
+    .single();
+  
+  if (error) throw error;
+  return data;
+},
 
   // Eliminar cita - USANDO appointment_ID (MAYÚSCULA)
   async delete(id) {

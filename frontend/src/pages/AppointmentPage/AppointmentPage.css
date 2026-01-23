@@ -115,6 +115,7 @@
   margin-bottom: 2rem;
   border: 1px solid var(--border-color);
   animation: slideDown 0.3s ease;
+  overflow: hidden;
 }
 
 .filter-header {
@@ -258,14 +259,87 @@
   background: rgba(239, 83, 80, 0.1);
 }
 
-/* Estadísticas */
+/* Estadísticas - NUEVO DISEÑO CON DESPLEGABLE */
 .appointments-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-bottom: 2.5rem;
+  background: var(--bg-primary);
+  border-radius: var(--border-radius-md);
+  border: 2px solid var(--border-color);
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.appointments-stats.expanded {
+  box-shadow: var(--shadow-md);
+}
+
+.stats-header-mobile {
+  display: none;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem 1.5rem;
+  background: var(--bg-secondary);
+  cursor: pointer;
+  border-bottom: 2px solid var(--border-color);
+}
+
+.stats-header-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.stats-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--text-primary);
+  font-size: 1.2rem;
+  margin: 0;
+  font-weight: 600;
+}
+
+.stats-summary-mobile {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.stat-summary-item {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.stat-summary-item:not(:last-child)::after {
+  content: "•";
+  margin-left: 0.5rem;
+  color: var(--border-color);
+}
+
+.stats-toggle-icon {
+  color: var(--text-secondary);
+  font-size: 1.1rem;
+  transition: transform 0.3s ease;
+  min-width: 24px;
+}
+
+.stats-grid-container {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 1.5rem;
-  margin-bottom: 2.5rem;
+  padding: 1.5rem;
+  transition: all 0.3s ease;
 }
 
+/* Cards de estadísticas */
 .stat-card {
   background: var(--bg-primary);
   border-radius: var(--border-radius-md);
@@ -369,6 +443,58 @@
   font-weight: 600;
 }
 
+/* Filtros móviles desplegables */
+.filter-header-mobile {
+  display: none;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem 1.5rem;
+  background: var(--bg-secondary);
+  cursor: pointer;
+  border-bottom: 2px solid var(--border-color);
+}
+
+.filter-header-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.filter-header-content h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--text-primary);
+  font-size: 1.2rem;
+  margin: 0;
+  font-weight: 600;
+}
+
+.filter-summary {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.filter-summary span {
+  white-space: nowrap;
+}
+
+.filter-toggle-icon {
+  color: var(--text-secondary);
+  font-size: 1.1rem;
+  transition: transform 0.3s ease;
+  min-width: 24px;
+}
+
+.filter-content-container {
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
 /* Sin citas */
 .no-appointments {
   text-align: center;
@@ -424,12 +550,12 @@
   padding: 1.5rem;
 }
 
-/* Fila horizontal principal */
+/* Fila horizontal principal - RE-DISEÑADA PARA MÁS ESPACIO */
 .appointment-main-row {
   display: grid;
-  grid-template-columns: 1fr 2fr 2fr 1.5fr 2fr;
+  grid-template-columns: 0.8fr 1.5fr 1.5fr 1.2fr 1.8fr;
   gap: 1.5rem;
-  align-items: center;
+  align-items: flex-start;
 }
 
 /* Columnas */
@@ -437,44 +563,51 @@
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  min-height: 70px;
+  justify-content: flex-start;
 }
 
-/* Columna 1: Fecha y hora */
+/* Columna 1: Fecha y hora - AJUSTADO */
 .date-column {
-  min-width: 120px;
+  min-width: 140px;
 }
 
 .appointment-date-short {
   font-size: 1.1rem;
   font-weight: 700;
   color: var(--text-primary);
-  line-height: 1.2;
+  line-height: 1.3;
+  white-space: nowrap;
 }
 
 .appointment-time {
   font-size: 0.95rem;
   color: var(--text-secondary);
   font-weight: 500;
+  white-space: nowrap;
 }
 
-/* Columna 2: Paciente */
+/* Columna 2: Paciente - MÁS ESPACIO */
 .patient-column {
-  min-width: 200px;
+  min-width: 280px;
+  flex: 1;
 }
 
 .appointment-patient-name {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.5rem;
   font-weight: 600;
   color: var(--text-primary);
   font-size: 1.05rem;
+  min-height: auto;
+  line-height: 1.4;
 }
 
 .appointment-patient-info {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.3rem;
 }
 
 .patient-id,
@@ -484,50 +617,68 @@
   gap: 0.5rem;
   font-size: 0.9rem;
   color: var(--text-secondary);
+  min-height: auto;
+  line-height: 1.3;
+  flex-wrap: wrap;
 }
 
 .patient-id svg,
 .patient-phone svg {
   font-size: 0.8rem;
+  flex-shrink: 0;
 }
 
-/* Columna 3: Servicio y tipo */
+/* Columna 3: Servicio y tipo - MÁS ESPACIO */
 .service-column {
-  min-width: 200px;
+  min-width: 280px;
+  flex: 1;
 }
 
 .appointment-service-info {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.5rem;
   font-weight: 500;
   color: var(--text-primary);
   font-size: 1rem;
+  min-height: auto;
+  line-height: 1.4;
 }
 
 .service-name {
-  max-width: 180px;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+  hyphens: auto;
+}
+
+.appointment-type-info {
+  margin-top: 0.25rem;
 }
 
 .appointment-type-badge {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.4rem 0.8rem;
+  padding: 0.4rem 0.9rem;
   border-radius: 20px;
   font-size: 0.85rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   width: fit-content;
+  white-space: nowrap;
 }
 
 /* Columna 4: Estado */
 .status-column {
-  min-width: 150px;
+  min-width: 160px;
 }
 
 .appointment-status-badge {
@@ -541,13 +692,14 @@
   text-transform: uppercase;
   letter-spacing: 0.5px;
   width: fit-content;
+  white-space: nowrap;
 }
 
 .procedure-badge {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.4rem 0.8rem;
+  padding: 0.4rem 0.9rem;
   border-radius: 20px;
   font-size: 0.8rem;
   font-weight: 600;
@@ -555,17 +707,19 @@
   color: #9c27b0;
   margin-top: 0.5rem;
   width: fit-content;
+  white-space: nowrap;
 }
 
 /* Columna 5: Acciones */
 .actions-column {
-  min-width: 250px;
+  min-width: 280px;
 }
 
 .appointment-actions-horizontal {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 1rem;
+  flex-wrap: wrap;
 }
 
 /* Botones de acción horizontales - MÁS GRANDES */
@@ -1101,28 +1255,41 @@ input:checked + .slider:before {
   color: #2196f3;
 }
 
-/* Responsive */
+/* RESPONSIVE - MODIFICACIONES IMPORTANTES PARA MÁS ESPACIO */
 @media (max-width: 1200px) {
   .appointment-main-row {
     grid-template-columns: repeat(3, 1fr);
     grid-template-rows: auto auto;
-    gap: 1rem;
+    gap: 1.2rem;
   }
   
   .date-column,
   .patient-column,
   .service-column {
     grid-column: span 1;
+    min-width: unset;
   }
   
   .status-column {
     grid-column: 1 / span 2;
     grid-row: 2;
+    min-width: unset;
   }
   
   .actions-column {
     grid-column: 3;
     grid-row: 2;
+    min-width: unset;
+  }
+  
+  /* Más espacio para texto en tablet */
+  .service-name,
+  .appointment-patient-name {
+    -webkit-line-clamp: 2;
+  }
+  
+  .appointment-actions-horizontal {
+    gap: 0.75rem;
   }
 }
 
@@ -1133,7 +1300,8 @@ input:checked + .slider:before {
   
   .appointment-main-row {
     grid-template-columns: 1fr;
-    gap: 1rem;
+    gap: 1.2rem;
+    grid-template-rows: auto;
   }
   
   .date-column,
@@ -1142,30 +1310,64 @@ input:checked + .slider:before {
   .status-column,
   .actions-column {
     grid-column: 1;
+    grid-row: auto;
+    min-width: unset;
+    width: 100%;
   }
   
   .date-column {
-    grid-row: 1;
+    order: 1;
   }
   
   .patient-column {
-    grid-row: 2;
+    order: 2;
   }
   
   .service-column {
-    grid-row: 3;
+    order: 3;
   }
   
   .status-column {
-    grid-row: 4;
+    order: 4;
   }
   
   .actions-column {
-    grid-row: 5;
+    order: 5;
+    min-width: unset;
+  }
+  
+  /* Más espacio vertical en móvil */
+  .appointment-column {
+    min-height: auto;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+  }
+  
+  .appointment-column:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+  
+  .service-name,
+  .appointment-patient-name {
+    -webkit-line-clamp: 3;
+    max-width: 100%;
   }
   
   .appointment-actions-horizontal {
     flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+  
+  /* Asegurar que los textos largos se muestren bien */
+  .appointment-patient-name,
+  .appointment-service-info {
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+  
+  .patient-id {
+    word-break: break-all;
   }
 }
 
@@ -1187,16 +1389,40 @@ input:checked + .slider:before {
   .add-appointment-btn,
   .filter-toggle-btn {
     justify-content: center;
+    width: 100%;
   }
   
+  /* Estadísticas desplegables en móvil */
   .appointments-stats {
+    padding: 0;
+  }
+  
+  .stats-header-mobile {
+    display: flex;
+  }
+  
+  .stats-grid-container {
+    padding: 1rem;
+    display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 1rem;
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: all 0.3s ease;
+  }
+  
+  .appointments-stats.expanded .stats-grid-container {
+    max-height: 500px;
+    opacity: 1;
+    padding: 1.5rem;
   }
   
   .stat-card {
     padding: 1rem;
     gap: 1rem;
+    flex-direction: column;
+    text-align: center;
   }
   
   .stat-icon {
@@ -1209,6 +1435,63 @@ input:checked + .slider:before {
     font-size: 1.5rem;
   }
   
+  /* Filtros desplegables en móvil */
+  .filter-section {
+    padding: 0;
+  }
+  
+  .filter-header-mobile {
+    display: flex;
+  }
+  
+  .filter-content-container {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: all 0.3s ease;
+  }
+  
+  .filter-section.expanded .filter-content-container {
+    max-height: 1000px;
+    opacity: 1;
+    padding: 1.5rem;
+  }
+  
+  .filter-header {
+    display: none;
+  }
+  
+  /* Mejorar visualización de textos largos en móvil */
+  .appointment-main-row {
+    gap: 1rem;
+  }
+  
+  .appointment-column {
+    gap: 0.4rem;
+  }
+  
+  .service-name,
+  .appointment-patient-name {
+    -webkit-line-clamp: 3;
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+  
+  /* IDs y números de teléfono en múltiples líneas si es necesario */
+  .patient-id,
+  .patient-phone {
+    flex-wrap: wrap;
+    line-height: 1.4;
+  }
+  
+  .appointment-date-short {
+    font-size: 1rem;
+  }
+  
+  .appointment-time {
+    font-size: 0.9rem;
+  }
+  
   .time-filter-buttons,
   .status-filter-buttons,
   .type-filter-buttons {
@@ -1219,17 +1502,37 @@ input:checked + .slider:before {
   .status-filter-btn,
   .type-filter-btn {
     justify-content: center;
+    width: 100%;
+  }
+  
+  .search-box {
+    width: 100%;
+  }
+  
+  .appointment-actions-horizontal {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+  
+  .status-actions-horizontal {
+    flex-direction: column;
+    width: 100%;
+    gap: 0.5rem;
   }
   
   .status-action-btn,
   .action-btn-horizontal {
     min-width: 100%;
     width: 100%;
+    justify-content: center;
+    padding: 0.8rem 1rem;
   }
   
-  .status-actions-horizontal {
-    flex-direction: column;
+  .edit-delete-actions {
+    justify-content: center;
     width: 100%;
+    margin-top: 0.5rem;
   }
   
   .modal-content {
@@ -1239,14 +1542,52 @@ input:checked + .slider:before {
 }
 
 @media (max-width: 480px) {
-  .appointments-stats {
+  .appointments-stats.expanded .stats-grid-container {
     grid-template-columns: 1fr;
   }
   
-  .stat-card {
-    flex-direction: column;
-    text-align: center;
-    gap: 1rem;
+  .stat-summary-item {
+    font-size: 0.85rem;
+  }
+  
+  .stats-summary-mobile {
+    gap: 0.5rem;
+  }
+  
+  /* Aún más espacio para textos en móviles pequeños */
+  .appointment-card-content {
+    padding: 1rem;
+  }
+  
+  .service-name,
+  .appointment-patient-name {
+    -webkit-line-clamp: 4;
+    font-size: 1rem;
+    line-height: 1.6;
+  }
+  
+  .appointment-patient-name,
+  .appointment-service-info {
+    font-size: 1rem;
+    line-height: 1.6;
+  }
+  
+  /* IDs más legibles */
+  .patient-id {
+    font-size: 0.85rem;
+    word-break: break-all;
+  }
+  
+  /* Badges más compactos */
+  .appointment-status-badge,
+  .appointment-type-badge,
+  .procedure-badge {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.8rem;
+  }
+  
+  .appointment-main-row.compact-view {
+    gap: 0.75rem;
   }
   
   .appointment-actions-horizontal {
@@ -1263,9 +1604,13 @@ input:checked + .slider:before {
     width: 100%;
     justify-content: center;
   }
+  
+  .filter-summary {
+    font-size: 0.85rem;
+  }
 }
 
-/* Estilos para vista compacta */
+/* Estilos para vista compacta - MEJORADOS */
 .appointment-main-row.compact-view {
   gap: 1rem;
 }
@@ -1274,20 +1619,26 @@ input:checked + .slider:before {
   min-width: unset;
 }
 
-/* Texto truncado para nombres largos */
+/* Texto truncado para nombres largos - VERSIÓN MEJORADA */
 .patient-name-truncate,
 .service-name-truncate {
-  max-width: 120px;
+  max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
 }
 
 /* Badges compactos */
 .appointment-status-badge.compact,
 .appointment-type-badge.compact {
-  padding: 0.3rem 0.6rem;
-  font-size: 0.75rem;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.8rem;
+  white-space: nowrap;
 }
 
 /* Indicador de bloqueo */
@@ -1302,6 +1653,7 @@ input:checked + .slider:before {
   color: #9E9E9E;
   font-size: 0.8rem;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .procedure-badge.locked {
@@ -1453,7 +1805,8 @@ input:checked + .slider:before {
 @media (max-width: 1200px) {
   .patient-name-truncate,
   .service-name-truncate {
-    max-width: 100px;
+    max-width: 180px;
+    -webkit-line-clamp: 2;
   }
 }
 
@@ -1464,14 +1817,21 @@ input:checked + .slider:before {
   
   .patient-name-truncate,
   .service-name-truncate {
-    max-width: 200px;
+    max-width: 100%;
+    -webkit-line-clamp: 3;
+  }
+  
+  .patient-results-list {
+    max-height: 200px;
   }
 }
 
 @media (max-width: 768px) {
   .patient-name-truncate,
   .service-name-truncate {
-    max-width: 150px;
+    max-width: 100%;
+    -webkit-line-clamp: 3;
+    font-size: 1rem;
   }
   
   .appointment-actions-horizontal {
@@ -1489,24 +1849,133 @@ input:checked + .slider:before {
     width: 100%;
     justify-content: center;
   }
-  
-  .patient-results-list {
-    max-height: 200px;
-  }
 }
 
 @media (max-width: 480px) {
   .patient-name-truncate,
   .service-name-truncate {
-    max-width: 120px;
+    max-width: 100%;
+    -webkit-line-clamp: 4;
   }
   
   .appointment-main-row.compact-view {
     gap: 0.75rem;
   }
+  
+  /* Mejorar visualización de textos en móviles pequeños */
+  .appointment-patient-name {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+  
+  .appointment-patient-name svg,
+  .appointment-service-info svg {
+    margin-right: 0.25rem;
+  }
 }
 
-/* Añadir al final del archivo AppointmentPage.css existente */
+@media (max-width: 375px) {
+  /* Para móviles muy pequeños */
+  .patient-name-truncate,
+  .service-name-truncate {
+    -webkit-line-clamp: 5;
+    font-size: 0.95rem;
+  }
+  
+  .appointment-date-short {
+    font-size: 0.95rem;
+  }
+  
+  .appointment-time {
+    font-size: 0.85rem;
+  }
+}
+
+/* NUEVOS ESTILOS PARA MEJORAR LEGIBILIDAD DE TEXTOS LARGOS */
+
+/* Permitir que los textos largos se ajusten mejor */
+.text-long-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+/* Clase específica para nombres muy largos */
+.long-text-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-height: 1.4;
+  word-break: break-word;
+  hyphens: auto;
+}
+
+/* Para identificaciones largas */
+.long-id-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.long-id-text {
+  font-family: 'Courier New', monospace;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  word-break: break-all;
+  line-height: 1.3;
+}
+
+/* Para servicios con nombres largos */
+.long-service-name {
+  font-weight: 500;
+  color: var(--text-primary);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
+}
+
+/* Mejoras para el diseño de columnas en diferentes dispositivos */
+@media (min-width: 1400px) {
+  .appointment-main-row {
+    grid-template-columns: 0.7fr 1.6fr 1.6fr 1.1fr 1.8fr;
+    gap: 1.75rem;
+  }
+  
+  .patient-name-truncate,
+  .service-name-truncate {
+    max-width: 240px;
+  }
+  
+  .service-name {
+    -webkit-line-clamp: 2;
+  }
+}
+
+/* Estilos para campos de identificación largos en escritorio */
+@media (min-width: 1025px) {
+  .patient-id .long-id-text {
+    max-width: 200px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  .patient-id:hover .long-id-text {
+    max-width: none;
+    white-space: normal;
+    word-break: break-all;
+  }
+}
+
+/* Añade al final del archivo AppointmentPage.css */
 
 /* Modal grande para formulario detallado */
 .large-modal {
@@ -1973,4 +2442,128 @@ input:checked + .slider:before {
   background-color: #f5f5f5;
   cursor: not-allowed;
   opacity: 0.7;
+}
+
+.procedure-badge.registered {
+  background-color: #4CAF50;
+  color: white;
+}
+
+.locked-indicator {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #4CAF50;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background-color: #E8F5E9;
+}
+
+.convert-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background-color: #cccccc;
+}
+
+/* Animación para desplegables */
+.filter-section.expanded .filter-toggle-icon,
+.appointments-stats.expanded .stats-toggle-icon {
+  transform: rotate(180deg);
+}
+
+/* Transiciones suaves para contenido desplegable */
+.filter-content-container,
+.stats-grid-container {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Permitir scroll en IDs muy largos en móvil */
+@media (max-width: 768px) {
+  .patient-id {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
+  }
+  
+  .patient-id::-webkit-scrollbar {
+    height: 3px;
+  }
+  
+  .patient-id::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+  }
+}
+
+/* BUSCADOR PRINCIPAL - NUEVO */
+.search-box-main-container {
+  background: var(--bg-secondary);
+  border-radius: var(--border-radius-lg);
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  border: 1px solid var(--border-color);
+  animation: slideDown 0.3s ease;
+}
+
+.search-box-main {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.search-input-main {
+  width: 100%;
+  padding: 0.85rem 1rem 0.85rem 3rem;
+  border: 2px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  font-size: 1rem;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+}
+
+.search-input-main:focus {
+  outline: none;
+  border-color: var(--primary-blue);
+  box-shadow: 0 0 0 3px rgba(66, 165, 245, 0.1);
+}
+
+.search-help-text {
+  display: block;
+  margin-top: 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+/* Responsive para el nuevo buscador */
+@media (max-width: 768px) {
+  .search-box-main-container {
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  
+  .search-input-main {
+    padding: 0.75rem 1rem 0.75rem 2.5rem;
+    font-size: 0.95rem;
+  }
+  
+  .search-help-text {
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .search-box-main-container {
+    padding: 0.75rem;
+  }
+  
+  .search-input-main {
+    padding: 0.65rem 0.85rem 0.65rem 2.5rem;
+    font-size: 0.9rem;
+  }
 }

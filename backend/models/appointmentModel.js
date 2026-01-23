@@ -1,4 +1,3 @@
-// appointmentModel.js
 import { supabaseAdmin } from '../config/supabase.js';
 
 const Appointment = {
@@ -41,6 +40,10 @@ const Appointment = {
       query = query.eq('is_orthodontics', filters.isOrthodontics);
     }
     
+    if (filters.isRegistered !== undefined) {
+      query = query.eq('is_registered', filters.isRegistered);
+    }
+    
     query = query.range(from, to);
     
     const { data, error, count } = await query;
@@ -52,7 +55,8 @@ const Appointment = {
       ...item,
       patient_name: `${item.patients?.first_name || ''} ${item.patients?.first_last_name || ''}`.trim(),
       patient_identification: item.patients?.identification,
-      patient_phone: item.patients?.number_phone
+      patient_phone: item.patients?.number_phone,
+      is_registered: item.is_registered || false
     }));
     
     return {
@@ -64,7 +68,7 @@ const Appointment = {
     };
   },
 
-  // Obtener cita por ID - USANDO appointment_ID (MAYÚSCULA)
+  // Obtener cita por ID
   async getById(id) {
     const { data, error } = await supabaseAdmin
       .from('clinical_appointments')
@@ -78,7 +82,7 @@ const Appointment = {
           email
         )
       `)
-      .eq('appointment_ID', id) // <-- MAYÚSCULA
+      .eq('appointment_ID', id)
       .single();
     
     if (error) throw error;
@@ -88,7 +92,8 @@ const Appointment = {
       patient_name: `${data.patients?.first_name || ''} ${data.patients?.first_last_name || ''}`.trim(),
       patient_identification: data.patients?.identification,
       patient_phone: data.patients?.number_phone,
-      patient_email: data.patients?.email
+      patient_email: data.patients?.email,
+      is_registered: data.is_registered || false
     };
   },
 
@@ -98,7 +103,8 @@ const Appointment = {
       .from('clinical_appointments')
       .insert([{
         ...appointmentData,
-        state: 'scheduled'
+        state: 'scheduled',
+        is_registered: false // Por defecto no registrada
       }])
       .select(`
         *,
@@ -111,63 +117,34 @@ const Appointment = {
       .single();
     
     if (error) throw error;
-    return data;
+    return {
+      ...data,
+      is_registered: data.is_registered || false
+    };
   },
 
-  // appointmentModel.js - Actualizar el método update
-async update(id, appointmentData) {
-  // Primero obtener la cita actual para verificar su estado
-  const { data: currentAppointment, error: fetchError } = await supabaseAdmin
-    .from('clinical_appointments')
-    .select('state, appointment_ID')
-    .eq('appointment_ID', id)
-    .single();
-  
-  if (fetchError) throw fetchError;
-  
-  // Verificar si la cita ya está completada
-  if (currentAppointment.state === 'completed') {
-    throw new Error('No se puede editar una cita que ya está completada');
-  }
-  
-  // Verificar si la cita ya tiene un procedimiento asociado
-  if (currentAppointment.state === 'completed') {
-    const { data: procedure, error: procError } = await supabaseAdmin
-      .from('procedures')
-      .select('procedure_ID')
+  // Actualizar cita
+  async update(id, appointmentData) {
+    const { data, error } = await supabaseAdmin
+      .from('clinical_appointments')
+      .update(appointmentData)
       .eq('appointment_ID', id)
+      .select()
       .single();
     
-    if (!procError && procedure) {
-      throw new Error('No se puede editar una cita que ya tiene un procedimiento registrado');
-    }
-  }
-  
-  // Si pasa las validaciones, actualizar la cita
-  const { data, error } = await supabaseAdmin
-    .from('clinical_appointments')
-    .update(appointmentData)
-    .eq('appointment_ID', id)
-    .select(`
-      *,
-      patients (
-        first_name,
-        first_last_name,
-        identification
-      )
-    `)
-    .single();
-  
-  if (error) throw error;
-  return data;
-},
+    if (error) throw error;
+    return {
+      ...data,
+      is_registered: data.is_registered || false
+    };
+  },
 
-  // Eliminar cita - USANDO appointment_ID (MAYÚSCULA)
+  // Eliminar cita
   async delete(id) {
     const { data, error } = await supabaseAdmin
       .from('clinical_appointments')
       .delete()
-      .eq('appointment_ID', id) // <-- MAYÚSCULA
+      .eq('appointment_ID', id)
       .select()
       .single();
     
@@ -181,10 +158,15 @@ async update(id, appointmentData) {
     const { data: appointment, error: appointmentError } = await supabaseAdmin
       .from('clinical_appointments')
       .select('*')
-      .eq('appointment_ID', appointmentId) // <-- MAYÚSCULA
+      .eq('appointment_ID', appointmentId)
       .single();
     
     if (appointmentError) throw appointmentError;
+    
+    // Verificar si ya está registrada
+    if (appointment.is_registered) {
+      throw new Error('Esta cita ya ha sido registrada como procedimiento');
+    }
     
     // 2. Crear el procedimiento
     const { data: procedure, error: procedureError } = await supabaseAdmin
@@ -198,25 +180,48 @@ async update(id, appointmentData) {
         payment_method: procedureData.payment_method,
         is_orthodontics: appointment.is_orthodontics,
         observations: procedureData.observations || appointment.observations,
-        creation_date: new Date().toISOString()
+        creation_date: new Date().toISOString(),
+        // Campos adicionales
+        total_cost_USD: procedureData.total_cost_USD || 0,
+        total_procedure: procedureData.total_procedure || 0,
+        amount_cordobas: procedureData.amount_cordobas || 0,
+        amount_dollars: procedureData.amount_dollars || 0,
+        payment_method_cordobas: procedureData.payment_method_cordobas,
+        payment_method_dollars: procedureData.payment_method_dollars,
+        external_doctor: procedureData.external_doctor,
+        external_doctor_payment: procedureData.external_doctor_payment,
+        theres_external_doctor: procedureData.theres_external_doctor || false,
+        external_doctor_name: procedureData.external_doctor_name,
+        external_doctor_specialty: procedureData.external_doctor_specialty,
+        external_doctor_payment_type: procedureData.external_doctor_payment_type,
+        external_doctor_payment_value: procedureData.external_doctor_payment_value,
+        external_doctor_payment_currency: procedureData.external_doctor_payment_currency,
+        clinic_payment_percentage: procedureData.clinic_payment_percentage,
+        doctor_payment_percentage: procedureData.doctor_payment_percentage
       }])
       .select()
       .single();
     
     if (procedureError) throw procedureError;
     
-    // 3. Actualizar estado de la cita a "completed"
+    // 3. Actualizar estado de la cita a "completed" y marcar como registrada
     const { data: updatedAppointment, error: updateError } = await supabaseAdmin
       .from('clinical_appointments')
-      .update({ state: 'completed' })
-      .eq('appointment_ID', appointmentId) // <-- MAYÚSCULA
+      .update({ 
+        state: 'completed',
+        is_registered: true 
+      })
+      .eq('appointment_ID', appointmentId)
       .select()
       .single();
     
     if (updateError) throw updateError;
     
     return {
-      appointment: updatedAppointment,
+      appointment: {
+        ...updatedAppointment,
+        is_registered: true
+      },
       procedure
     };
   },
@@ -245,20 +250,24 @@ async update(id, appointmentData) {
     return data.map(item => ({
       ...item,
       patient_name: `${item.patients?.first_name || ''} ${item.patients?.first_last_name || ''}`.trim(),
-      patient_phone: item.patients?.number_phone
+      patient_phone: item.patients?.number_phone,
+      is_registered: item.is_registered || false
     }));
   },
 
-  // Obtener citas por paciente - USANDO Patient_ID (MAYÚSCULA)
+  // Obtener citas por paciente
   async getByPatientId(patientId) {
     const { data, error } = await supabaseAdmin
       .from('clinical_appointments')
       .select('*')
-      .eq('Patient_ID', patientId) // <-- MAYÚSCULA
+      .eq('Patient_ID', patientId)
       .order('appointment_date', { ascending: false });
     
     if (error) throw error;
-    return data;
+    return data.map(item => ({
+      ...item,
+      is_registered: item.is_registered || false
+    }));
   },
 
   // Contar citas por estado
@@ -267,6 +276,28 @@ async update(id, appointmentData) {
       .from('clinical_appointments')
       .select('*', { count: 'exact', head: true })
       .eq('state', state);
+    
+    if (error) throw error;
+    return count;
+  },
+
+  // Contar citas registradas
+  async countRegistered() {
+    const { count, error } = await supabaseAdmin
+      .from('clinical_appointments')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_registered', true);
+    
+    if (error) throw error;
+    return count;
+  },
+
+  // Contar citas no registradas
+  async countUnregistered() {
+    const { count, error } = await supabaseAdmin
+      .from('clinical_appointments')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_registered', false);
     
     if (error) throw error;
     return count;

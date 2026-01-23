@@ -1,5 +1,4 @@
-// frontend/src/pages/DashboardPage.jsx
-import React, { useContext, useEffect } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
   faUsers, 
@@ -10,7 +9,10 @@ import {
   faUserMd,
   faClock,
   faSmile,
-  faReceipt
+  faReceipt,
+  faChevronDown,
+  faChevronUp,
+  faChartBar
 } from '@fortawesome/free-solid-svg-icons';
 import { AuthContext } from '../../context/AuthContext.jsx';
 import { AppContext } from '../../context/AppContext.jsx';
@@ -26,6 +28,8 @@ const DashboardPage = () => {
     fetchAppointments,
     fetchProcedures 
   } = useContext(AppContext);
+
+  const [expandedStats, setExpandedStats] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -133,21 +137,41 @@ const DashboardPage = () => {
         </div>
       </div>
       
-      {/* Estadísticas */}
-      <div className="dashboard-grid">
-        {dashboardStats.map((stat) => (
-          <div key={stat.id} className="dashboard-card">
-            <div className="card-header">
-              <div className="card-icon-wrapper" style={{ backgroundColor: `${stat.color}20` }}>
-                <FontAwesomeIcon icon={stat.icon} style={{ color: stat.color }} />
-              </div>
-              <h3 className="card-title">{stat.title}</h3>
-            </div>
-            <div className="card-body">
-              <div className="card-value">{stat.value}</div>
+      {/* Estadísticas desplegables */}
+      <div className={`appointments-stats ${expandedStats ? 'expanded' : ''}`}>
+        <div className="stats-header-mobile" onClick={() => setExpandedStats(!expandedStats)}>
+          <div className="stats-header-content">
+            <h3 className="stats-title">
+              <FontAwesomeIcon icon={faChartBar} />
+              Estadísticas del Dashboard
+            </h3>
+            <div className="stats-summary-mobile">
+              <span className="stat-summary-item">Pacientes: {stats.totalPatients}</span>
+              <span className="stat-summary-item">Citas hoy: {stats.todayAppointments}</span>
+              <span className="stat-summary-item">Ingresos: {formatCurrency(stats.monthlyIncome)}</span>
             </div>
           </div>
-        ))}
+          <FontAwesomeIcon 
+            icon={expandedStats ? faChevronUp : faChevronDown} 
+            className="stats-toggle-icon"
+          />
+        </div>
+        
+        <div className="stats-grid-container">
+          {dashboardStats.map((stat) => (
+            <div key={stat.id} className="dashboard-card">
+              <div className="card-header">
+                <div className="card-icon-wrapper" style={{ backgroundColor: `${stat.color}20` }}>
+                  <FontAwesomeIcon icon={stat.icon} style={{ color: stat.color }} />
+                </div>
+                <h3 className="card-title">{stat.title}</h3>
+              </div>
+              <div className="card-body">
+                <div className="card-value">{stat.value}</div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
       
       {/* Secciones inferiores */}

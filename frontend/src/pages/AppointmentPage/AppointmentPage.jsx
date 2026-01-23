@@ -30,7 +30,8 @@ import {
   faDollarSign,
   faUserDoctor,
   faFileMedical,
-  faSave
+  faSave,
+  faChartBar
 } from '@fortawesome/free-solid-svg-icons';
 import { AppContext } from '../../context/AppContext';
 import { AuthContext } from '../../context/AuthContext';
@@ -59,6 +60,53 @@ const PAYMENT_METHODS = [
   'Mixto'
 ];
 
+// FUNCIONES FORMATADORAS - MOVIDAS ARRIBA para evitar el error
+const formatDateTime = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  return date.toLocaleDateString('es-ES', {
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
+
+const formatTime = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  return date.toLocaleTimeString('es-ES', {
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
+
+const formatDateShort = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  return date.toLocaleDateString('es-ES', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  });
+};
+
+const formatCurrency = (amount) => {
+  return new Intl.NumberFormat('es-NI', {
+    style: 'currency',
+    currency: 'NIO'
+  }).format(amount || 0);
+};
+
+const formatCurrencyUSD = (amount) => {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD'
+  }).format(amount || 0);
+};
+
 const AppointmentPage = () => {
   const { user } = useContext(AuthContext);
   const { 
@@ -75,7 +123,7 @@ const AppointmentPage = () => {
   } = useContext(AppContext);
 
   // Estados
-  const [timeFilter, setTimeFilter] = useState(TIME_FILTERS.TODAY);
+  const [timeFilter, setTimeFilter] = useState(TIME_FILTERS.THIS_MONTH);
   const [statusFilter, setStatusFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -96,6 +144,10 @@ const AppointmentPage = () => {
     clinic_payment: 40,
     doctor_payment: 60
   });
+  
+  // Nuevos estados para desplegables móviles
+  const [expandedStats, setExpandedStats] = useState(false);
+  const [expandedFilterSection, setExpandedFilterSection] = useState(false);
   
   // Formulario de nueva cita
   const [newAppointment, setNewAppointment] = useState({
@@ -208,14 +260,6 @@ const AppointmentPage = () => {
     setProcedureForm(updatedForm);
   };
 
-  // Formatear moneda en dólares
-  const formatCurrencyUSD = (amount) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(amount || 0);
-  };
-
   // Filtrar pacientes cuando cambia el término de búsqueda
   useEffect(() => {
     if (patients.length > 0 && patientSearchTerm.trim()) {
@@ -256,7 +300,25 @@ const AppointmentPage = () => {
     }
   }, [showConvertModal]);
 
-  // Filtrar citas
+  // Verificar si la cita ya tiene un procedimiento asociado
+  const hasProcedure = (appointment) => {
+    return appointment.is_registered || appointment.procedure_id || appointment.procedure_ID;
+  };
+
+  // Verificar si la cita puede ser editada
+  const canEditAppointment = (appointment) => {
+    // No se puede editar si:
+    // 1. Ya tiene un procedimiento asociado
+    // 2. Está en estado "completed"
+    // 3. Está en estado "cancelled"
+    const hasProcedure = appointment.is_registered || appointment.procedure_id || appointment.procedure_ID;
+    const isCompleted = appointment.state === 'completed';
+    const isCancelled = appointment.state === 'cancelled';
+    
+    return !hasProcedure && !isCompleted && !isCancelled;
+  };
+
+  // Filtrar citas - CORREGIDO: ahora usa formatDateTime que está definido arriba
   const filteredAppointments = useMemo(() => {
     let filtered = [...appointments];
 
@@ -353,70 +415,12 @@ const AppointmentPage = () => {
     };
   }, [appointments]);
 
-  // Formateadores
-  const formatDateTime = (dateString) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('es-ES', {
-      weekday: 'short',
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  const formatTime = (dateString) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toLocaleTimeString('es-ES', {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  const formatDateShort = (dateString) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('es-ES', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
-  };
-
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('es-NI', {
-      style: 'currency',
-      currency: 'NIO'
-    }).format(amount || 0);
-  };
-
   // Funciones para citas
   const toggleExpandAppointment = (appointmentId) => {
     setExpandedAppointments(prev => ({
       ...prev,
       [appointmentId]: !prev[appointmentId]
     }));
-  };
-
-  // Verificar si la cita ya tiene un procedimiento asociado
-  const hasProcedure = (appointment) => {
-    return appointment.procedure_id || appointment.procedure_ID;
-  };
-
-  // Verificar si la cita puede ser editada
-  const canEditAppointment = (appointment) => {
-    // No se puede editar si:
-    // 1. Ya tiene un procedimiento asociado
-    // 2. Está en estado "completed"
-    // 3. Está en estado "cancelled"
-    const hasProcedure = appointment.procedure_id || appointment.procedure_ID;
-    const isCompleted = appointment.state === 'completed';
-    const isCancelled = appointment.state === 'cancelled';
-    
-    return !hasProcedure && !isCompleted && !isCancelled;
   };
 
   // Función para manejar cambios en el switch de ortodoncia
@@ -512,68 +516,68 @@ const AppointmentPage = () => {
   };
 
   // Función para actualizar el estado de la cita (con conversión automática)
-const handleUpdateAppointmentWithAutoConvert = async (appointmentId, newState) => {
-  try {
-    const appointment = appointments.find(a => a.appointment_ID === appointmentId);
-    
-    if (hasProcedure(appointment)) {
-      alert('No se puede cambiar el estado de una cita que ya tiene un procedimiento registrado');
-      return;
+  const handleUpdateAppointmentWithAutoConvert = async (appointmentId, newState) => {
+    try {
+      const appointment = appointments.find(a => a.appointment_ID === appointmentId);
+      
+      if (hasProcedure(appointment)) {
+        alert('No se puede cambiar el estado de una cita que ya tiene un procedimiento registrado');
+        return;
+      }
+      
+      // Actualizar el estado de la cita inmediatamente
+      await updateAppointment(appointmentId, { state: newState });
+      
+      // Recargar citas para obtener los datos actualizados
+      await fetchAppointments();
+      
+      let message = '';
+      switch(newState) {
+        case 'completed':
+          message = '✅ Cita completada';
+          
+          // Obtener la cita actualizada después del refresh
+          const updatedAppointments = await fetchAppointments();
+          const updatedAppointment = updatedAppointments.data?.find(a => a.appointment_ID === appointmentId) || appointment;
+          
+          // Guardar la cita completada para abrir automáticamente el modal de procedimiento
+          setJustCompletedAppointment({
+            ...updatedAppointment,
+            state: 'completed' // Asegurar que el estado esté como completado
+          });
+          setShowAutoConvertModal(true);
+          
+          // Pre-cargar datos en el formulario de procedimiento
+          setProcedureForm({
+            procedure_description: updatedAppointment.query_type || '',
+            amount_cordobas: '',
+            amount_dollars: '',
+            payment_method_cordobas: 'Efectivo',
+            payment_method_dollars: 'Efectivo',
+            exchange_rate: currentSettings.exchange_rate,
+            external_doctor: false,
+            external_doctor_name: '',
+            external_doctor_specialty: '',
+            external_doctor_payment_type: 'percentage',
+            external_doctor_payment_value: '',
+            external_doctor_payment_currency: 'C$',
+            clinic_payment_percentage: updatedAppointment.is_orthodontics ? currentSettings.clinic_payment : 100,
+            doctor_payment_percentage: updatedAppointment.is_orthodontics ? currentSettings.doctor_payment : 0,
+            observations: updatedAppointment.observations || ''
+          });
+          
+          break;
+        case 'cancelled':
+          message = '❌ Cita cancelada';
+          break;
+      }
+      
+      if (message) alert(message);
+    } catch (error) {
+      console.error('Error al actualizar cita:', error);
+      alert('Error al actualizar la cita: ' + error.message);
     }
-    
-    // Actualizar el estado de la cita inmediatamente
-    await updateAppointment(appointmentId, { state: newState });
-    
-    // Recargar citas para obtener los datos actualizados
-    await fetchAppointments();
-    
-    let message = '';
-    switch(newState) {
-      case 'completed':
-        message = '✅ Cita completada';
-        
-        // Obtener la cita actualizada después del refresh
-        const updatedAppointments = await fetchAppointments();
-        const updatedAppointment = updatedAppointments.data?.find(a => a.appointment_ID === appointmentId) || appointment;
-        
-        // Guardar la cita completada para abrir automáticamente el modal de procedimiento
-        setJustCompletedAppointment({
-          ...updatedAppointment,
-          state: 'completed' // Asegurar que el estado esté como completado
-        });
-        setShowAutoConvertModal(true);
-        
-        // Pre-cargar datos en el formulario de procedimiento
-        setProcedureForm({
-          procedure_description: updatedAppointment.query_type || '',
-          amount_cordobas: '',
-          amount_dollars: '',
-          payment_method_cordobas: 'Efectivo',
-          payment_method_dollars: 'Efectivo',
-          exchange_rate: currentSettings.exchange_rate,
-          external_doctor: false,
-          external_doctor_name: '',
-          external_doctor_specialty: '',
-          external_doctor_payment_type: 'percentage',
-          external_doctor_payment_value: '',
-          external_doctor_payment_currency: 'C$',
-          clinic_payment_percentage: updatedAppointment.is_orthodontics ? currentSettings.clinic_payment : 100,
-          doctor_payment_percentage: updatedAppointment.is_orthodontics ? currentSettings.doctor_payment : 0,
-          observations: updatedAppointment.observations || ''
-        });
-        
-        break;
-      case 'cancelled':
-        message = '❌ Cita cancelada';
-        break;
-    }
-    
-    if (message) alert(message);
-  } catch (error) {
-    console.error('Error al actualizar cita:', error);
-    alert('Error al actualizar la cita: ' + error.message);
-  }
-};
+  };
 
   // Función para manejar el cierre del modal automático
   const handleCloseAutoConvertModal = () => {
@@ -648,79 +652,135 @@ const handleUpdateAppointmentWithAutoConvert = async (appointmentId, newState) =
 
   // Convertir cita en procedimiento
   const handleConvertToProcedure = async (e) => {
-  e.preventDefault();
-  
-  if (!selectedAppointment) return;
-  
-  if (hasProcedure(selectedAppointment)) {
-    alert('Esta cita ya tiene un procedimiento registrado');
-    setShowConvertModal(false);
-    return;
-  }
-  
-  try {
-    // Calcular valores
-    const totalCordobas = parseFloat(procedureForm.amount_cordobas) || 0;
-    const totalDollars = parseFloat(procedureForm.amount_dollars) || 0;
-    const exchangeRate = parseFloat(procedureForm.exchange_rate) || 1;
-    const totalProcedure = totalCordobas + (totalDollars * exchangeRate);
+    e.preventDefault();
     
-    // Calcular pago de doctor externo
-    let externalDoctorPayment = null;
-    if (procedureForm.external_doctor && procedureForm.external_doctor_payment_value) {
-      if (procedureForm.external_doctor_payment_type === 'percentage') {
-        externalDoctorPayment = (totalProcedure * parseFloat(procedureForm.external_doctor_payment_value) / 100);
-      } else {
-        if (procedureForm.external_doctor_payment_currency === 'US$') {
-          externalDoctorPayment = parseFloat(procedureForm.external_doctor_payment_value) * exchangeRate;
+    if (!selectedAppointment) return;
+    
+    // Verificar si ya está registrada (doble verificación)
+    if (selectedAppointment.is_registered || hasProcedure(selectedAppointment)) {
+      alert('Esta cita ya ha sido registrada como procedimiento');
+      setShowConvertModal(false);
+      return;
+    }
+    
+    try {
+      // Calcular valores
+      const totalCordobas = parseFloat(procedureForm.amount_cordobas) || 0;
+      const totalDollars = parseFloat(procedureForm.amount_dollars) || 0;
+      const exchangeRate = parseFloat(procedureForm.exchange_rate) || 1;
+      const totalProcedure = totalCordobas + (totalDollars * exchangeRate);
+      
+      // Calcular pago de doctor externo
+      let externalDoctorPayment = null;
+      if (procedureForm.external_doctor && procedureForm.external_doctor_payment_value) {
+        if (procedureForm.external_doctor_payment_type === 'percentage') {
+          externalDoctorPayment = (totalProcedure * parseFloat(procedureForm.external_doctor_payment_value) / 100);
         } else {
-          externalDoctorPayment = parseFloat(procedureForm.external_doctor_payment_value);
+          if (procedureForm.external_doctor_payment_currency === 'US$') {
+            externalDoctorPayment = parseFloat(procedureForm.external_doctor_payment_value) * exchangeRate;
+          } else {
+            externalDoctorPayment = parseFloat(procedureForm.external_doctor_payment_value);
+          }
         }
+      }
+      
+      // Preparar datos para enviar
+      const procedureData = {
+        procedure_description: procedureForm.procedure_description,
+        total_cost: totalCordobas, // cantidad en córdobas
+        total_cost_USD: totalDollars, // cantidad en dólares
+        total_procedure: totalProcedure, // sumatoria de ambos convertidos a córdobas
+        payment_method: procedureForm.payment_method_cordobas || procedureForm.payment_method_dollars, // método principal
+        amount_cordobas: totalCordobas,
+        amount_dollars: totalDollars,
+        payment_method_cordobas: procedureForm.payment_method_cordobas,
+        payment_method_dollars: procedureForm.payment_method_dollars,
+        observations: procedureForm.observations,
+        external_doctor: procedureForm.external_doctor_name,
+        external_doctor_payment: externalDoctorPayment,
+        theres_external_doctor: procedureForm.external_doctor,
+        external_doctor_name: procedureForm.external_doctor_name,
+        external_doctor_specialty: procedureForm.external_doctor_specialty,
+        external_doctor_payment_type: procedureForm.external_doctor_payment_type,
+        external_doctor_payment_value: procedureForm.external_doctor_payment_value,
+        external_doctor_payment_currency: procedureForm.external_doctor_payment_currency
+      };
+      
+      // Solo añadir porcentajes si es ortodoncia
+      if (selectedAppointment.is_orthodontics) {
+        procedureData.clinic_payment_percentage = procedureForm.clinic_payment_percentage;
+        procedureData.doctor_payment_percentage = procedureForm.doctor_payment_percentage;
+      } else {
+        procedureData.clinic_payment_percentage = 100;
+        procedureData.doctor_payment_percentage = 0;
+      }
+      
+      console.log('Datos del procedimiento:', procedureData);
+      
+      await convertAppointmentToProcedure(
+        selectedAppointment.appointment_ID,
+        procedureData
+      );
+      
+      // Resetear formulario
+      setShowConvertModal(false);
+      setProcedureForm({
+        procedure_description: '',
+        amount_cordobas: '',
+        amount_dollars: '',
+        payment_method_cordobas: 'Efectivo',
+        payment_method_dollars: 'Efectivo',
+        exchange_rate: currentSettings.exchange_rate,
+        external_doctor: false,
+        external_doctor_name: '',
+        external_doctor_specialty: '',
+        external_doctor_payment_type: 'percentage',
+        external_doctor_payment_value: '',
+        external_doctor_payment_currency: 'C$',
+        clinic_payment_percentage: currentSettings.clinic_payment,
+        doctor_payment_percentage: currentSettings.doctor_payment,
+        observations: ''
+      });
+      
+      // Recargar citas
+      fetchAppointments();
+      
+      alert('✅ Procedimiento registrado exitosamente');
+      
+      // Redirigir
+      if (selectedAppointment.is_orthodontics) {
+        window.location.href = '/orthodontics';
+      } else {
+        window.location.href = '/procedures';
+      }
+      
+    } catch (error) {
+      console.error('Error al registrar procedimiento:', error);
+      alert(`❌ Error: ${error.message}`);
+    }
+  };
+
+  // Abrir modal para convertir cita
+  const openConvertModal = (appointment) => {
+    // Verificar si la cita está completada (permitir citas recién completadas del modal automático)
+    const isRecentlyCompleted = appointment === justCompletedAppointment;
+    
+    if (!isRecentlyCompleted) {
+      // Verificar si la cita ya ha sido registrada como procedimiento
+      if (appointment.is_registered || hasProcedure(appointment)) {
+        alert('Esta cita ya ha sido registrada como procedimiento');
+        return;
+      }
+      
+      if (appointment.state !== 'completed') {
+        alert('Solo se pueden registrar procedimientos de citas completadas');
+        return;
       }
     }
     
-    // Preparar datos para enviar
-    const procedureData = {
-      procedure_description: procedureForm.procedure_description,
-      total_cost: totalCordobas, // cantidad en córdobas
-      total_cost_USD: totalDollars, // cantidad en dólares
-      total_procedure: totalProcedure, // sumatoria de ambos convertidos a córdobas
-      payment_method: procedureForm.payment_method_cordobas || procedureForm.payment_method_dollars, // método principal
-      amount_cordobas: totalCordobas,
-      amount_dollars: totalDollars,
-      payment_method_cordobas: procedureForm.payment_method_cordobas,
-      payment_method_dollars: procedureForm.payment_method_dollars,
-      observations: procedureForm.observations,
-      external_doctor: procedureForm.external_doctor_name,
-      external_doctor_payment: externalDoctorPayment,
-      theres_external_doctor: procedureForm.external_doctor,
-      external_doctor_name: procedureForm.external_doctor_name,
-      external_doctor_specialty: procedureForm.external_doctor_specialty,
-      external_doctor_payment_type: procedureForm.external_doctor_payment_type,
-      external_doctor_payment_value: procedureForm.external_doctor_payment_value,
-      external_doctor_payment_currency: procedureForm.external_doctor_payment_currency
-    };
-    
-    // Solo añadir porcentajes si es ortodoncia
-    if (selectedAppointment.is_orthodontics) {
-      procedureData.clinic_payment_percentage = procedureForm.clinic_payment_percentage;
-      procedureData.doctor_payment_percentage = procedureForm.doctor_payment_percentage;
-    } else {
-      procedureData.clinic_payment_percentage = 100;
-      procedureData.doctor_payment_percentage = 0;
-    }
-    
-    console.log('Datos del procedimiento:', procedureData);
-    
-    await convertAppointmentToProcedure(
-      selectedAppointment.appointment_ID,
-      procedureData
-    );
-    
-    // Resetear formulario
-    setShowConvertModal(false);
+    setSelectedAppointment(appointment);
     setProcedureForm({
-      procedure_description: '',
+      procedure_description: appointment.query_type || '',
       amount_cordobas: '',
       amount_dollars: '',
       payment_method_cordobas: 'Efectivo',
@@ -732,66 +792,12 @@ const handleUpdateAppointmentWithAutoConvert = async (appointmentId, newState) =
       external_doctor_payment_type: 'percentage',
       external_doctor_payment_value: '',
       external_doctor_payment_currency: 'C$',
-      clinic_payment_percentage: currentSettings.clinic_payment,
-      doctor_payment_percentage: currentSettings.doctor_payment,
-      observations: ''
+      clinic_payment_percentage: appointment.is_orthodontics ? currentSettings.clinic_payment : 100,
+      doctor_payment_percentage: appointment.is_orthodontics ? currentSettings.doctor_payment : 0,
+      observations: appointment.observations || ''
     });
-    
-    // Recargar citas
-    fetchAppointments();
-    
-    alert('✅ Procedimiento registrado exitosamente');
-    
-    // Redirigir
-    if (selectedAppointment.is_orthodontics) {
-      window.location.href = '/orthodontics';
-    } else {
-      window.location.href = '/procedures';
-    }
-    
-  } catch (error) {
-    console.error('Error al registrar procedimiento:', error);
-    alert(`❌ Error: ${error.message}`);
-  }
-};
-
-  // Abrir modal para convertir cita
-const openConvertModal = (appointment) => {
-  // Verificar si la cita está completada (permitir citas recién completadas del modal automático)
-  const isRecentlyCompleted = appointment === justCompletedAppointment;
-  
-  if (!isRecentlyCompleted) {
-    if (hasProcedure(appointment)) {
-      alert('Esta cita ya tiene un procedimiento registrado');
-      return;
-    }
-    
-    if (appointment.state !== 'completed') {
-      alert('Solo se pueden registrar procedimientos de citas completadas');
-      return;
-    }
-  }
-  
-  setSelectedAppointment(appointment);
-  setProcedureForm({
-    procedure_description: appointment.query_type || '',
-    amount_cordobas: '',
-    amount_dollars: '',
-    payment_method_cordobas: 'Efectivo',
-    payment_method_dollars: 'Efectivo',
-    exchange_rate: currentSettings.exchange_rate,
-    external_doctor: false,
-    external_doctor_name: '',
-    external_doctor_specialty: '',
-    external_doctor_payment_type: 'percentage',
-    external_doctor_payment_value: '',
-    external_doctor_payment_currency: 'C$',
-    clinic_payment_percentage: appointment.is_orthodontics ? currentSettings.clinic_payment : 100,
-    doctor_payment_percentage: appointment.is_orthodontics ? currentSettings.doctor_payment : 0,
-    observations: appointment.observations || ''
-  });
-  setShowConvertModal(true);
-};
+    setShowConvertModal(true);
+  };
 
   const getStatusColor = (status) => {
     const colors = {
@@ -874,207 +880,253 @@ const openConvertModal = (appointment) => {
 
       {/* Filtros */}
       {showFilters && (
-        <div className="filter-section">
-          <div className="filter-header">
-            <h3>
-              <FontAwesomeIcon icon={faFilter} />
-              Filtrar citas
-            </h3>
-            <button 
-              className="close-filter-btn"
-              onClick={() => setShowFilters(false)}
-            >
-              <FontAwesomeIcon icon={faTimes} />
-            </button>
+        <div className={`filter-section ${expandedFilterSection ? 'expanded' : ''}`}>
+          <div className="filter-header-mobile" onClick={() => setExpandedFilterSection(!expandedFilterSection)}>
+            <div className="filter-header-content">
+              <h3>
+                <FontAwesomeIcon icon={faFilter} />
+                Filtros
+              </h3>
+              <span className="filter-summary">
+                {timeFilter === TIME_FILTERS.TODAY ? 'Hoy' : 
+                 timeFilter === TIME_FILTERS.THIS_WEEK ? 'Esta semana' :
+                 timeFilter === TIME_FILTERS.THIS_MONTH ? 'Este mes' : 'Todas'} • 
+                {statusFilter === 'all' ? ' Todos estados' : getStatusLabel(statusFilter)} • 
+                {typeFilter === 'all' ? ' Todos tipos' : typeFilter === 'orthodontics' ? ' Ortodoncia' : 'General'}
+              </span>
+            </div>
+            <FontAwesomeIcon 
+              icon={expandedFilterSection ? faChevronUp : faChevronDown} 
+              className="filter-toggle-icon"
+            />
           </div>
           
-          <div className="filter-controls">
-            {/* Filtro de tiempo */}
-            <div className="filter-group">
-              <label className="filter-label">Periodo:</label>
-              <div className="time-filter-buttons">
-                <button 
-                  className={`time-filter-btn ${timeFilter === TIME_FILTERS.TODAY ? 'active' : ''}`}
-                  onClick={() => setTimeFilter(TIME_FILTERS.TODAY)}
-                >
-                  <FontAwesomeIcon icon={faCalendarDay} />
-                  Hoy
-                </button>
-                <button 
-                  className={`time-filter-btn ${timeFilter === TIME_FILTERS.THIS_WEEK ? 'active' : ''}`}
-                  onClick={() => setTimeFilter(TIME_FILTERS.THIS_WEEK)}
-                >
-                  <FontAwesomeIcon icon={faCalendarWeek} />
-                  Esta semana
-                </button>
-                <button 
-                  className={`time-filter-btn ${timeFilter === TIME_FILTERS.THIS_MONTH ? 'active' : ''}`}
-                  onClick={() => setTimeFilter(TIME_FILTERS.THIS_MONTH)}
-                >
-                  <FontAwesomeIcon icon={faCalendar} />
-                  Este mes
-                </button>
-                <button 
-                  className={`time-filter-btn ${timeFilter === TIME_FILTERS.ALL ? 'active' : ''}`}
-                  onClick={() => setTimeFilter(TIME_FILTERS.ALL)}
-                >
-                  Todas
-                </button>
-              </div>
+          <div className="filter-content-container">
+            <div className="filter-header">
+              <h3>
+                <FontAwesomeIcon icon={faFilter} />
+                Filtrar citas
+              </h3>
+              <button 
+                className="close-filter-btn"
+                onClick={() => setShowFilters(false)}
+              >
+                <FontAwesomeIcon icon={faTimes} />
+              </button>
             </div>
-
-            {/* Filtro de estado */}
-            <div className="filter-group">
-              <label className="filter-label">Estado:</label>
-              <div className="status-filter-buttons">
-                <button 
-                  className={`status-filter-btn ${statusFilter === 'all' ? 'active' : ''}`}
-                  onClick={() => setStatusFilter('all')}
-                >
-                  Todos
-                </button>
-                <button 
-                  className={`status-filter-btn ${statusFilter === APPOINTMENT_STATUS.SCHEDULED ? 'active' : ''}`}
-                  onClick={() => setStatusFilter(APPOINTMENT_STATUS.SCHEDULED)}
-                  style={{ backgroundColor: '#FFA72620', color: '#FFA726' }}
-                >
-                  <FontAwesomeIcon icon={faClock} />
-                  Pendientes
-                </button>
-                <button 
-                  className={`status-filter-btn ${statusFilter === APPOINTMENT_STATUS.COMPLETED ? 'active' : ''}`}
-                  onClick={() => setStatusFilter(APPOINTMENT_STATUS.COMPLETED)}
-                  style={{ backgroundColor: '#66BB6A20', color: '#66BB6A' }}
-                >
-                  <FontAwesomeIcon icon={faCheckCircle} />
-                  Completadas
-                </button>
-                <button 
-                  className={`status-filter-btn ${statusFilter === APPOINTMENT_STATUS.CANCELLED ? 'active' : ''}`}
-                  onClick={() => setStatusFilter(APPOINTMENT_STATUS.CANCELLED)}
-                  style={{ backgroundColor: '#EF535020', color: '#EF5350' }}
-                >
-                  <FontAwesomeIcon icon={faTimesCircle} />
-                  Canceladas
-                </button>
-              </div>
-            </div>
-
-            {/* Filtro de tipo */}
-            <div className="filter-group">
-              <label className="filter-label">Tipo:</label>
-              <div className="type-filter-buttons">
-                <button 
-                  className={`type-filter-btn ${typeFilter === 'all' ? 'active' : ''}`}
-                  onClick={() => setTypeFilter('all')}
-                >
-                  Todos
-                </button>
-                <button 
-                  className={`type-filter-btn ${typeFilter === 'orthodontics' ? 'active' : ''}`}
-                  onClick={() => setTypeFilter('orthodontics')}
-                  style={{ backgroundColor: '#4DB6AC20', color: '#4DB6AC' }}
-                >
-                  <FontAwesomeIcon icon={faUserMd} />
-                  Ortodoncia
-                </button>
-                <button 
-                  className={`type-filter-btn ${typeFilter === 'general' ? 'active' : ''}`}
-                  onClick={() => setTypeFilter('general')}
-                  style={{ backgroundColor: '#42A5F520', color: '#42A5F5' }}
-                >
-                  <FontAwesomeIcon icon={faTooth} />
-                  General
-                </button>
-              </div>
-            </div>
-
-            {/* Búsqueda */}
-            <div className="filter-group">
-              <label className="filter-label">Buscar:</label>
-              <div className="search-box">
-                <FontAwesomeIcon icon={faSearch} className="search-icon" />
-                <input
-                  type="text"
-                  placeholder="Buscar por paciente, servicio o fecha..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="search-input"
-                />
-                {searchTerm && (
+            
+            <div className="filter-controls">
+              {/* Filtro de tiempo */}
+              <div className="filter-group">
+                <label className="filter-label">Periodo:</label>
+                <div className="time-filter-buttons">
                   <button 
-                    className="clear-search-btn"
-                    onClick={() => setSearchTerm('')}
+                    className={`time-filter-btn ${timeFilter === TIME_FILTERS.TODAY ? 'active' : ''}`}
+                    onClick={() => setTimeFilter(TIME_FILTERS.TODAY)}
                   >
-                    <FontAwesomeIcon icon={faTimes} />
+                    <FontAwesomeIcon icon={faCalendarDay} />
+                    Hoy
                   </button>
-                )}
+                  <button 
+                    className={`time-filter-btn ${timeFilter === TIME_FILTERS.THIS_WEEK ? 'active' : ''}`}
+                    onClick={() => setTimeFilter(TIME_FILTERS.THIS_WEEK)}
+                  >
+                    <FontAwesomeIcon icon={faCalendarWeek} />
+                    Esta semana
+                  </button>
+                  <button 
+                    className={`time-filter-btn ${timeFilter === TIME_FILTERS.THIS_MONTH ? 'active' : ''}`}
+                    onClick={() => setTimeFilter(TIME_FILTERS.THIS_MONTH)}
+                  >
+                    <FontAwesomeIcon icon={faCalendar} />
+                    Este mes
+                  </button>
+                  <button 
+                    className={`time-filter-btn ${timeFilter === TIME_FILTERS.ALL ? 'active' : ''}`}
+                    onClick={() => setTimeFilter(TIME_FILTERS.ALL)}
+                  >
+                    Todas
+                  </button>
+                </div>
+              </div>
+
+              {/* Filtro de estado */}
+              <div className="filter-group">
+                <label className="filter-label">Estado:</label>
+                <div className="status-filter-buttons">
+                  <button 
+                    className={`status-filter-btn ${statusFilter === 'all' ? 'active' : ''}`}
+                    onClick={() => setStatusFilter('all')}
+                  >
+                    Todos
+                  </button>
+                  <button 
+                    className={`status-filter-btn ${statusFilter === APPOINTMENT_STATUS.SCHEDULED ? 'active' : ''}`}
+                    onClick={() => setStatusFilter(APPOINTMENT_STATUS.SCHEDULED)}
+                    style={{ backgroundColor: '#FFA72620', color: '#FFA726' }}
+                  >
+                    <FontAwesomeIcon icon={faClock} />
+                    Pendientes
+                  </button>
+                  <button 
+                    className={`status-filter-btn ${statusFilter === APPOINTMENT_STATUS.COMPLETED ? 'active' : ''}`}
+                    onClick={() => setStatusFilter(APPOINTMENT_STATUS.COMPLETED)}
+                    style={{ backgroundColor: '#66BB6A20', color: '#66BB6A' }}
+                  >
+                    <FontAwesomeIcon icon={faCheckCircle} />
+                    Completadas
+                  </button>
+                  <button 
+                    className={`status-filter-btn ${statusFilter === APPOINTMENT_STATUS.CANCELLED ? 'active' : ''}`}
+                    onClick={() => setStatusFilter(APPOINTMENT_STATUS.CANCELLED)}
+                    style={{ backgroundColor: '#EF535020', color: '#EF5350' }}
+                  >
+                    <FontAwesomeIcon icon={faTimesCircle} />
+                    Canceladas
+                  </button>
+                </div>
+              </div>
+
+              {/* Filtro de tipo */}
+              <div className="filter-group">
+                <label className="filter-label">Tipo:</label>
+                <div className="type-filter-buttons">
+                  <button 
+                    className={`type-filter-btn ${typeFilter === 'all' ? 'active' : ''}`}
+                    onClick={() => setTypeFilter('all')}
+                  >
+                    Todos
+                  </button>
+                  <button 
+                    className={`type-filter-btn ${typeFilter === 'orthodontics' ? 'active' : ''}`}
+                    onClick={() => setTypeFilter('orthodontics')}
+                    style={{ backgroundColor: '#4DB6AC20', color: '#4DB6AC' }}
+                  >
+                    <FontAwesomeIcon icon={faUserMd} />
+                    Ortodoncia
+                  </button>
+                  <button 
+                    className={`type-filter-btn ${typeFilter === 'general' ? 'active' : ''}`}
+                    onClick={() => setTypeFilter('general')}
+                    style={{ backgroundColor: '#42A5F520', color: '#42A5F5' }}
+                  >
+                    <FontAwesomeIcon icon={faTooth} />
+                    General
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Estadísticas */}
-      <div className="appointments-stats">
-        <div className="stat-card total">
-          <div className="stat-icon">
-            <FontAwesomeIcon icon={faCalendarAlt} />
+      {/* Estadísticas - Desplegables en móvil */}
+      <div className={`appointments-stats ${expandedStats ? 'expanded' : ''}`}>
+        <div className="stats-header-mobile" onClick={() => setExpandedStats(!expandedStats)}>
+          <div className="stats-header-content">
+            <h3 className="stats-title">
+              <FontAwesomeIcon icon={faChartBar} />
+              Estadísticas
+            </h3>
+            <div className="stats-summary-mobile">
+              <span className="stat-summary-item">Total: {stats.total}</span>
+              <span className="stat-summary-item">Hoy: {stats.today}</span>
+              <span className="stat-summary-item">Pendientes: {stats.pending}</span>
+            </div>
           </div>
-          <div className="stat-content">
-            <div className="stat-value">{stats.total}</div>
-            <div className="stat-label">Citas Totales</div>
-          </div>
+          <FontAwesomeIcon 
+            icon={expandedStats ? faChevronUp : faChevronDown} 
+            className="stats-toggle-icon"
+          />
         </div>
         
-        <div className="stat-card today">
-          <div className="stat-icon">
-            <FontAwesomeIcon icon={faCalendarDay} />
+        <div className="stats-grid-container">
+          <div className="stat-card total">
+            <div className="stat-icon">
+              <FontAwesomeIcon icon={faCalendarAlt} />
+            </div>
+            <div className="stat-content">
+              <div className="stat-value">{stats.total}</div>
+              <div className="stat-label">Citas Totales</div>
+            </div>
           </div>
-          <div className="stat-content">
-            <div className="stat-value">{stats.today}</div>
-            <div className="stat-label">Hoy</div>
+          
+          <div className="stat-card today">
+            <div className="stat-icon">
+              <FontAwesomeIcon icon={faCalendarDay} />
+            </div>
+            <div className="stat-content">
+              <div className="stat-value">{stats.today}</div>
+              <div className="stat-label">Hoy</div>
+            </div>
+          </div>
+          
+          <div className="stat-card pending">
+            <div className="stat-icon">
+              <FontAwesomeIcon icon={faClock} />
+            </div>
+            <div className="stat-content">
+              <div className="stat-value">{stats.pending}</div>
+              <div className="stat-label">Pendientes</div>
+            </div>
+          </div>
+          
+          <div className="stat-card completed">
+            <div className="stat-icon">
+              <FontAwesomeIcon icon={faCheckCircle} />
+            </div>
+            <div className="stat-content">
+              <div className="stat-value">{stats.completed}</div>
+              <div className="stat-label">Completadas</div>
+            </div>
+          </div>
+          
+          <div className="stat-card orthodontics">
+            <div className="stat-icon">
+              <FontAwesomeIcon icon={faUserMd} />
+            </div>
+            <div className="stat-content">
+              <div className="stat-value">{stats.orthodontics}</div>
+              <div className="stat-label">Ortodoncia</div>
+            </div>
+          </div>
+          
+          <div className="stat-card general">
+            <div className="stat-icon">
+              <FontAwesomeIcon icon={faTooth} />
+            </div>
+            <div className="stat-content">
+              <div className="stat-value">{stats.general}</div>
+              <div className="stat-label">General</div>
+            </div>
           </div>
         </div>
-        
-        <div className="stat-card pending">
-          <div className="stat-icon">
-            <FontAwesomeIcon icon={faClock} />
+      </div>
+
+      {/* BUSCADOR PRINCIPAL - MOVIDO AQUÍ */}
+      <div className="search-box-main-container">
+        <div className="filter-group">
+          <label className="filter-label">Buscar citas:</label>
+          <div className="search-box-main">
+            <input
+              type="text"
+              placeholder="Buscar por paciente, servicio o fecha..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="search-input-main"
+            />
+            {searchTerm && (
+              <button 
+                className="clear-search-btn"
+                onClick={() => setSearchTerm('')}
+              >
+                <FontAwesomeIcon icon={faTimes} />
+              </button>
+            )}
           </div>
-          <div className="stat-content">
-            <div className="stat-value">{stats.pending}</div>
-            <div className="stat-label">Pendientes</div>
-          </div>
-        </div>
-        
-        <div className="stat-card completed">
-          <div className="stat-icon">
-            <FontAwesomeIcon icon={faCheckCircle} />
-          </div>
-          <div className="stat-content">
-            <div className="stat-value">{stats.completed}</div>
-            <div className="stat-label">Completadas</div>
-          </div>
-        </div>
-        
-        <div className="stat-card orthodontics">
-          <div className="stat-icon">
-            <FontAwesomeIcon icon={faUserMd} />
-          </div>
-          <div className="stat-content">
-            <div className="stat-value">{stats.orthodontics}</div>
-            <div className="stat-label">Ortodoncia</div>
-          </div>
-        </div>
-        
-        <div className="stat-card general">
-          <div className="stat-icon">
-            <FontAwesomeIcon icon={faTooth} />
-          </div>
-          <div className="stat-content">
-            <div className="stat-value">{stats.general}</div>
-            <div className="stat-label">General</div>
-          </div>
+          <small className="search-help-text">
+            Busca por nombre del paciente, tipo de servicio o fecha (ej: "Juan Pérez", "Limpieza", "15/01/2025")
+          </small>
         </div>
       </div>
 
@@ -1160,10 +1212,10 @@ const openConvertModal = (appointment) => {
                       <FontAwesomeIcon icon={getStatusIcon(appointment.state)} />
                       <span>{getStatusLabel(appointment.state)}</span>
                     </div>
-                    {hasProcedure(appointment) && (
-                      <div className="procedure-badge locked">
-                        <FontAwesomeIcon icon={faLock} />
-                        <span>Bloqueado</span>
+                    {appointment.is_registered && (
+                      <div className="procedure-badge registered">
+                        <FontAwesomeIcon icon={faCheckCircle} />
+                        <span>Registrado</span>
                       </div>
                     )}
                   </div>
@@ -1172,11 +1224,12 @@ const openConvertModal = (appointment) => {
                   <div className="appointment-column actions-column compact">
                     <div className="appointment-actions-horizontal">
                       {/* Botón para convertir en procedimiento */}
-                      {appointment.state === 'completed' && !hasProcedure(appointment) && (
+                      {appointment.state === 'completed' && !appointment.is_registered && !hasProcedure(appointment) && (
                         <button 
                           className="action-btn-horizontal convert-btn"
                           onClick={() => openConvertModal(appointment)}
                           title="Registrar como procedimiento"
+                          disabled={appointment.is_registered}
                         >
                           <FontAwesomeIcon icon={faExchangeAlt} />
                           <span>Registrar</span>
@@ -1235,10 +1288,10 @@ const openConvertModal = (appointment) => {
                       </div>
                       
                       {/* Mostrar icono de bloqueo si tiene procedimiento */}
-                      {hasProcedure(appointment) && (
-                        <div className="locked-indicator" title="Cita bloqueada - Ya tiene procedimiento">
-                          <FontAwesomeIcon icon={faLock} />
-                          <span>Bloqueada</span>
+                      {appointment.is_registered && (
+                        <div className="locked-indicator" title="Cita registrada - Ya tiene procedimiento">
+                          <FontAwesomeIcon icon={faCheckCircle} />
+                          <span>Registrada</span>
                         </div>
                       )}
                       
@@ -1308,7 +1361,7 @@ const openConvertModal = (appointment) => {
                     )}
 
                     {/* Información del procedimiento si existe */}
-                    {hasProcedure(appointment) && (
+                    {appointment.is_registered && (
                       <div className="expanded-section">
                         <h4 className="section-title">
                           <FontAwesomeIcon icon={faExchangeAlt} />
@@ -1320,6 +1373,9 @@ const openConvertModal = (appointment) => {
                             {appointment.is_orthodontics 
                               ? ' Puede ver los detalles en la sección de Ortodoncia.' 
                               : ' Puede ver los detalles en la sección de Procedimientos.'}
+                          </p>
+                          <p className="procedure-note">
+                            <small>El botón de registro está inhabilitado para evitar duplicidad de datos.</small>
                           </p>
                         </div>
                       </div>
@@ -1684,7 +1740,6 @@ const openConvertModal = (appointment) => {
                 >
                   Registrar más tarde
                 </button>
-                // En el modal automático, cambia el botón "Registrar Procedimiento Ahora" a:
                 <button 
                   className="btn-submit"
                   onClick={() => {

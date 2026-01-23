@@ -1028,3 +1028,484 @@
     font-size: 18px;
   }
 }
+
+/* Orthodontics Page - Estadísticas desplegables */
+.appointments-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-bottom: 2rem;
+  background: var(--bg-primary);
+  border-radius: 12px;
+  border: 2px solid #E0E0E0;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.appointments-stats.expanded {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.stats-header-mobile {
+  display: none;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  background: #F5F5F5;
+  cursor: pointer;
+  border-bottom: 2px solid #E0E0E0;
+}
+
+.stats-header-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.stats-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: #37474F;
+  font-size: 1.1rem;
+  margin: 0;
+  font-weight: 600;
+}
+
+.stats-summary-mobile {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.stat-summary-item {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  color: #78909C;
+  font-weight: 500;
+}
+
+.stat-summary-item:not(:last-child)::after {
+  content: "•";
+  margin-left: 0.5rem;
+  color: #E0E0E0;
+}
+
+.stats-toggle-icon {
+  color: #78909C;
+  font-size: 1rem;
+  transition: transform 0.3s ease;
+  min-width: 20px;
+}
+
+.stats-grid-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+  padding: 1.5rem;
+  transition: all 0.3s ease;
+}
+
+/* Responsive para Orthodontics Page */
+@media (max-width: 768px) {
+  .appointments-stats {
+    padding: 0;
+    margin-bottom: 1.5rem;
+  }
+  
+  .stats-header-mobile {
+    display: flex;
+  }
+  
+  .stats-grid-container {
+    padding: 1rem;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: all 0.3s ease;
+  }
+  
+  .appointments-stats.expanded .stats-grid-container {
+    max-height: 600px;
+    opacity: 1;
+    padding: 1.5rem;
+  }
+  
+  .earnings-card {
+    padding: 1rem;
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .earnings-icon {
+    width: 50px;
+    height: 50px;
+    font-size: 1.5rem;
+    margin: 0 auto;
+  }
+  
+  .earnings-value {
+    font-size: 1.5rem;
+  }
+  
+  .total-earnings-section {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .appointments-stats.expanded .stats-grid-container {
+    grid-template-columns: 1fr;
+  }
+  
+  .stats-summary-mobile {
+    gap: 0.5rem;
+  }
+  
+  .stat-summary-item {
+    font-size: 0.8rem;
+  }
+}
+
+/* BUSCADOR PRINCIPAL */
+.search-box-main-container {
+  background: #F8F9FA;
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  border: 1px solid #E0E0E0;
+  animation: slideDown 0.3s ease;
+}
+
+.search-box-main {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.search-input-main {
+  width: 100%;
+  padding: 0.85rem 1rem 0.85rem 3rem;
+  border: 2px solid #E0E0E0;
+  border-radius: 8px;
+  font-size: 1rem;
+  color: #37474F;
+  background: white;
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+}
+
+.search-input-main:focus {
+  outline: none;
+  border-color: #AB47BC;
+  box-shadow: 0 0 0 3px rgba(171, 71, 188, 0.1);
+}
+
+.search-help-text {
+  display: block;
+  margin-top: 0.5rem;
+  color: #78909C;
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+.search-icon {
+  position: absolute;
+  left: 1rem;
+  color: #78909C;
+  font-size: 1rem;
+}
+
+.clear-search-btn {
+  position: absolute;
+  right: 1rem;
+  background: none;
+  border: none;
+  color: #78909C;
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+}
+
+.clear-search-btn:hover {
+  color: #EF5350;
+  background: rgba(239, 83, 80, 0.1);
+}
+
+/* FILTROS DESPLEGABLES */
+.filter-section {
+  background: #F8F9FA;
+  border-radius: 12px;
+  padding: 0;
+  margin-bottom: 1.5rem;
+  border: 1px solid #E0E0E0;
+  overflow: hidden;
+}
+
+.filter-header-mobile {
+  display: none;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  background: #F3E5F5;
+  cursor: pointer;
+  border-bottom: 2px solid #E0E0E0;
+}
+
+.filter-header-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.filter-header-content h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: #37474F;
+  font-size: 1.1rem;
+  margin: 0;
+  font-weight: 600;
+}
+
+.filter-summary {
+  font-size: 0.85rem;
+  color: #78909C;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.filter-toggle-icon {
+  color: #78909C;
+  font-size: 1rem;
+  transition: transform 0.3s ease;
+  min-width: 20px;
+}
+
+.filter-content-container {
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+/* Estilos de filtros internos */
+.filters-section {
+  background-color: transparent;
+  padding: 1.5rem;
+  margin-bottom: 0;
+}
+
+.filters-section h3 {
+  display: none;
+}
+
+.filters-row {
+  display: flex;
+  gap: 20px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.filter-group {
+  flex: 1;
+  min-width: 200px;
+}
+
+.filter-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #455A64;
+  font-size: 0.9rem;
+}
+
+.filter-group input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #B0BEC5;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  transition: all 0.3s ease;
+  background: white;
+}
+
+.filter-group input:focus {
+  outline: none;
+  border-color: #AB47BC;
+  box-shadow: 0 0 0 3px rgba(171, 71, 188, 0.1);
+}
+
+.filter-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.btn-apply-filters {
+  background-color: #AB47BC;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 0.95rem;
+  min-width: 140px;
+}
+
+.btn-apply-filters:hover {
+  background-color: #8E24AA;
+  transform: translateY(-2px);
+}
+
+.btn-clear-filters {
+  background-color: #F5F5F5;
+  color: #78909C;
+  border: 1px solid #E0E0E0;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 0.95rem;
+  min-width: 140px;
+}
+
+.btn-clear-filters:hover {
+  background-color: #E0E0E0;
+  color: #37474F;
+  transform: translateY(-2px);
+}
+
+/* Responsive para Orthodontics Page */
+@media (max-width: 768px) {
+  .appointments-stats {
+    padding: 0;
+    margin-bottom: 1.5rem;
+  }
+  
+  .stats-header-mobile {
+    display: flex;
+  }
+  
+  .stats-grid-container {
+    padding: 1rem;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: all 0.3s ease;
+  }
+  
+  .appointments-stats.expanded .stats-grid-container {
+    max-height: 600px;
+    opacity: 1;
+    padding: 1.5rem;
+  }
+  
+  .filter-section {
+    padding: 0;
+  }
+  
+  .filter-header-mobile {
+    display: flex;
+  }
+  
+  .filter-content-container {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: all 0.3s ease;
+  }
+  
+  .filter-section.expanded .filter-content-container {
+    max-height: 1000px;
+    opacity: 1;
+    padding: 1.5rem;
+  }
+  
+  .filters-row {
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  .filter-group {
+    min-width: 100%;
+  }
+  
+  .filter-actions {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .btn-apply-filters,
+  .btn-clear-filters {
+    width: 100%;
+    padding: 14px 20px;
+    font-size: 1rem;
+  }
+  
+  .search-box-main-container {
+    padding: 1rem;
+  }
+  
+  .search-input-main {
+    padding: 0.75rem 1rem 0.75rem 2.5rem;
+    font-size: 0.95rem;
+  }
+  
+  .total-earnings-section {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .appointments-stats.expanded .stats-grid-container {
+    grid-template-columns: 1fr;
+  }
+  
+  .stats-summary-mobile {
+    gap: 0.5rem;
+  }
+  
+  .stat-summary-item {
+    font-size: 0.8rem;
+  }
+  
+  .filter-summary {
+    font-size: 0.8rem;
+  }
+}
+
+/* Animaciones */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Clase para sección expandida */
+.filter-section.expanded .filter-toggle-icon {
+  transform: rotate(180deg);
+}
+
+.appointments-stats.expanded .stats-toggle-icon {
+  transform: rotate(180deg);
+}

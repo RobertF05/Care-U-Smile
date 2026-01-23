@@ -2,6 +2,15 @@ import { useContext, useState, useEffect } from "react";
 import { AppContext } from "../../context/AppContext";
 import { AuthContext } from "../../context/AuthContext";
 import { formatDate, formatCurrency } from "../../utils/formatters";
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { 
+  faChevronDown,
+  faChevronUp,
+  faChartBar,
+  faFilter,
+  faTimes,
+  faSearch
+} from '@fortawesome/free-solid-svg-icons';
 import "./ProceduresPage.css";
 
 export default function ProceduresPage() {
@@ -20,6 +29,8 @@ export default function ProceduresPage() {
     endDate: ""
   });
   const [localError, setLocalError] = useState("");
+  const [expandedStats, setExpandedStats] = useState(false);
+  const [expandedFilters, setExpandedFilters] = useState(false);
 
   // Cargar procedimientos al montar
   useEffect(() => {
@@ -183,93 +194,148 @@ export default function ProceduresPage() {
       <div className="procedures-header">
         <h2>🦷 Procedimientos Regulares</h2>
         <div className="procedures-tools">
-          <div className="search-wrapper">
-            <input
-              className="search-box"
-              placeholder="Buscar por descripción, paciente, cédula o doctor..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="gray" viewBox="0 0 16 16">
-              <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0" />
-            </svg>
-          </div>
-          
           <div className="procedures-count">
             <span>{filteredProcedures.length}</span>
           </div>
         </div>
       </div>
 
-      {/* Estadísticas actualizadas */}
-      <div className="stats-cards">
-        <div className="stat-card total-income">
-          <div className="stat-icon">💰</div>
-          <div className="stat-content">
-            <h3>Total en Córdobas</h3>
-            <p className="stat-value">{formatCurrency(statsData.totalCordobas)}</p>
-            <p className="stat-subtitle">C$ depositados</p>
+      {/* Estadísticas desplegables */}
+      <div className={`appointments-stats ${expandedStats ? 'expanded' : ''}`}>
+        <div className="stats-header-mobile" onClick={() => setExpandedStats(!expandedStats)}>
+          <div className="stats-header-content">
+            <h3 className="stats-title">
+              <FontAwesomeIcon icon={faChartBar} />
+              Estadísticas de Procedimientos
+            </h3>
+            <div className="stats-summary-mobile">
+              <span className="stat-summary-item">Total: {filteredProcedures.length}</span>
+              <span className="stat-summary-item">C$: {formatCurrency(statsData.totalCordobas)}</span>
+              <span className="stat-summary-item">US$: {formatCurrencyUSD(statsData.totalDollars)}</span>
+            </div>
           </div>
+          <FontAwesomeIcon 
+            icon={expandedStats ? faChevronUp : faChevronDown} 
+            className="stats-toggle-icon"
+          />
         </div>
         
-        <div className="stat-card total-income-usd">
-          <div className="stat-icon">💵</div>
-          <div className="stat-content">
-            <h3>Total en Dólares</h3>
-            <p className="stat-value">{formatCurrencyUSD(statsData.totalDollars)}</p>
-            <p className="stat-subtitle">US$ depositados</p>
+        <div className="stats-grid-container">
+          <div className="stat-card total-income">
+            <div className="stat-icon">💰</div>
+            <div className="stat-content">
+              <h3>Total en Córdobas</h3>
+              <p className="stat-value">{formatCurrency(statsData.totalCordobas)}</p>
+              <p className="stat-subtitle">C$ depositados</p>
+            </div>
           </div>
-        </div>
-        
-        <div className="stat-card total-procedure">
-          <div className="stat-icon">📊</div>
-          <div className="stat-content">
-            <h3>Total del Procedimiento</h3>
-            <p className="stat-value">{formatCurrency(statsData.totalProcedure)}</p>
-            <p className="stat-subtitle">Sumatoria total (C$)</p>
+          
+          <div className="stat-card total-income-usd">
+            <div className="stat-icon">💵</div>
+            <div className="stat-content">
+              <h3>Total en Dólares</h3>
+              <p className="stat-value">{formatCurrencyUSD(statsData.totalDollars)}</p>
+              <p className="stat-subtitle">US$ depositados</p>
+            </div>
           </div>
-        </div>
-        
-        <div className="stat-card external-doctor">
-          <div className="stat-icon">👨‍⚕️</div>
-          <div className="stat-content">
-            <h3>Doctores Externos</h3>
-            <p className="stat-value">{statsData.externalDoctorCount}</p>
-            <p className="stat-subtitle">
-              Pagos: {formatCurrency(statsData.externalDoctorPayments)}
-            </p>
+          
+          <div className="stat-card total-procedure">
+            <div className="stat-icon">📊</div>
+            <div className="stat-content">
+              <h3>Total del Procedimiento</h3>
+              <p className="stat-value">{formatCurrency(statsData.totalProcedure)}</p>
+              <p className="stat-subtitle">Sumatoria total (C$)</p>
+            </div>
+          </div>
+          
+          <div className="stat-card external-doctor">
+            <div className="stat-icon">👨‍⚕️</div>
+            <div className="stat-content">
+              <h3>Doctores Externos</h3>
+              <p className="stat-value">{statsData.externalDoctorCount}</p>
+              <p className="stat-subtitle">
+                Pagos: {formatCurrency(statsData.externalDoctorPayments)}
+              </p>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Filtros por fecha */}
-      <div className="filters-section">
-        <h3>Filtros</h3>
-        <div className="filters-row">
-          <div className="filter-group">
-            <label>Fecha desde:</label>
+      {/* Filtros desplegables */}
+      <div className={`filter-section ${expandedFilters ? 'expanded' : ''}`}>
+        <div className="filter-header-mobile" onClick={() => setExpandedFilters(!expandedFilters)}>
+          <div className="filter-header-content">
+            <h3>
+              <FontAwesomeIcon icon={faFilter} />
+              Filtros
+            </h3>
+            <span className="filter-summary">
+              {dateFilter.startDate ? `Desde: ${dateFilter.startDate}` : 'Sin fecha inicio'} • 
+              {dateFilter.endDate ? ` Hasta: ${dateFilter.endDate}` : ' Sin fecha fin'}
+            </span>
+          </div>
+          <FontAwesomeIcon 
+            icon={expandedFilters ? faChevronUp : faChevronDown} 
+            className="filter-toggle-icon"
+          />
+        </div>
+        
+        <div className="filter-content-container">
+          <div className="filters-section">
+            <div className="filters-row">
+              <div className="filter-group">
+                <label>Fecha desde:</label>
+                <input
+                  type="date"
+                  value={dateFilter.startDate}
+                  onChange={(e) => setDateFilter({...dateFilter, startDate: e.target.value})}
+                />
+              </div>
+              <div className="filter-group">
+                <label>Fecha hasta:</label>
+                <input
+                  type="date"
+                  value={dateFilter.endDate}
+                  onChange={(e) => setDateFilter({...dateFilter, endDate: e.target.value})}
+                />
+              </div>
+              <div className="filter-actions">
+                <button className="btn-apply-filters" onClick={applyFilters}>
+                  Aplicar Filtros
+                </button>
+                <button className="btn-clear-filters" onClick={clearFilters}>
+                  Limpiar Filtros
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* BUSCADOR PRINCIPAL - Debajo de estadísticas */}
+      <div className="search-box-main-container">
+        <div className="filter-group">
+          <label className="filter-label">Buscar procedimientos:</label>
+          <div className="search-box-main">
             <input
-              type="date"
-              value={dateFilter.startDate}
-              onChange={(e) => setDateFilter({...dateFilter, startDate: e.target.value})}
+              type="text"
+              placeholder="Buscar por descripción, paciente, cédula o doctor..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="search-input-main"
             />
+            {search && (
+              <button 
+                className="clear-search-btn"
+                onClick={() => setSearch('')}
+              >
+                <FontAwesomeIcon icon={faTimes} />
+              </button>
+            )}
           </div>
-          <div className="filter-group">
-            <label>Fecha hasta:</label>
-            <input
-              type="date"
-              value={dateFilter.endDate}
-              onChange={(e) => setDateFilter({...dateFilter, endDate: e.target.value})}
-            />
-          </div>
-          <div className="filter-actions">
-            <button className="btn-apply-filters" onClick={applyFilters}>
-              Aplicar Filtros
-            </button>
-            <button className="btn-clear-filters" onClick={clearFilters}>
-              Limpiar Filtros
-            </button>
-          </div>
+          <small className="search-help-text">
+            Busca por descripción del procedimiento, nombre del paciente, cédula o nombre del doctor externo
+          </small>
         </div>
       </div>
 

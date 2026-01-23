@@ -1,4 +1,3 @@
-// appointmentController.js
 import { supabaseAdmin } from '../config/supabase.js';
 
 const appointmentController = {
@@ -12,7 +11,8 @@ const appointmentController = {
         endDate, 
         state,
         patientId,
-        isOrthodontics
+        isOrthodontics,
+        isRegistered
       } = req.query;
       
       const from = (page - 1) * limit;
@@ -45,11 +45,15 @@ const appointmentController = {
       }
       
       if (patientId) {
-        query = query.eq('Patient_ID', patientId); // <-- MAYÚSCULA
+        query = query.eq('Patient_ID', patientId);
       }
       
       if (isOrthodontics !== undefined) {
         query = query.eq('is_orthodontics', isOrthodontics === 'true');
+      }
+      
+      if (isRegistered !== undefined) {
+        query = query.eq('is_registered', isRegistered === 'true');
       }
       
       query = query.range(from, to);
@@ -63,7 +67,8 @@ const appointmentController = {
         ...item,
         patient_name: `${item.patients?.first_name || ''} ${item.patients?.first_last_name || ''}`.trim(),
         patient_identification: item.patients?.identification,
-        patient_phone: item.patients?.number_phone
+        patient_phone: item.patients?.number_phone,
+        is_registered: item.is_registered || false
       }));
       
       res.json({ 
@@ -83,7 +88,7 @@ const appointmentController = {
     }
   },
 
-  // Obtener cita por ID - USANDO appointment_ID (MAYÚSCULA)
+  // Obtener cita por ID
   getById: async (req, res) => {
     try {
       const { id } = req.params;
@@ -100,7 +105,7 @@ const appointmentController = {
             email
           )
         `)
-        .eq('appointment_ID', id) // <-- MAYÚSCULA
+        .eq('appointment_ID', id)
         .single();
       
       if (error) throw error;
@@ -117,7 +122,8 @@ const appointmentController = {
         patient_name: `${data.patients?.first_name || ''} ${data.patients?.first_last_name || ''}`.trim(),
         patient_identification: data.patients?.identification,
         patient_phone: data.patients?.number_phone,
-        patient_email: data.patients?.email
+        patient_email: data.patients?.email,
+        is_registered: data.is_registered || false
       };
       
       res.json({ 
@@ -142,11 +148,12 @@ const appointmentController = {
       
       // Normalizar nombres de campos
       const normalizedData = {
-        Patient_ID: parseInt(appointmentData.Patient_ID || appointmentData.patient_id), // <-- MAYÚSCULA
+        Patient_ID: parseInt(appointmentData.Patient_ID || appointmentData.patient_id),
         appointment_date: appointmentData.appointment_date,
         query_type: appointmentData.query_type || 'Consulta general',
         is_orthodontics: appointmentData.is_orthodontics || false,
-        observations: appointmentData.observations || null
+        observations: appointmentData.observations || null,
+        is_registered: false // Siempre false al crear
       };
       
       // Validar datos requeridos
@@ -160,8 +167,8 @@ const appointmentController = {
       // Verificar que el paciente exista
       const { data: patient, error: patientError } = await supabaseAdmin
         .from('patients')
-        .select('Patient_ID') // <-- MAYÚSCULA
-        .eq('Patient_ID', normalizedData.Patient_ID) // <-- MAYÚSCULA
+        .select('Patient_ID')
+        .eq('Patient_ID', normalizedData.Patient_ID)
         .single();
       
       if (patientError || !patient) {
@@ -176,7 +183,8 @@ const appointmentController = {
         .from('clinical_appointments')
         .insert([{
           ...normalizedData,
-          state: 'scheduled'
+          state: 'scheduled',
+          is_registered: false
         }])
         .select(`
           *,
@@ -204,7 +212,7 @@ const appointmentController = {
     }
   },
 
-  // Actualizar cita - USANDO appointment_ID (MAYÚSCULA)
+  // Actualizar cita
   update: async (req, res) => {
     try {
       const { id } = req.params;
@@ -213,8 +221,8 @@ const appointmentController = {
       // Verificar que la cita exista
       const { data: existingAppointment, error: checkError } = await supabaseAdmin
         .from('clinical_appointments')
-        .select('appointment_ID') // <-- MAYÚSCULA
-        .eq('appointment_ID', id) // <-- MAYÚSCULA
+        .select('appointment_ID, is_registered')
+        .eq('appointment_ID', id)
         .single();
       
       if (checkError || !existingAppointment) {
@@ -224,10 +232,18 @@ const appointmentController = {
         });
       }
       
+      // No permitir editar si ya está registrada como procedimiento
+      if (existingAppointment.is_registered && appointmentData.state !== 'cancelled') {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'No se puede editar una cita que ya ha sido registrada como procedimiento' 
+        });
+      }
+      
       const { data, error } = await supabaseAdmin
         .from('clinical_appointments')
         .update(appointmentData)
-        .eq('appointment_ID', id) // <-- MAYÚSCULA
+        .eq('appointment_ID', id)
         .select()
         .single();
       
@@ -248,107 +264,139 @@ const appointmentController = {
   },
 
   // Convertir cita en procedimiento
-convertToProcedure: async (req, res) => {
-  try {
-    const { id } = req.params;
-    const procedureData = req.body;
-    
-    // 1. Obtener la cita
-    const { data: appointment, error: appointmentError } = await supabaseAdmin
-      .from('clinical_appointments')
-      .select('*')
-      .eq('appointment_ID', id)
-      .single();
-    
-    if (appointmentError || !appointment) {
-      return res.status(404).json({ 
-        success: false, 
-        error: 'Cita no encontrada' 
-      });
-    }
-    
-    // Validar datos mínimos
-    if (!procedureData.procedure_description) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Descripción del procedimiento es requerida' 
-      });
-    }
-    
-    // Validar que haya al menos un método de pago
-    if (!procedureData.payment_method_cordobas && !procedureData.payment_method_dollars) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Debe especificar al menos un método de pago' 
-      });
-    }
-    
-    // Preparar datos para insertar
-    const procedureToInsert = {
-      appointment_ID: id,
-      Patient_ID: appointment.Patient_ID,
-      procedure_date: appointment.appointment_date,
-      procedure_description: procedureData.procedure_description,
-      total_cost: procedureData.total_cost || 0, // cantidad en córdobas
-      total_cost_USD: procedureData.total_cost_USD || 0, // cantidad en dólares
-      total_procedure: procedureData.total_procedure || 0, // sumatoria total
-      payment_method: procedureData.payment_method || 'Mixto',
-      is_orthodontics: appointment.is_orthodontics,
-      observations: procedureData.observations || appointment.observations,
-      creation_date: new Date().toISOString(),
-      // Campos de pagos múltiples
-      amount_cordobas: procedureData.amount_cordobas || 0,
-      amount_dollars: procedureData.amount_dollars || 0,
-      payment_method_cordobas: procedureData.payment_method_cordobas || null,
-      payment_method_dollars: procedureData.payment_method_dollars || null,
-      // Campos de doctor externo
-      external_doctor: procedureData.external_doctor || null,
-      external_doctor_payment: procedureData.external_doctor_payment || null,
-      theres_external_doctor: procedureData.theres_external_doctor || false,
-      external_doctor_name: procedureData.external_doctor_name || null,
-      external_doctor_specialty: procedureData.external_doctor_specialty || null,
-      external_doctor_payment_type: procedureData.external_doctor_payment_type || 'fixed',
-      external_doctor_payment_value: procedureData.external_doctor_payment_value || null,
-      external_doctor_payment_currency: procedureData.external_doctor_payment_currency || 'C$',
-      // Campos de porcentajes
-      clinic_payment_percentage: procedureData.clinic_payment_percentage || 
-        (appointment.is_orthodontics ? 40 : 100),
-      doctor_payment_percentage: procedureData.doctor_payment_percentage || 
-        (appointment.is_orthodontics ? 60 : 0)
-    };
-    
-    // 2. Crear el procedimiento
-    const { data: procedure, error: procedureError } = await supabaseAdmin
-      .from('procedures')
-      .insert([procedureToInsert])
-      .select()
-      .single();
-    
-    if (procedureError) {
-      console.error('Error detallado al crear procedimiento:', procedureError);
-      throw new Error(`Error al crear procedimiento: ${procedureError.message}`);
-    }
-    
-    res.json({ 
-      success: true, 
-      message: appointment.is_orthodontics ? 
-        'Tratamiento de ortodoncia registrado exitosamente' : 
-        'Procedimiento registrado exitosamente',
-      data: {
-        appointment,
-        procedure
+  convertToProcedure: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const procedureData = req.body;
+      
+      // 1. Obtener la cita
+      const { data: appointment, error: appointmentError } = await supabaseAdmin
+        .from('clinical_appointments')
+        .select('*')
+        .eq('appointment_ID', id)
+        .single();
+      
+      if (appointmentError || !appointment) {
+        return res.status(404).json({ 
+          success: false, 
+          error: 'Cita no encontrada' 
+        });
       }
-    });
-  } catch (error) {
-    console.error('Error al convertir cita en procedimiento:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message || 'Error al registrar procedimiento' 
-    });
-  }
-},
+      
+      // Verificar si ya está registrada
+      if (appointment.is_registered) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Esta cita ya ha sido registrada como procedimiento' 
+        });
+      }
+      
+      // Validar datos mínimos
+      if (!procedureData.procedure_description) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Descripción del procedimiento es requerida' 
+        });
+      }
+      
+      // Validar que haya al menos un método de pago
+      if (!procedureData.payment_method_cordobas && !procedureData.payment_method_dollars) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Debe especificar al menos un método de pago' 
+        });
+      }
+      
+      // Preparar datos para insertar
+      const procedureToInsert = {
+        appointment_ID: id,
+        Patient_ID: appointment.Patient_ID,
+        procedure_date: appointment.appointment_date,
+        procedure_description: procedureData.procedure_description,
+        total_cost: procedureData.total_cost || 0,
+        total_cost_USD: procedureData.total_cost_USD || 0,
+        total_procedure: procedureData.total_procedure || 0,
+        payment_method: procedureData.payment_method || 'Mixto',
+        is_orthodontics: appointment.is_orthodontics,
+        observations: procedureData.observations || appointment.observations,
+        creation_date: new Date().toISOString(),
+        // Campos de pagos múltiples
+        amount_cordobas: procedureData.amount_cordobas || 0,
+        amount_dollars: procedureData.amount_dollars || 0,
+        payment_method_cordobas: procedureData.payment_method_cordobas || null,
+        payment_method_dollars: procedureData.payment_method_dollars || null,
+        // Campos de doctor externo
+        external_doctor: procedureData.external_doctor || null,
+        external_doctor_payment: procedureData.external_doctor_payment || null,
+        theres_external_doctor: procedureData.theres_external_doctor || false,
+        external_doctor_name: procedureData.external_doctor_name || null,
+        external_doctor_specialty: procedureData.external_doctor_specialty || null,
+        external_doctor_payment_type: procedureData.external_doctor_payment_type || 'fixed',
+        external_doctor_payment_value: procedureData.external_doctor_payment_value || null,
+        external_doctor_payment_currency: procedureData.external_doctor_payment_currency || 'C$',
+        // Campos de porcentajes
+        clinic_payment_percentage: procedureData.clinic_payment_percentage || 
+          (appointment.is_orthodontics ? 40 : 100),
+        doctor_payment_percentage: procedureData.doctor_payment_percentage || 
+          (appointment.is_orthodontics ? 60 : 0)
+      };
+      
+      // 2. Crear el procedimiento
+      const { data: procedure, error: procedureError } = await supabaseAdmin
+        .from('procedures')
+        .insert([procedureToInsert])
+        .select()
+        .single();
+      
+      if (procedureError) {
+        console.error('Error detallado al crear procedimiento:', procedureError);
+        throw new Error(`Error al crear procedimiento: ${procedureError.message}`);
+      }
+      
+      // 3. Actualizar estado de la cita a "completed" y marcar como registrada
+      const { data: updatedAppointment, error: updateError } = await supabaseAdmin
+        .from('clinical_appointments')
+        .update({ 
+          state: 'completed',
+          is_registered: true 
+        })
+        .eq('appointment_ID', id)
+        .select()
+        .single();
+      
+      if (updateError) {
+        // Si falla la actualización, revertir el procedimiento
+        await supabaseAdmin
+          .from('procedures')
+          .delete()
+          .eq('procedure_ID', procedure.procedure_ID);
+        
+        throw new Error(`Error al actualizar cita: ${updateError.message}`);
+      }
+      
+      res.json({ 
+        success: true, 
+        message: appointment.is_orthodontics ? 
+          'Tratamiento de ortodoncia registrado exitosamente' : 
+          'Procedimiento registrado exitosamente',
+        data: {
+          appointment: {
+            ...updatedAppointment,
+            is_registered: true
+          },
+          procedure
+        }
+      });
+    } catch (error) {
+      console.error('Error al convertir cita en procedimiento:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: error.message || 'Error al registrar procedimiento' 
+      });
+    }
+  },
 
-  // Eliminar cita - USANDO appointment_ID (MAYÚSCULA)
+  // Eliminar cita
   delete: async (req, res) => {
     try {
       const { id } = req.params;
@@ -356,8 +404,8 @@ convertToProcedure: async (req, res) => {
       // Verificar que la cita exista
       const { data: existingAppointment, error: checkError } = await supabaseAdmin
         .from('clinical_appointments')
-        .select('appointment_ID') // <-- MAYÚSCULA
-        .eq('appointment_ID', id) // <-- MAYÚSCULA
+        .select('appointment_ID, is_registered')
+        .eq('appointment_ID', id)
         .single();
       
       if (checkError || !existingAppointment) {
@@ -367,10 +415,18 @@ convertToProcedure: async (req, res) => {
         });
       }
       
+      // No permitir eliminar si ya está registrada como procedimiento
+      if (existingAppointment.is_registered) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'No se puede eliminar una cita que ya ha sido registrada como procedimiento' 
+        });
+      }
+      
       const { data, error } = await supabaseAdmin
         .from('clinical_appointments')
         .delete()
-        .eq('appointment_ID', id) // <-- MAYÚSCULA
+        .eq('appointment_ID', id)
         .select()
         .single();
       
@@ -416,7 +472,8 @@ convertToProcedure: async (req, res) => {
       const transformedData = data.map(item => ({
         ...item,
         patient_name: `${item.patients?.first_name || ''} ${item.patients?.first_last_name || ''}`.trim(),
-        patient_phone: item.patients?.number_phone
+        patient_phone: item.patients?.number_phone,
+        is_registered: item.is_registered || false
       }));
       
       res.json({ 
@@ -432,7 +489,7 @@ convertToProcedure: async (req, res) => {
     }
   },
 
-  // Obtener citas por paciente - USANDO Patient_ID (MAYÚSCULA)
+  // Obtener citas por paciente
   getByPatientId: async (req, res) => {
     try {
       const { patientId } = req.params;
@@ -440,14 +497,19 @@ convertToProcedure: async (req, res) => {
       const { data, error } = await supabaseAdmin
         .from('clinical_appointments')
         .select('*')
-        .eq('Patient_ID', patientId) // <-- MAYÚSCULA
+        .eq('Patient_ID', patientId)
         .order('appointment_date', { ascending: false });
       
       if (error) throw error;
       
+      const transformedData = data.map(item => ({
+        ...item,
+        is_registered: item.is_registered || false
+      }));
+      
       res.json({ 
         success: true, 
-        data: data || [] 
+        data: transformedData || [] 
       });
     } catch (error) {
       console.error('Error al obtener citas:', error);
@@ -479,6 +541,52 @@ convertToProcedure: async (req, res) => {
       res.status(500).json({ 
         success: false, 
         error: 'Error al contar citas' 
+      });
+    }
+  },
+
+  // Contar citas registradas
+  countRegistered: async (req, res) => {
+    try {
+      const { count, error } = await supabaseAdmin
+        .from('clinical_appointments')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_registered', true);
+      
+      if (error) throw error;
+      
+      res.json({ 
+        success: true, 
+        count: count || 0 
+      });
+    } catch (error) {
+      console.error('Error al contar citas registradas:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: 'Error al contar citas registradas' 
+      });
+    }
+  },
+
+  // Contar citas no registradas
+  countUnregistered: async (req, res) => {
+    try {
+      const { count, error } = await supabaseAdmin
+        .from('clinical_appointments')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_registered', false);
+      
+      if (error) throw error;
+      
+      res.json({ 
+        success: true, 
+        count: count || 0 
+      });
+    } catch (error) {
+      console.error('Error al contar citas no registradas:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: 'Error al contar citas no registradas' 
       });
     }
   }

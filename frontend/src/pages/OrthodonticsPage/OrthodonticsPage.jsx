@@ -2,6 +2,15 @@ import { useContext, useState, useEffect } from "react";
 import { AppContext } from "../../context/AppContext";
 import { AuthContext } from "../../context/AuthContext";
 import { formatDate, formatCurrency } from "../../utils/formatters";
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { 
+  faChevronDown,
+  faChevronUp,
+  faChartBar,
+  faFilter,
+  faTimes,
+  faSearch
+} from '@fortawesome/free-solid-svg-icons';
 import "./OrthodonticsPage.css";
 
 export default function OrthodonticsPage() {
@@ -20,6 +29,8 @@ export default function OrthodonticsPage() {
     endDate: ""
   });
   const [localError, setLocalError] = useState("");
+  const [expandedStats, setExpandedStats] = useState(false);
+  const [expandedFilters, setExpandedFilters] = useState(false);
 
   // Cargar ortodoncias al montar
   useEffect(() => {
@@ -200,28 +211,34 @@ export default function OrthodonticsPage() {
       <div className="orthodontics-header">
         <h2>🔧 Ortodoncia</h2>
         <div className="orthodontics-tools">
-          <div className="search-wrapper">
-            <input
-              className="search-box"
-              placeholder="Buscar por descripción, paciente, cédula o doctor..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="gray" viewBox="0 0 16 16">
-              <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0" />
-            </svg>
-          </div>
-          
           <div className="orthodontics-count">
             <span>{filteredOrthodontics.length}</span>
           </div>
         </div>
       </div>
 
-      {/* Ganancias totales actualizadas */}
-      <div className="total-earnings-section">
-        <h3>💰 Ganancias Totales</h3>
-        <div className="earnings-cards">
+      {/* Estadísticas desplegables */}
+      <div className={`appointments-stats ${expandedStats ? 'expanded' : ''}`}>
+        <div className="stats-header-mobile" onClick={() => setExpandedStats(!expandedStats)}>
+          <div className="stats-header-content">
+            <h3 className="stats-title">
+              <FontAwesomeIcon icon={faChartBar} />
+              Estadísticas de Ortodoncia
+            </h3>
+            <div className="stats-summary-mobile">
+              <span className="stat-summary-item">Total: {totalEarnings.count}</span>
+              <span className="stat-summary-item">Clínica: {formatCurrency(totalEarnings.totalClinicEarnings)}</span>
+              <span className="stat-summary-item">Doctora: {formatCurrency(totalEarnings.totalDoctorEarnings)}</span>
+            </div>
+          </div>
+          <FontAwesomeIcon 
+            icon={expandedStats ? faChevronUp : faChevronDown} 
+            className="stats-toggle-icon"
+          />
+        </div>
+        
+        <div className="stats-grid-container">
+          {/* Ganancias Totales actualizadas */}
           <div className="earnings-card clinic-earnings">
             <div className="earnings-icon">🏥</div>
             <div className="earnings-content">
@@ -284,34 +301,81 @@ export default function OrthodonticsPage() {
         </div>
       </div>
 
-      {/* Filtros por fecha */}
-      <div className="filters-section">
-        <h3>Filtros</h3>
-        <div className="filters-row">
-          <div className="filter-group">
-            <label>Fecha desde:</label>
+      {/* Filtros desplegables */}
+      <div className={`filter-section ${expandedFilters ? 'expanded' : ''}`}>
+        <div className="filter-header-mobile" onClick={() => setExpandedFilters(!expandedFilters)}>
+          <div className="filter-header-content">
+            <h3>
+              <FontAwesomeIcon icon={faFilter} />
+              Filtros
+            </h3>
+            <span className="filter-summary">
+              {dateFilter.startDate ? `Desde: ${dateFilter.startDate}` : 'Sin fecha inicio'} • 
+              {dateFilter.endDate ? ` Hasta: ${dateFilter.endDate}` : ' Sin fecha fin'}
+            </span>
+          </div>
+          <FontAwesomeIcon 
+            icon={expandedFilters ? faChevronUp : faChevronDown} 
+            className="filter-toggle-icon"
+          />
+        </div>
+        
+        <div className="filter-content-container">
+          <div className="filters-section">
+            <div className="filters-row">
+              <div className="filter-group">
+                <label>Fecha desde:</label>
+                <input
+                  type="date"
+                  value={dateFilter.startDate}
+                  onChange={(e) => setDateFilter({...dateFilter, startDate: e.target.value})}
+                />
+              </div>
+              <div className="filter-group">
+                <label>Fecha hasta:</label>
+                <input
+                  type="date"
+                  value={dateFilter.endDate}
+                  onChange={(e) => setDateFilter({...dateFilter, endDate: e.target.value})}
+                />
+              </div>
+              <div className="filter-actions">
+                <button className="btn-apply-filters" onClick={applyFilters}>
+                  Aplicar Filtros
+                </button>
+                <button className="btn-clear-filters" onClick={clearFilters}>
+                  Limpiar Filtros
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* BUSCADOR PRINCIPAL - Debajo de estadísticas */}
+      <div className="search-box-main-container">
+        <div className="filter-group">
+          <label className="filter-label">Buscar ortodoncias:</label>
+          <div className="search-box-main">
             <input
-              type="date"
-              value={dateFilter.startDate}
-              onChange={(e) => setDateFilter({...dateFilter, startDate: e.target.value})}
+              type="text"
+              placeholder="Buscar por descripción, paciente, cédula o doctor..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="search-input-main"
             />
+            {search && (
+              <button 
+                className="clear-search-btn"
+                onClick={() => setSearch('')}
+              >
+                <FontAwesomeIcon icon={faTimes} />
+              </button>
+            )}
           </div>
-          <div className="filter-group">
-            <label>Fecha hasta:</label>
-            <input
-              type="date"
-              value={dateFilter.endDate}
-              onChange={(e) => setDateFilter({...dateFilter, endDate: e.target.value})}
-            />
-          </div>
-          <div className="filter-actions">
-            <button className="btn-apply-filters" onClick={applyFilters}>
-              Aplicar Filtros
-            </button>
-            <button className="btn-clear-filters" onClick={clearFilters}>
-              Limpiar Filtros
-            </button>
-          </div>
+          <small className="search-help-text">
+            Busca por descripción del tratamiento, nombre del paciente, cédula o nombre del doctor externo
+          </small>
         </div>
       </div>
 

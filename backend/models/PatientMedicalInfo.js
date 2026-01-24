@@ -1,5 +1,9 @@
-// models/PatientMedicalInfo.js
+// models/patientMedicalInfoModel.js
 import { supabaseAdmin } from '../config/supabase.js';
+import { 
+  formatNicaraguaDateTime,
+  formatNicaraguaDate
+} from '../utils/timezoneUtils.js';
 
 const PatientMedicalInfo = {
   // Obtener información médica por ID de paciente
@@ -11,6 +15,17 @@ const PatientMedicalInfo = {
       .single();
     
     if (error && error.code !== 'PGRST116') throw error;
+    
+    if (data) {
+      return {
+        ...data,
+        created_at_display: formatNicaraguaDateTime(data.created_at),
+        updated_at_display: formatNicaraguaDateTime(data.updated_at),
+        last_dental_visit_display: data.last_dental_visit ? 
+          formatNicaraguaDate(data.last_dental_visit) : null
+      };
+    }
+    
     return data;
   },
 
@@ -28,16 +43,21 @@ const PatientMedicalInfo = {
       .single();
     
     if (error) throw error;
-    return data;
+    
+    return {
+      ...data,
+      created_at_display: formatNicaraguaDateTime(data.created_at),
+      updated_at_display: formatNicaraguaDateTime(data.updated_at),
+      last_dental_visit_display: data.last_dental_visit ? 
+        formatNicaraguaDate(data.last_dental_visit) : null
+    };
   },
 
   // Actualizar información médica
   async update(patientId, medicalData) {
-    // Primero verificar si existe
     const existing = await this.getByPatientId(patientId);
     
     if (existing) {
-      // Actualizar
       const { data, error } = await supabaseAdmin
         .from('patient_medical_info')
         .update({
@@ -49,9 +69,15 @@ const PatientMedicalInfo = {
         .single();
       
       if (error) throw error;
-      return data;
+      
+      return {
+        ...data,
+        created_at_display: formatNicaraguaDateTime(data.created_at),
+        updated_at_display: formatNicaraguaDateTime(data.updated_at),
+        last_dental_visit_display: data.last_dental_visit ? 
+          formatNicaraguaDate(data.last_dental_visit) : null
+      };
     } else {
-      // Crear si no existe
       return await this.create(patientId, medicalData);
     }
   },
@@ -69,7 +95,7 @@ const PatientMedicalInfo = {
     return data;
   },
 
-  // Obtener información médica con paciente (join)
+  // Obtener información médica con paciente
   async getWithPatient(patientId) {
     const { data, error } = await supabaseAdmin
       .from('patient_medical_info')
@@ -86,6 +112,20 @@ const PatientMedicalInfo = {
       .single();
     
     if (error && error.code !== 'PGRST116') throw error;
+    
+    if (data) {
+      return {
+        ...data,
+        created_at_display: formatNicaraguaDateTime(data.created_at),
+        updated_at_display: formatNicaraguaDateTime(data.updated_at),
+        last_dental_visit_display: data.last_dental_visit ? 
+          formatNicaraguaDate(data.last_dental_visit) : null,
+        patient_name: `${data.patients?.first_name || ''} ${data.patients?.first_last_name || ''}`.trim(),
+        patient_identification: data.patients?.identification,
+        patient_phone: data.patients?.number_phone
+      };
+    }
+    
     return data;
   }
 };

@@ -1,4 +1,9 @@
+// models/patientModel.js
 import { supabaseAdmin } from '../config/supabase.js';
+import { 
+  formatNicaraguaDateTime,
+  formatNicaraguaDate
+} from '../utils/timezoneUtils.js';
 
 const Patient = {
   // Obtener todos los pacientes
@@ -21,8 +26,16 @@ const Patient = {
     
     if (error) throw error;
     
+    // Formatear fechas para mostrar
+    const formattedData = data.map(patient => ({
+      ...patient,
+      creation_date_display: formatNicaraguaDateTime(patient.creation_date),
+      birthdate_display: patient.birthdate ? 
+        formatNicaraguaDate(patient.birthdate) : null
+    }));
+    
     return {
-      data,
+      data: formattedData,
       total: count,
       page,
       limit,
@@ -39,7 +52,13 @@ const Patient = {
       .single();
     
     if (error) throw error;
-    return data;
+    
+    return {
+      ...data,
+      creation_date_display: formatNicaraguaDateTime(data.creation_date),
+      birthdate_display: data.birthdate ? 
+        formatNicaraguaDate(data.birthdate) : null
+    };
   },
 
   // Crear paciente
@@ -54,7 +73,13 @@ const Patient = {
       .single();
     
     if (error) throw error;
-    return data;
+    
+    return {
+      ...data,
+      creation_date_display: formatNicaraguaDateTime(data.creation_date),
+      birthdate_display: data.birthdate ? 
+        formatNicaraguaDate(data.birthdate) : null
+    };
   },
 
   // Actualizar paciente
@@ -67,7 +92,13 @@ const Patient = {
       .single();
     
     if (error) throw error;
-    return data;
+    
+    return {
+      ...data,
+      creation_date_display: formatNicaraguaDateTime(data.creation_date),
+      birthdate_display: data.birthdate ? 
+        formatNicaraguaDate(data.birthdate) : null
+    };
   },
 
   // Eliminar paciente
@@ -92,6 +123,16 @@ const Patient = {
       .single();
     
     if (error && error.code !== 'PGRST116') throw error;
+    
+    if (data) {
+      return {
+        ...data,
+        creation_date_display: formatNicaraguaDateTime(data.creation_date),
+        birthdate_display: data.birthdate ? 
+          formatNicaraguaDate(data.birthdate) : null
+      };
+    }
+    
     return data;
   },
 

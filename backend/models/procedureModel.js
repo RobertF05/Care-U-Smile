@@ -1,7 +1,105 @@
-// procedureModel.js - Versión actualizada
+// models/procedureModel.js
 import { supabaseAdmin } from '../config/supabase.js';
+import { 
+  toUTCFromNicaragua,
+  toNicaraguaTime,
+  formatNicaraguaDateTime,
+  formatNicaraguaDate,
+  createNicaraguaDateRange,
+  convertDateStringToUTCStart,
+  convertDateStringToUTCEnd
+} from '../utils/timezoneUtils.js';
 
 const Procedure = {
+  // Obtener estadísticas de ingresos por día (Nicaragua)
+  async getDailyIncomeStats(date, isOrthodontics = false) {
+    const { start, end } = createNicaraguaDateRange(date);
+    
+    let query = supabaseAdmin
+      .from('procedures')
+      .select('total_cost, total_procedure, clinic_payment_percentage, doctor_payment_percentage')
+      .eq('is_orthodontics', isOrthodontics)
+      .gte('procedure_date', start)
+      .lte('procedure_date', end);
+
+    const { data, error } = await query;
+    
+    if (error) throw error;
+    
+    let totalIncome = 0;
+    let clinicIncome = 0;
+    let doctorIncome = 0;
+    
+    (data || []).forEach(procedure => {
+      const amount = procedure.total_cost || procedure.total_procedure || 0;
+      totalIncome += amount;
+      
+      if (isOrthodontics) {
+        const clinicPercentage = procedure.clinic_payment_percentage || 40;
+        const doctorPercentage = procedure.doctor_payment_percentage || 60;
+        
+        clinicIncome += amount * (clinicPercentage / 100);
+        doctorIncome += amount * (doctorPercentage / 100);
+      } else {
+        clinicIncome += amount;
+      }
+    });
+    
+    return {
+      total_income: totalIncome,
+      clinic_income: clinicIncome,
+      doctor_income: doctorIncome,
+      procedure_count: data?.length || 0,
+      fecha_nicaragua: date
+    };
+  },
+
+  // Obtener procedimientos no incluidos en cierres diarios
+  async getUnclosedProcedures(startDate, endDate, closingType = 'general') {
+    const isOrthodontics = closingType === 'orthodontics';
+    const startUTC = convertDateStringToUTCStart(startDate);
+    const endUTC = convertDateStringToUTCEnd(endDate);
+    
+    let query = supabaseAdmin
+      .from('procedures')
+      .select(`
+        procedure_ID,
+        procedure_date,
+        total_cost,
+        is_orthodontics,
+        patients (first_name, first_last_name)
+      `)
+      .eq('is_orthodontics', isOrthodontics)
+      .gte('procedure_date', startUTC)
+      .lte('procedure_date', endUTC)
+      .order('procedure_date', { ascending: false });
+
+    const { data: procedures, error } = await query;
+    
+    if (error) throw error;
+    
+    const { data: closedProcedures } = await supabaseAdmin
+      .from('procedure_daily_closings')
+      .select('procedure_id')
+      .in('procedure_id', procedures.map(p => p.procedure_ID));
+    
+    const closedIds = new Set(closedProcedures?.map(cp => cp.procedure_id) || []);
+    const unclosed = procedures.filter(p => !closedIds.has(p.procedure_ID));
+    
+    // Convertir fechas a Nicaragua para mostrar
+    const unclosedWithNicaraguaTime = unclosed.map(p => ({
+      ...p,
+      procedure_date_display: formatNicaraguaDateTime(p.procedure_date),
+      procedure_date_utc: p.procedure_date
+    }));
+    
+    return {
+      procedures: unclosedWithNicaraguaTime,
+      total_count: unclosed.length,
+      total_amount: unclosed.reduce((sum, p) => sum + (p.total_cost || 0), 0)
+    };
+  },
+
   // Obtener procedimientos regulares (NO ortodoncia)
   async getAllNormal(page = 1, limit = 20, filters = {}) {
     const from = (page - 1) * limit;
@@ -24,13 +122,15 @@ const Procedure = {
       .eq('is_orthodontics', false)
       .order('procedure_date', { ascending: false });
     
-    // Aplicar filtros
+    // Aplicar filtros con conversión de zona horaria
     if (filters.startDate) {
-      query = query.gte('procedure_date', filters.startDate);
+      const startUTC = convertDateStringToUTCStart(filters.startDate);
+      query = query.gte('procedure_date', startUTC);
     }
     
     if (filters.endDate) {
-      query = query.lte('procedure_date', filters.endDate);
+      const endUTC = convertDateStringToUTCEnd(filters.endDate);
+      query = query.lte('procedure_date', endUTC);
     }
     
     if (filters.patientId) {
@@ -43,13 +143,17 @@ const Procedure = {
     
     if (error) throw error;
     
-    // Transformar datos
+    // Transformar datos y convertir fechas
     const transformedData = data.map(item => ({
       ...item,
+      procedure_date: formatNicaraguaDateTime(item.procedure_date),
+      procedure_date_utc: item.procedure_date,
+      creation_date: formatNicaraguaDateTime(item.creation_date),
       patient_name: `${item.patients?.first_name || ''} ${item.patients?.first_last_name || ''}`.trim(),
       patient_identification: item.patients?.identification,
       original_query_type: item.clinical_appointments?.query_type,
-      original_appointment_date: item.clinical_appointments?.appointment_date
+      original_appointment_date: item.clinical_appointments?.appointment_date ? 
+        formatNicaraguaDateTime(item.clinical_appointments.appointment_date) : null
     }));
     
     return {
@@ -83,13 +187,15 @@ const Procedure = {
       .eq('is_orthodontics', true)
       .order('procedure_date', { ascending: false });
     
-    // Aplicar filtros
+    // Aplicar filtros con conversión de zona horaria
     if (filters.startDate) {
-      query = query.gte('procedure_date', filters.startDate);
+      const startUTC = convertDateStringToUTCStart(filters.startDate);
+      query = query.gte('procedure_date', startUTC);
     }
     
     if (filters.endDate) {
-      query = query.lte('procedure_date', filters.endDate);
+      const endUTC = convertDateStringToUTCEnd(filters.endDate);
+      query = query.lte('procedure_date', endUTC);
     }
     
     if (filters.patientId) {
@@ -109,10 +215,14 @@ const Procedure = {
       
       return {
         ...item,
+        procedure_date: formatNicaraguaDateTime(item.procedure_date),
+        procedure_date_utc: item.procedure_date,
+        creation_date: formatNicaraguaDateTime(item.creation_date),
         patient_name: `${item.patients?.first_name || ''} ${item.patients?.first_last_name || ''}`.trim(),
         patient_identification: item.patients?.identification,
         original_query_type: item.clinical_appointments?.query_type,
-        original_appointment_date: item.clinical_appointments?.appointment_date,
+        original_appointment_date: item.clinical_appointments?.appointment_date ? 
+          formatNicaraguaDateTime(item.clinical_appointments.appointment_date) : null,
         clinic_income,
         doctor_income
       };
@@ -150,7 +260,6 @@ const Procedure = {
     
     if (error) throw error;
     
-    // Calcular ingresos basados en porcentajes
     const clinicPercentage = data.is_orthodontics ? (data.clinic_payment_percentage || 40) : 100;
     const doctorPercentage = data.is_orthodontics ? (data.doctor_payment_percentage || 60) : 0;
     
@@ -159,30 +268,44 @@ const Procedure = {
     
     return {
       ...data,
+      procedure_date: formatNicaraguaDateTime(data.procedure_date),
+      procedure_date_utc: data.procedure_date,
+      creation_date: formatNicaraguaDateTime(data.creation_date),
       patient_name: `${data.patients?.first_name || ''} ${data.patients?.first_last_name || ''}`.trim(),
       patient_identification: data.patients?.identification,
       patient_phone: data.patients?.number_phone,
       clinic_income,
       doctor_income,
       original_query_type: data.clinical_appointments?.query_type,
-      original_appointment_date: data.clinical_appointments?.appointment_date
+      original_appointment_date: data.clinical_appointments?.appointment_date ? 
+        formatNicaraguaDateTime(data.clinical_appointments.appointment_date) : null
     };
   },
 
-  // Crear procedimiento directamente (sin cita)
+  // Crear procedimiento directamente (convierte hora Nicaragua a UTC)
   async create(procedureData) {
+    // Convertir fecha a UTC si se proporciona
+    const procedureWithUTC = {
+      ...procedureData,
+      procedure_date: procedureData.procedure_date ? 
+        toUTCFromNicaragua(procedureData.procedure_date).toISOString() : 
+        new Date().toISOString(),
+      creation_date: new Date().toISOString()
+    };
+    
+    console.log('Creando procedimiento:', {
+      fechaOriginal: procedureData.procedure_date,
+      fechaUTC: procedureWithUTC.procedure_date
+    });
+    
     const { data, error } = await supabaseAdmin
       .from('procedures')
-      .insert([{
-        ...procedureData,
-        creation_date: new Date().toISOString()
-      }])
+      .insert([procedureWithUTC])
       .select()
       .single();
     
     if (error) throw error;
     
-    // Calcular ingresos para respuesta
     const clinicPercentage = data.is_orthodontics ? (data.clinic_payment_percentage || 40) : 100;
     const doctorPercentage = data.is_orthodontics ? (data.doctor_payment_percentage || 60) : 0;
     
@@ -191,6 +314,9 @@ const Procedure = {
     
     return {
       ...data,
+      procedure_date: formatNicaraguaDateTime(data.procedure_date),
+      procedure_date_utc: data.procedure_date,
+      creation_date: formatNicaraguaDateTime(data.creation_date),
       clinic_income,
       doctor_income
     };
@@ -198,15 +324,26 @@ const Procedure = {
 
   // Actualizar procedimiento
   async update(id, procedureData) {
+    // Si se actualiza la fecha, convertir a UTC
+    const updateData = { ...procedureData };
+    if (updateData.procedure_date) {
+      updateData.procedure_date = toUTCFromNicaragua(updateData.procedure_date).toISOString();
+    }
+    
     const { data, error } = await supabaseAdmin
       .from('procedures')
-      .update(procedureData)
+      .update(updateData)
       .eq('procedure_id', id)
       .select()
       .single();
     
     if (error) throw error;
-    return data;
+    
+    return {
+      ...data,
+      procedure_date: formatNicaraguaDateTime(data.procedure_date),
+      procedure_date_utc: data.procedure_date
+    };
   },
 
   // Eliminar procedimiento
@@ -231,12 +368,28 @@ const Procedure = {
       .order('procedure_date', { ascending: false });
     
     if (error) throw error;
-    return data;
+    
+    return data.map(item => ({
+      ...item,
+      procedure_date: formatNicaraguaDateTime(item.procedure_date),
+      procedure_date_utc: item.procedure_date,
+      creation_date: formatNicaraguaDateTime(item.creation_date)
+    }));
   },
 
-  // Obtener estadísticas de ingresos
+  // Obtener estadísticas de ingresos con fechas Nicaragua
   async getIncomeStats(startDate, endDate) {
-    // Primero obtener la configuración actual de porcentajes
+    const startUTC = convertDateStringToUTCStart(startDate);
+    const endUTC = convertDateStringToUTCEnd(endDate);
+    
+    console.log('Obteniendo estadísticas de ingresos:', {
+      inicioNicaragua: startDate,
+      finNicaragua: endDate,
+      inicioUTC: startUTC,
+      finUTC: endUTC
+    });
+    
+    // Primero obtener la configuración actual
     const { data: settingsData } = await supabaseAdmin
       .from('settings')
       .select('*')
@@ -247,12 +400,12 @@ const Procedure = {
     const clinicPercentage = settingsData?.clinic_payment || 40;
     const doctorPercentage = settingsData?.doctor_payment || 60;
     
-    // Obtener todos los procedimientos del período
+    // Obtener procedimientos del período
     const { data, error } = await supabaseAdmin
       .from('procedures')
       .select('total_cost, is_orthodontics, clinic_payment_percentage, doctor_payment_percentage')
-      .gte('procedure_date', startDate)
-      .lte('procedure_date', endDate);
+      .gte('procedure_date', startUTC)
+      .lte('procedure_date', endUTC);
     
     if (error) throw error;
     
@@ -265,7 +418,6 @@ const Procedure = {
       const cost = procedure.total_cost || 0;
       
       if (procedure.is_orthodontics) {
-        // Usar porcentajes específicos del procedimiento o los globales
         const procClinicPercentage = procedure.clinic_payment_percentage || clinicPercentage;
         const procDoctorPercentage = procedure.doctor_payment_percentage || doctorPercentage;
         
@@ -273,7 +425,6 @@ const Procedure = {
         doctorOrthodonticIncome += cost * procDoctorPercentage / 100;
         totalOrthodontic += cost;
       } else {
-        // Procedimientos generales: 100% clínica
         generalIncome += cost;
       }
     });
@@ -285,7 +436,9 @@ const Procedure = {
       clinic_income: clinicIncome,
       doctor_income: doctorOrthodonticIncome,
       total_orthodontic: totalOrthodontic,
-      total_all_procedures: generalIncome + totalOrthodontic
+      total_all_procedures: generalIncome + totalOrthodontic,
+      periodo_inicio: startDate,
+      periodo_fin: endDate
     };
   },
 

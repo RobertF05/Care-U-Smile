@@ -1,6 +1,16 @@
-// frontend/src/context/AppContext.jsx
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { AuthContext } from './AuthContext';
+import {
+  nicaraguaToUTC,
+  utcToNicaragua,
+  formatNicaraguaDateTime,
+  formatNicaraguaDate,
+  createDateTimeInputFromUTC,
+  parseDateTimeInputToUTC,
+  getCurrentNicaraguaDateString,
+  getCurrentNicaraguaDateTime,
+  adjustDateForQuery
+} from '../utils/dateUtils';
 
 export const AppContext = createContext();
 
@@ -13,8 +23,10 @@ export const AppProvider = ({ children }) => {
   const [appointments, setAppointments] = useState([]);
   const [bills, setBills] = useState([]);
   const [monthlyClosings, setMonthlyClosings] = useState([]);
+  const [dailyClosings, setDailyClosings] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  
   const [stats, setStats] = useState({
     totalPatients: 0,
     todayAppointments: 0,
@@ -151,56 +163,71 @@ export const AppProvider = ({ children }) => {
   };
 
   // ========== INFORMACIÓN MÉDICA DE PACIENTES ==========
-const getPatientMedicalInfo = async (patientId) => {
-  try {
-    const data = await apiFetch(`/patients/${patientId}/medical-info`);
-    return data;
-  } catch (error) {
-    console.error('Error obteniendo información médica:', error);
-    return { success: false, error: error.message };
-  }
-};
+  const getPatientMedicalInfo = async (patientId) => {
+    try {
+      const data = await apiFetch(`/patients/${patientId}/medical-info`);
+      return data;
+    } catch (error) {
+      console.error('Error obteniendo información médica:', error);
+      return { success: false, error: error.message };
+    }
+  };
 
-const createPatientMedicalInfo = async (patientId, medicalData) => {
-  try {
-    const data = await apiFetch(`/patients/${patientId}/medical-info`, {
-      method: 'POST',
-      body: JSON.stringify(medicalData),
-    });
-    return data;
-  } catch (error) {
-    console.error('Error creando información médica:', error);
-    return { success: false, error: error.message };
-  }
-};
+  const createPatientMedicalInfo = async (patientId, medicalData) => {
+    try {
+      const data = await apiFetch(`/patients/${patientId}/medical-info`, {
+        method: 'POST',
+        body: JSON.stringify(medicalData),
+      });
+      return data;
+    } catch (error) {
+      console.error('Error creando información médica:', error);
+      return { success: false, error: error.message };
+    }
+  };
 
-const updatePatientMedicalInfo = async (patientId, medicalData) => {
-  try {
-    const data = await apiFetch(`/patients/${patientId}/medical-info`, {
-      method: 'PUT',
-      body: JSON.stringify(medicalData),
-    });
-    return data;
-  } catch (error) {
-    console.error('Error actualizando información médica:', error);
-    return { success: false, error: error.message };
-  }
-};
+  const updatePatientMedicalInfo = async (patientId, medicalData) => {
+    try {
+      const data = await apiFetch(`/patients/${patientId}/medical-info`, {
+        method: 'PUT',
+        body: JSON.stringify(medicalData),
+      });
+      return data;
+    } catch (error) {
+      console.error('Error actualizando información médica:', error);
+      return { success: false, error: error.message };
+    }
+  };
 
   // ========== CITAS ==========
   const fetchAppointments = async (filters = {}) => {
     try {
-      const queryParams = new URLSearchParams(filters).toString();
+      // Procesar filtros para fechas
+      const processedFilters = { ...filters };
+      
+      if (processedFilters.startDate) {
+        processedFilters.startDate = adjustDateForQuery(processedFilters.startDate);
+      }
+      
+      if (processedFilters.endDate) {
+        processedFilters.endDate = adjustDateForQuery(processedFilters.endDate);
+      }
+      
+      const queryParams = new URLSearchParams(processedFilters).toString();
       const endpoint = queryParams ? `/appointments?${queryParams}` : '/appointments';
       const data = await apiFetch(endpoint);
       
+      // Las fechas ya vienen formateadas desde el backend en hora Nicaragua
       setAppointments(data.data);
       
-      // Calcular citas de hoy
-      const today = new Date().toISOString().split('T')[0];
-      const todayCount = data.data.filter(apt => 
-        apt.appointment_date?.includes(today)
-      ).length;
+      // Calcular citas de hoy (en hora Nicaragua)
+      const todayNicaragua = getCurrentNicaraguaDateString();
+      
+      const todayCount = data.data.filter(apt => {
+        // El backend devuelve appointment_date ya en hora Nicaragua
+        const aptDate = apt.appointment_date?.split(' ')[0]; // Extraer solo la fecha
+        return aptDate === todayNicaragua;
+      }).length;
       
       setStats(prev => ({ ...prev, todayAppointments: todayCount }));
       
@@ -213,7 +240,9 @@ const updatePatientMedicalInfo = async (patientId, medicalData) => {
 
   const getAppointmentsByDate = async (date) => {
     try {
-      const data = await apiFetch(`/appointments/date/${date}`);
+      // Convertir fecha a formato YYYY-MM-DD para el backend
+      const dateString = adjustDateForQuery(date);
+      const data = await apiFetch(`/appointments/date/${dateString}`);
       return data;
     } catch (error) {
       console.error('Error obteniendo citas por fecha:', error);
@@ -223,15 +252,25 @@ const updatePatientMedicalInfo = async (patientId, medicalData) => {
 
   const createAppointment = async (appointmentData) => {
     try {
-      console.log('📝 Datos de la cita a crear:', appointmentData);
+      console.log('📝 Datos de la cita original:', appointmentData);
+      
+      // IMPORTANTE: NO convertir aquí, el backend maneja la conversión
+      // Solo enviar la fecha como está (en hora Nicaragua desde el input)
+      const appointmentToSend = {
+        ...appointmentData,
+        // appointment_date ya está en hora Nicaragua del input datetime-local
+      };
+      
+      console.log('📤 Enviando al backend (hora Nicaragua):', appointmentToSend.appointment_date);
       
       const data = await apiFetch('/appointments', {
         method: 'POST',
-        body: JSON.stringify(appointmentData),
+        body: JSON.stringify(appointmentToSend),
       });
       
       console.log('✅ Cita creada exitosamente:', data);
       
+      // El backend ya devuelve la fecha formateada en hora Nicaragua
       setAppointments(prev => [...prev, data.data]);
       
       return data;
@@ -248,11 +287,15 @@ const updatePatientMedicalInfo = async (patientId, medicalData) => {
 
   const updateAppointment = async (id, appointmentData) => {
     try {
+      // IMPORTANTE: NO convertir aquí, el backend maneja la conversión
+      console.log('📝 Actualizando cita:', { id, appointmentData });
+      
       const data = await apiFetch(`/appointments/${id}`, {
         method: 'PUT',
         body: JSON.stringify(appointmentData),
       });
       
+      // El backend ya devuelve la fecha formateada en hora Nicaragua
       setAppointments(prev => 
         prev.map(appointment => appointment.appointment_ID === id ? data.data : appointment)
       );
@@ -282,13 +325,24 @@ const updatePatientMedicalInfo = async (patientId, medicalData) => {
   };
 
   // ========== PROCEDIMIENTOS ==========
-  // Función para procedimientos regulares (is_orthodontics = false)
   const fetchProceduresNormal = async (filters = {}) => {
     try {
-      const queryParams = new URLSearchParams(filters).toString();
+      // Procesar filtros para fechas
+      const processedFilters = { ...filters };
+      
+      if (processedFilters.startDate) {
+        processedFilters.startDate = adjustDateForQuery(processedFilters.startDate);
+      }
+      
+      if (processedFilters.endDate) {
+        processedFilters.endDate = adjustDateForQuery(processedFilters.endDate);
+      }
+      
+      const queryParams = new URLSearchParams(processedFilters).toString();
       const endpoint = queryParams ? `/procedures/normal?${queryParams}` : '/procedures/normal';
       const data = await apiFetch(endpoint);
       
+      // Las fechas ya vienen formateadas desde el backend
       setProcedures(data.data);
       setStats(prev => ({ 
         ...prev, 
@@ -303,10 +357,20 @@ const updatePatientMedicalInfo = async (patientId, medicalData) => {
     }
   };
 
-  // Función para ortodoncias (is_orthodontics = true)
   const fetchOrthodontics = async (filters = {}) => {
     try {
-      const queryParams = new URLSearchParams(filters).toString();
+      // Procesar filtros para fechas
+      const processedFilters = { ...filters };
+      
+      if (processedFilters.startDate) {
+        processedFilters.startDate = adjustDateForQuery(processedFilters.startDate);
+      }
+      
+      if (processedFilters.endDate) {
+        processedFilters.endDate = adjustDateForQuery(processedFilters.endDate);
+      }
+      
+      const queryParams = new URLSearchParams(processedFilters).toString();
       const endpoint = queryParams ? `/procedures/orthodontics?${queryParams}` : '/procedures/orthodontics';
       const data = await apiFetch(endpoint);
       
@@ -324,26 +388,25 @@ const updatePatientMedicalInfo = async (patientId, medicalData) => {
     }
   };
 
-  // Función general para todos los procedimientos (deprecada)
-const fetchProcedures = async (filters = {}) => {
-  try {
-    const queryParams = new URLSearchParams(filters).toString();
-    const endpoint = queryParams ? `/procedures/normal?${queryParams}` : '/procedures/normal';
-    const data = await apiFetch(endpoint);
-    
-    setProcedures(data.data);
-    setStats(prev => ({ 
-      ...prev, 
-      totalProcedures: data.total,
-      pendingProcedures: data.data.filter(proc => !proc.state || proc.state !== 'COMPLETED').length
-    }));
-    
-    return data;
-  } catch (error) {
-    console.error('Error cargando procedimientos:', error);
-    return { success: false, error: error.message };
-  }
-};
+  const fetchProcedures = async (filters = {}) => {
+    try {
+      const queryParams = new URLSearchParams(filters).toString();
+      const endpoint = queryParams ? `/procedures/normal?${queryParams}` : '/procedures/normal';
+      const data = await apiFetch(endpoint);
+      
+      setProcedures(data.data);
+      setStats(prev => ({ 
+        ...prev, 
+        totalProcedures: data.total,
+        pendingProcedures: data.data.filter(proc => !proc.state || proc.state !== 'COMPLETED').length
+      }));
+      
+      return data;
+    } catch (error) {
+      console.error('Error cargando procedimientos:', error);
+      return { success: false, error: error.message };
+    }
+  };
 
   const getProceduresByPatient = async (patientId) => {
     try {
@@ -357,7 +420,11 @@ const fetchProcedures = async (filters = {}) => {
 
   const getIncomeStats = async (startDate, endDate) => {
     try {
-      const queryParams = new URLSearchParams({ startDate, endDate }).toString();
+      const queryParams = new URLSearchParams({ 
+        startDate: adjustDateForQuery(startDate), 
+        endDate: adjustDateForQuery(endDate) 
+      }).toString();
+      
       const data = await apiFetch(`/procedures/stats/income?${queryParams}`);
       
       setStats(prev => ({ 
@@ -372,7 +439,6 @@ const fetchProcedures = async (filters = {}) => {
     }
   };
 
-  // Función para convertir cita en procedimiento
   const convertAppointmentToProcedure = async (appointmentId, procedureData) => {
     try {
       const data = await apiFetch(`/appointments/${appointmentId}/convert-to-procedure`, {
@@ -388,241 +454,437 @@ const fetchProcedures = async (filters = {}) => {
   };
 
   // ========== GASTOS ==========
-const fetchBills = async (filters = {}) => {
-  try {
-    const queryParams = new URLSearchParams(filters).toString();
-    const endpoint = queryParams ? `/bills?${queryParams}` : '/bills';
-    const data = await apiFetch(endpoint);
-    
-    setBills(data.data || []);
-    
-    // Calcular total de gastos
-    const totalExpenses = (data.data || []).reduce((sum, bill) => sum + (bill.amount || 0), 0);
-    setStats(prev => ({ ...prev, totalExpenses }));
-    
-    return data;
-  } catch (error) {
-    console.error('Error cargando gastos:', error);
-    return { success: false, error: error.message };
-  }
-};
+  const fetchBills = async (filters = {}) => {
+    try {
+      // Procesar filtros para fechas
+      const processedFilters = { ...filters };
+      
+      if (processedFilters.startDate) {
+        processedFilters.startDate = adjustDateForQuery(processedFilters.startDate);
+      }
+      
+      if (processedFilters.endDate) {
+        processedFilters.endDate = adjustDateForQuery(processedFilters.endDate);
+      }
+      
+      const queryParams = new URLSearchParams(processedFilters).toString();
+      const endpoint = queryParams ? `/bills?${queryParams}` : '/bills';
+      const data = await apiFetch(endpoint);
+      
+      setBills(data.data || []);
+      
+      // Calcular total de gastos
+      const totalExpenses = (data.data || []).reduce((sum, bill) => sum + (bill.amount || 0), 0);
+      setStats(prev => ({ ...prev, totalExpenses }));
+      
+      return data;
+    } catch (error) {
+      console.error('Error cargando gastos:', error);
+      return { success: false, error: error.message };
+    }
+  };
 
-const getBillById = async (id) => {
-  try {
-    const data = await apiFetch(`/bills/${id}`);
-    return data;
-  } catch (error) {
-    console.error('Error obteniendo gasto:', error);
-    return { success: false, error: error.message };
-  }
-};
+  const getBillById = async (id) => {
+    try {
+      const data = await apiFetch(`/bills/${id}`);
+      return data;
+    } catch (error) {
+      console.error('Error obteniendo gasto:', error);
+      return { success: false, error: error.message };
+    }
+  };
 
-const createBill = async (billData) => {
-  try {
-    console.log('📝 Datos del gasto a crear:', billData);
-    
-    const data = await apiFetch('/bills', {
-      method: 'POST',
-      body: JSON.stringify(billData),
-    });
-    
-    console.log('✅ Gasto creado exitosamente:', data);
-    
-    setBills(prev => [...prev, data.data]);
-    
-    // Actualizar estadísticas
-    setStats(prev => ({ 
-      ...prev, 
-      totalExpenses: prev.totalExpenses + (data.data.amount || 0) 
-    }));
-    
-    return data;
-  } catch (error) {
-    console.error('❌ Error detallado creando gasto:', {
-      error: error.message,
-      billData,
-      timestamp: new Date().toISOString()
-    });
-    setError('Error al crear gasto: ' + error.message);
-    return { success: false, error: error.message };
-  }
-};
-
-const updateBill = async (id, billData) => {
-  try {
-    const data = await apiFetch(`/bills/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(billData),
-    });
-    
-    // Actualizar el estado local
-    setBills(prev => 
-      prev.map(bill => bill.bill_ID === id ? data.data : bill)
-    );
-    
-    // Recalcular estadísticas
-    const updatedBills = bills.map(bill => 
-      bill.bill_ID === id ? data.data : bill
-    );
-    const totalExpenses = updatedBills.reduce((sum, bill) => sum + (bill.amount || 0), 0);
-    setStats(prev => ({ ...prev, totalExpenses }));
-    
-    return data;
-  } catch (error) {
-    console.error('Error actualizando gasto:', error);
-    return { success: false, error: error.message };
-  }
-};
-
-const deleteBill = async (id) => {
-  try {
-    const data = await apiFetch(`/bills/${id}`, {
-      method: 'DELETE',
-    });
-    
-    // Encontrar el gasto a eliminar para actualizar estadísticas
-    const billToDelete = bills.find(bill => bill.bill_ID === id);
-    
-    // Actualizar el estado local
-    setBills(prev => prev.filter(bill => bill.bill_ID !== id));
-    
-    // Actualizar estadísticas
-    if (billToDelete) {
+  const createBill = async (billData) => {
+    try {
+      console.log('📝 Datos del gasto a crear:', billData);
+      
+      // Para bill_date (que es DATE, no TIMESTAMP), solo necesitamos YYYY-MM-DD
+      const billWithFormattedDate = {
+        ...billData,
+        bill_date: adjustDateForQuery(billData.bill_date)
+      };
+      
+      const data = await apiFetch('/bills', {
+        method: 'POST',
+        body: JSON.stringify(billWithFormattedDate),
+      });
+      
+      console.log('✅ Gasto creado exitosamente:', data);
+      
+      setBills(prev => [...prev, data.data]);
+      
+      // Actualizar estadísticas
       setStats(prev => ({ 
         ...prev, 
-        totalExpenses: prev.totalExpenses - (billToDelete.amount || 0) 
+        totalExpenses: prev.totalExpenses + (data.data.amount || 0) 
       }));
+      
+      return data;
+    } catch (error) {
+      console.error('❌ Error detallado creando gasto:', {
+        error: error.message,
+        billData,
+        timestamp: new Date().toISOString()
+      });
+      setError('Error al crear gasto: ' + error.message);
+      return { success: false, error: error.message };
     }
-    
-    return data;
-  } catch (error) {
-    console.error('Error eliminando gasto:', error);
-    return { success: false, error: error.message };
-  }
-};
+  };
 
-const getRecurrentBills = async () => {
-  try {
-    const data = await apiFetch('/bills/recurrent/all');
-    return data;
-  } catch (error) {
-    console.error('Error obteniendo gastos recurrentes:', error);
-    return { success: false, error: error.message };
-  }
-};
+  const updateBill = async (id, billData) => {
+    try {
+      // Formatear fecha si se actualiza
+      const updateData = { ...billData };
+      if (updateData.bill_date) {
+        updateData.bill_date = adjustDateForQuery(updateData.bill_date);
+      }
+      
+      const data = await apiFetch(`/bills/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(updateData),
+      });
+      
+      // Actualizar el estado local
+      setBills(prev => 
+        prev.map(bill => bill.bill_ID === id ? data.data : bill)
+      );
+      
+      // Recalcular estadísticas
+      const updatedBills = bills.map(bill => 
+        bill.bill_ID === id ? data.data : bill
+      );
+      const totalExpenses = updatedBills.reduce((sum, bill) => sum + (bill.amount || 0), 0);
+      setStats(prev => ({ ...prev, totalExpenses }));
+      
+      return data;
+    } catch (error) {
+      console.error('Error actualizando gasto:', error);
+      return { success: false, error: error.message };
+    }
+  };
 
-const getExpenseStats = async (startDate, endDate) => {
-  try {
-    const queryParams = new URLSearchParams({ startDate, endDate }).toString();
-    const data = await apiFetch(`/bills/stats/expenses?${queryParams}`);
-    return data;
-  } catch (error) {
-    console.error('Error obteniendo estadísticas de gastos:', error);
-    return { success: false, error: error.message };
-  }
-};
+  const deleteBill = async (id) => {
+    try {
+      const data = await apiFetch(`/bills/${id}`, {
+        method: 'DELETE',
+      });
+      
+      // Encontrar el gasto a eliminar para actualizar estadísticas
+      const billToDelete = bills.find(bill => bill.bill_ID === id);
+      
+      // Actualizar el estado local
+      setBills(prev => prev.filter(bill => bill.bill_ID !== id));
+      
+      // Actualizar estadísticas
+      if (billToDelete) {
+        setStats(prev => ({ 
+          ...prev, 
+          totalExpenses: prev.totalExpenses - (billToDelete.amount || 0) 
+        }));
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Error eliminando gasto:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  const getRecurrentBills = async () => {
+    try {
+      const data = await apiFetch('/bills/recurrent/all');
+      return data;
+    } catch (error) {
+      console.error('Error obteniendo gastos recurrentes:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  const getExpenseStats = async (startDate, endDate) => {
+    try {
+      const queryParams = new URLSearchParams({ 
+        startDate: adjustDateForQuery(startDate), 
+        endDate: adjustDateForQuery(endDate) 
+      }).toString();
+      
+      const data = await apiFetch(`/bills/stats/expenses?${queryParams}`);
+      return data;
+    } catch (error) {
+      console.error('Error obteniendo estadísticas de gastos:', error);
+      return { success: false, error: error.message };
+    }
+  };
 
   // ========== CIERRES MENSUALES ==========
-const fetchMonthlyClosings = async () => {
-  try {
-    const data = await apiFetch('/monthly-closings');
-    
-    setMonthlyClosings(data.data || []);
-    
-    // Obtener último cierre
-    if (data.data && data.data.length > 0) {
-      const lastClosing = data.data[0]; // Ordenados descendente
-      setStats(prev => ({ 
-        ...prev, 
-        monthlyIncome: lastClosing.total_general_income || 0 
-      }));
+  const fetchMonthlyClosings = async () => {
+    try {
+      const data = await apiFetch('/monthly-closings');
+      
+      setMonthlyClosings(data.data || []);
+      
+      // Obtener último cierre
+      if (data.data && data.data.length > 0) {
+        const lastClosing = data.data[0];
+        setStats(prev => ({ 
+          ...prev, 
+          monthlyIncome: lastClosing.total_general_income || 0 
+        }));
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Error cargando cierres:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  const getMonthlyClosingById = async (id) => {
+    try {
+      const data = await apiFetch(`/monthly-closings/${id}`);
+      return data;
+    } catch (error) {
+      console.error('Error obteniendo cierre:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  const createMonthlyClosing = async (closingData) => {
+    try {
+      console.log('📝 Datos del cierre a crear:', closingData);
+      
+      const data = await apiFetch('/monthly-closings', {
+        method: 'POST',
+        body: JSON.stringify(closingData),
+      });
+      
+      console.log('✅ Cierre creado exitosamente:', data);
+      
+      const formattedClosing = {
+        ...data.data,
+        closing_ID: data.data.closing_ID || data.data.id,
+        id: data.data.closing_ID || data.data.id,
+        total_clinic_income: (data.data.total_general_income || 0) + (data.data.total_clinical_orthodontic_income || 0),
+        total_expenses_including_doctor: (data.data.total_fixed_expenses || 0) + (data.data.total_variable_expenses || 0)
+      };
+      
+      setMonthlyClosings(prev => [formattedClosing, ...prev]);
+      
+      return data;
+    } catch (error) {
+      console.error('❌ Error detallado creando cierre:', {
+        error: error.message,
+        closingData,
+        timestamp: new Date().toISOString()
+      });
+      setError('Error al crear cierre: ' + error.message);
+      return { success: false, error: error.message };
+    }
+  };
+
+  const getFinancialSummary = async (startDate, endDate) => {
+    try {
+      const queryParams = new URLSearchParams({ 
+        startDate: adjustDateForQuery(startDate), 
+        endDate: adjustDateForQuery(endDate) 
+      }).toString();
+      
+      const data = await apiFetch(`/monthly-closings/summary/financial?${queryParams}`);
+      return data;
+    } catch (error) {
+      console.error('Error obteniendo resumen financiero:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  // ========== CIERRES DIARIOS ==========
+  const fetchDailyClosings = async (filters = {}) => {
+    try {
+      // Procesar filtros para fechas
+      const processedFilters = { ...filters };
+      
+      if (processedFilters.startDate) {
+        processedFilters.startDate = adjustDateForQuery(processedFilters.startDate);
+      }
+      
+      if (processedFilters.endDate) {
+        processedFilters.endDate = adjustDateForQuery(processedFilters.endDate);
+      }
+      
+      const queryParams = new URLSearchParams(processedFilters).toString();
+      const endpoint = queryParams ? `/daily-closings?${queryParams}` : '/daily-closings';
+      const data = await apiFetch(endpoint);
+      
+      setDailyClosings(data.data || []);
+      return data;
+    } catch (error) {
+      console.error('Error cargando cierres diarios:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  const getDailyClosingById = async (id) => {
+    try {
+      const data = await apiFetch(`/daily-closings/${id}`);
+      return data;
+    } catch (error) {
+      console.error('Error obteniendo cierre diario:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  const createDailyClosing = async (closingData) => {
+    try {
+      console.log('📝 Datos del cierre diario a crear:', closingData);
+      
+      // Asegurarse de que la fecha esté en formato YYYY-MM-DD
+      const closingWithFormattedDate = {
+        ...closingData,
+        date: adjustDateForQuery(closingData.date)
+      };
+      
+      const data = await apiFetch('/daily-closings', {
+        method: 'POST',
+        body: JSON.stringify(closingWithFormattedDate),
+      });
+      
+      console.log('✅ Cierre diario creado exitosamente:', data);
+      
+      // Formatear fechas para mostrar
+      const closingWithFormattedDates = {
+        ...data.data,
+        closing_date_display: formatNicaraguaDate(data.data.closing_date),
+        created_at_display: formatNicaraguaDateTime(data.data.created_at)
+      };
+      
+      setDailyClosings(prev => [closingWithFormattedDates, ...prev]);
+      
+      return data;
+    } catch (error) {
+      console.error('❌ Error creando cierre diario:', error);
+      setError('Error al crear cierre diario: ' + error.message);
+      return { success: false, error: error.message };
+    }
+  };
+
+  const getDailySummary = async (date, closingType = 'general') => {
+    try {
+      const queryParams = new URLSearchParams({ 
+        date: adjustDateForQuery(date), 
+        closing_type: closingType 
+      }).toString();
+      
+      const data = await apiFetch(`/daily-closings/summary/daily?${queryParams}`);
+      return data;
+    } catch (error) {
+      console.error('Error obteniendo resumen diario:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  const checkDailyClosingExists = async (date, closingType = 'general') => {
+    try {
+      const queryParams = new URLSearchParams({ 
+        date: adjustDateForQuery(date), 
+        closing_type: closingType 
+      }).toString();
+      
+      const data = await apiFetch(`/daily-closings/check/exists?${queryParams}`);
+      return data;
+    } catch (error) {
+      console.error('Error verificando cierre:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  const getDailyStatsByRange = async (startDate, endDate, closingType = 'general') => {
+    try {
+      const queryParams = new URLSearchParams({ 
+        startDate: adjustDateForQuery(startDate), 
+        endDate: adjustDateForQuery(endDate), 
+        closing_type: closingType 
+      }).toString();
+      
+      const data = await apiFetch(`/daily-closings/stats/range?${queryParams}`);
+      return data;
+    } catch (error) {
+      console.error('Error obteniendo estadísticas diarias:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  // ========== FUNCIONES DE UTILIDAD PARA FECHAS ==========
+  
+  /**
+   * Prepara una fecha para usar en formularios
+   * @param {string} dateString - Fecha en UTC o Nicaragua
+   * @param {boolean} includeTime - Si incluye hora o solo fecha
+   * @returns {string} - Fecha formateada para input
+   */
+  const prepareDateForForm = (dateString, includeTime = true) => {
+    if (!dateString) {
+      if (includeTime) {
+        return createDateTimeInputFromUTC(getCurrentNicaraguaDateTime().toISOString());
+      } else {
+        return getCurrentNicaraguaDateString();
+      }
     }
     
-    return data;
-  } catch (error) {
-    console.error('Error cargando cierres:', error);
-    return { success: false, error: error.message };
-  }
-};
+    if (includeTime) {
+      return createDateTimeInputFromUTC(dateString);
+    } else {
+      return adjustDateForQuery(dateString);
+    }
+  };
 
-const getMonthlyClosingById = async (id) => {
-  try {
-    const data = await apiFetch(`/monthly-closings/${id}`);
-    return data;
-  } catch (error) {
-    console.error('Error obteniendo cierre:', error);
-    return { success: false, error: error.message };
-  }
-};
+  /**
+   * Formatea una fecha para mostrar
+   * @param {string} dateString - Fecha en UTC
+   * @param {boolean} includeTime - Si incluye hora o solo fecha
+   * @returns {string} - Fecha formateada
+   */
+  const formatDateForDisplay = (dateString, includeTime = true) => {
+    if (!dateString) return '';
+    return includeTime ? 
+      formatNicaraguaDateTime(dateString) : 
+      formatNicaraguaDate(dateString);
+  };
 
-const createMonthlyClosing = async (closingData) => {
-  try {
-    console.log('📝 Datos del cierre a crear:', closingData);
-    
-    const data = await apiFetch('/monthly-closings', {
-      method: 'POST',
-      body: JSON.stringify(closingData),
-    });
-    
-    console.log('✅ Cierre creado exitosamente:', data);
-    
-    // Asegurar que los datos sean consistentes
-    const formattedClosing = {
-      ...data.data,
-      closing_ID: data.data.closing_ID || data.data.id,
-      id: data.data.closing_ID || data.data.id,
-      // Asegurar cálculos correctos
-      total_clinic_income: (data.data.total_general_income || 0) + (data.data.total_clinical_orthodontic_income || 0),
-      total_expenses_including_doctor: (data.data.total_fixed_expenses || 0) + (data.data.total_variable_expenses || 0)
-    };
-    
-    setMonthlyClosings(prev => [formattedClosing, ...prev]);
-    
-    return data;
-  } catch (error) {
-    console.error('❌ Error detallado creando cierre:', {
-      error: error.message,
-      closingData,
-      timestamp: new Date().toISOString()
-    });
-    setError('Error al crear cierre: ' + error.message);
-    return { success: false, error: error.message };
-  }
-};
-
-const getFinancialSummary = async (startDate, endDate) => {
-  try {
-    const queryParams = new URLSearchParams({ startDate, endDate }).toString();
-    const data = await apiFetch(`/monthly-closings/summary/financial?${queryParams}`);
-    return data;
-  } catch (error) {
-    console.error('Error obteniendo resumen financiero:', error);
-    return { success: false, error: error.message };
-  }
-};
+  /**
+   * Obtiene la fecha actual en Nicaragua
+   * @param {boolean} includeTime - Si incluye hora
+   * @returns {string} - Fecha actual formateada
+   */
+  const getCurrentDate = (includeTime = false) => {
+    if (includeTime) {
+      return formatNicaraguaDateTime(new Date().toISOString());
+    } else {
+      return getCurrentNicaraguaDateString();
+    }
+  };
 
   // ========== CARGA INICIAL ==========
-useEffect(() => {
-  if (user) {
-    // Cargar datos iniciales
-    const loadInitialData = async () => {
-      await Promise.all([
-        fetchPatients(),
-        fetchAppointments(),
-        fetchProceduresNormal(),
-        fetchBills(), 
-        fetchMonthlyClosings(),
-        // Obtener estadísticas del mes actual
-        getIncomeStats(
-          new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
-          new Date().toISOString().split('T')[0]
-        )
-      ]);
-    };
-    
-    loadInitialData();
-  }
-}, [user]);
+  useEffect(() => {
+    if (user) {
+      // Cargar datos iniciales
+      const loadInitialData = async () => {
+        await Promise.all([
+          fetchPatients(),
+          fetchAppointments(),
+          fetchProceduresNormal(),
+          fetchBills(), 
+          fetchMonthlyClosings(),
+          fetchDailyClosings(),
+          // Obtener estadísticas del mes actual
+          getIncomeStats(
+            new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
+            new Date().toISOString().split('T')[0]
+          )
+        ]);
+      };
+      
+      loadInitialData();
+    }
+  }, [user]);
 
   const value = {
     // Estados
@@ -631,6 +893,7 @@ useEffect(() => {
     appointments,
     bills,
     monthlyClosings,
+    dailyClosings,
     loading,
     error,
     stats,
@@ -655,9 +918,9 @@ useEffect(() => {
     deleteAppointment,
     
     // Procedimientos
-    fetchProceduresNormal, // Añadido
-    fetchOrthodontics, // Añadido
-    fetchProcedures, // Mantenido por compatibilidad
+    fetchProceduresNormal,
+    fetchOrthodontics,
+    fetchProcedures,
     getProceduresByPatient,
     getIncomeStats,
     convertAppointmentToProcedure,
@@ -671,11 +934,24 @@ useEffect(() => {
     getRecurrentBills,
     getExpenseStats,
     
-    // Cierres
+    // Cierres Mensuales
     fetchMonthlyClosings,
     getMonthlyClosingById,
     createMonthlyClosing,
     getFinancialSummary,
+    
+    // Cierres Diarios
+    fetchDailyClosings,
+    getDailyClosingById,
+    createDailyClosing,
+    getDailySummary,
+    checkDailyClosingExists,
+    getDailyStatsByRange,
+    
+    // Funciones de utilidad para fechas
+    prepareDateForForm,
+    formatDateForDisplay,
+    getCurrentDate,
     
     // Utilerías
     clearError: () => setError(null),

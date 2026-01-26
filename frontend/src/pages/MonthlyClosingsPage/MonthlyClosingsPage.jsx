@@ -264,79 +264,124 @@ const MonthlyClosingsPage = () => {
   };
 
   // Crear cierre mensual
-  const handleCreateClosing = async (e) => {
-    e.preventDefault();
-    setCreating(true);
+  // Crear cierre mensual - VERSIÓN CON LOGS MEJORADOS
+const handleCreateClosing = async (e) => {
+  e.preventDefault();
+  setCreating(true);
+  
+  try {
+    // Validar que no exista ya un cierre para ese mes/año
+    const exists = monthlyClosings.some(
+      closing => closing.month === newClosing.month && 
+                 closing.year.toString() === newClosing.year
+    );
     
-    try {
-      // Validar que no exista ya un cierre para ese mes/año
-      const exists = monthlyClosings.some(
-        closing => closing.month === newClosing.month && 
-                   closing.year.toString() === newClosing.year
-      );
-      
-      if (exists) {
-        alert(`⚠️ Ya existe un cierre para ${newClosing.month} ${newClosing.year}`);
-        setCreating(false);
-        return;
-      }
-
-      // Calcular fechas del período
-      const startDate = newClosing.startDate || `${newClosing.year}-${getMonthNumber(newClosing.month)}-01`;
-      const endDate = newClosing.endDate || getLastDayOfMonth(newClosing.year, newClosing.month);
-      
-      // Obtener resumen financiero desde el backend
-      const summaryResponse = await getIncomeStats(startDate, endDate);
-      
-      if (!summaryResponse.success) {
-        throw new Error('Error al obtener el resumen financiero');
-      }
-
-      const summary = summaryResponse.data;
-      
-      // Crear cierre
-      const closingData = {
-        month: newClosing.month,
-        year: parseInt(newClosing.year),
-        total_general_income: summary.general_income || 0,
-        total_clinical_orthodontic_income: summary.clinic_income || 0,
-        total_orthodontic_doctor_income: summary.doctor_income || 0,
-        total_fixed_expenses: summary.fixed_expenses || 0,
-        total_variable_expenses: (summary.variable_expenses || 0) + (summary.doctor_income || 0),
-        net_profit: summary.net_profit || 0,
-        comentary: newClosing.comentary || ''
-      };
-
-      const response = await createMonthlyClosing(closingData);
-      
-      if (response.success) {
-        alert(`✅ Cierre de ${newClosing.month} ${newClosing.year} creado exitosamente\n\n` +
-              `Ingresos Clínica: ${formatCurrency(closingData.total_general_income + closingData.total_clinical_orthodontic_income)}\n` +
-              `Gastos (incl. doctora): ${formatCurrency(closingData.total_fixed_expenses + closingData.total_variable_expenses)}\n` +
-              `Utilidad Neta: ${formatCurrency(closingData.net_profit)}`);
-        
-        setShowCreateModal(false);
-        setNewClosing({
-          month: MONTHS[new Date().getMonth()],
-          year: new Date().getFullYear().toString(),
-          startDate: '',
-          endDate: '',
-          comentary: ''
-        });
-        
-        // Recargar cierres
-        fetchMonthlyClosings();
-      } else {
-        throw new Error(response.error || 'Error al crear cierre');
-      }
-      
-    } catch (error) {
-      console.error('Error al crear cierre:', error);
-      alert(`❌ Error: ${error.message}`);
-    } finally {
+    if (exists) {
+      alert(`⚠️ Ya existe un cierre para ${newClosing.month} ${newClosing.year}`);
       setCreating(false);
+      return;
     }
-  };
+
+    // Calcular fechas del período
+    const startDate = newClosing.startDate || `${newClosing.year}-${getMonthNumber(newClosing.month)}-01`;
+    const endDate = newClosing.endDate || getLastDayOfMonth(newClosing.year, newClosing.month);
+    
+    console.log('📅 Período a calcular:', { startDate, endDate });
+    
+    // Obtener resumen financiero desde el backend
+    console.log('🔍 Llamando a getIncomeStats...');
+    const summaryResponse = await getIncomeStats(startDate, endDate);
+    
+    console.log('📊 Respuesta completa de getIncomeStats:', summaryResponse);
+    console.log('📈 Datos del summary:', summaryResponse.data);
+    
+    if (!summaryResponse.success) {
+      console.error('❌ Error en getIncomeStats:', summaryResponse.error);
+      throw new Error('Error al obtener el resumen financiero: ' + summaryResponse.error);
+    }
+
+    const summary = summaryResponse.data;
+    
+    // Mostrar estructura completa para debug
+    console.log('🔍 Estructura completa del summary:');
+    Object.keys(summary).forEach(key => {
+      console.log(`  ${key}:`, summary[key]);
+    });
+    
+    // Usar valores por defecto si no existen
+    const totalGeneralIncome = summary.general_income || summary.total_general_income || 0;
+    const totalClinicOrthodonticIncome = summary.clinic_orthodontic_income || summary.total_clinical_orthodontic_income || 0;
+    const totalDoctorOrthodonticIncome = summary.doctor_orthodontic_income || summary.total_orthodontic_doctor_income || 0;
+    const totalFixedExpenses = summary.fixed_expenses || summary.total_fixed_expenses || 0;
+    const totalVariableExpenses = summary.variable_expenses || summary.total_variable_expenses || 0;
+    
+    console.log('🧮 Valores calculados:', {
+      totalGeneralIncome,
+      totalClinicOrthodonticIncome,
+      totalDoctorOrthodonticIncome,
+      totalFixedExpenses,
+      totalVariableExpenses
+    });
+    
+    // Calcular valores correctamente
+    const totalClinicIncome = totalGeneralIncome + totalClinicOrthodonticIncome;
+    const totalExpenses = totalFixedExpenses + totalVariableExpenses;
+    const netProfit = totalClinicIncome - totalExpenses - totalDoctorOrthodonticIncome;
+    
+    console.log('💰 Resultados finales:', {
+      totalClinicIncome,
+      totalExpenses,
+      netProfit
+    });
+    
+    // Crear cierre
+    const closingData = {
+      month: newClosing.month,
+      year: parseInt(newClosing.year),
+      total_general_income: totalGeneralIncome,
+      total_clinical_orthodontic_income: totalClinicOrthodonticIncome,
+      total_orthodontic_doctor_income: totalDoctorOrthodonticIncome,
+      total_fixed_expenses: totalFixedExpenses,
+      total_variable_expenses: totalVariableExpenses,
+      net_profit: netProfit,
+      comentary: newClosing.comentary || ''
+    };
+    
+    console.log('📤 Datos para crear cierre mensual:', closingData);
+
+    const response = await createMonthlyClosing(closingData);
+    
+    if (response.success) {
+      alert(`✅ Cierre de ${newClosing.month} ${newClosing.year} creado exitosamente\n\n` +
+            `Ingresos Generales: ${formatCurrency(closingData.total_general_income)}\n` +
+            `Ortodoncia Clínica (40%): ${formatCurrency(closingData.total_clinical_orthodontic_income)}\n` +
+            `Pago Doctora Ortodoncia (60%): ${formatCurrency(closingData.total_orthodontic_doctor_income)}\n` +
+            `Gastos Fijos: ${formatCurrency(closingData.total_fixed_expenses)}\n` +
+            `Gastos Variables: ${formatCurrency(closingData.total_variable_expenses)}\n` +
+            `Utilidad Neta: ${formatCurrency(closingData.net_profit)}`);
+      
+      setShowCreateModal(false);
+      setNewClosing({
+        month: MONTHS[new Date().getMonth()],
+        year: new Date().getFullYear().toString(),
+        startDate: '',
+        endDate: '',
+        comentary: ''
+      });
+      
+      // Recargar cierres
+      fetchMonthlyClosings();
+    } else {
+      throw new Error(response.error || 'Error al crear cierre');
+    }
+    
+  } catch (error) {
+    console.error('❌ Error detallado al crear cierre:', error);
+    alert(`❌ Error: ${error.message}`);
+  } finally {
+    setCreating(false);
+  }
+};
 
   // Obtener resumen diario previo
   const handleGetDailySummary = async () => {
@@ -641,18 +686,6 @@ const MonthlyClosingsPage = () => {
             <div className="stat-subtext">
               {stats.dailyGeneralCount} General / {stats.dailyOrthodonticsCount} Ortodoncia
             </div>
-          </div>
-        </div>
-        
-        <div className="stat-card profit">
-          <div className="stat-icon">
-            <FontAwesomeIcon icon={faCalculator} />
-          </div>
-          <div className="stat-content">
-            <div className="stat-value" style={{ color: getProfitColor(stats.totalMonthlyProfit + stats.totalDailyProfit) }}>
-              {formatCurrency(stats.totalMonthlyProfit + stats.totalDailyProfit)}
-            </div>
-            <div className="stat-label">Utilidad Total</div>
           </div>
         </div>
       </div>

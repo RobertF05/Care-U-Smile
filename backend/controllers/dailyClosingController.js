@@ -58,20 +58,25 @@ const dailyClosingController = {
     }
   },
 
-  // Crear cierre diario
+  // Crear cierre diario - VERSIÓN SIMPLIFICADA
   create: async (req, res) => {
     try {
-      const { date, closing_type = 'general', comentary = '' } = req.body;
+      const { date, closing_date, closing_type = 'general', comentary = '' } = req.body;
       
-      if (!date) {
+      console.log('🔍 DEBUG Controller - Datos recibidos:', req.body);
+      
+      // Determinar qué fecha usar
+      const effectiveDate = date || closing_date;
+      
+      if (!effectiveDate) {
         return res.status(400).json({ 
           success: false, 
           error: 'La fecha es requerida' 
         });
       }
       
-      // Verificar si ya existe cierre para esta fecha y tipo
-      const exists = await DailyClosing.exists(date, closing_type);
+      // Verificar si ya existe cierre
+      const exists = await DailyClosing.exists(effectiveDate, closing_type);
       if (exists) {
         return res.status(400).json({ 
           success: false, 
@@ -79,12 +84,12 @@ const dailyClosingController = {
         });
       }
       
-      // Obtener resumen financiero del día
-      const financialSummary = await DailyClosing.getDailyFinancialSummary(date, closing_type);
+      // Obtener resumen financiero
+      const financialSummary = await DailyClosing.getDailyFinancialSummary(effectiveDate, closing_type);
       
       // Crear cierre diario
       const closingData = {
-        closing_date: date,
+        closing_date: effectiveDate,
         closing_type,
         total_income: financialSummary.total_income,
         total_clinic_income: financialSummary.total_clinic_income,
@@ -95,20 +100,62 @@ const dailyClosingController = {
         is_processed: false
       };
       
+      console.log('📤 Creando cierre con datos:', closingData);
+      
       const newClosing = await DailyClosing.create(closingData);
       
-      // Crear relaciones con procedimientos
-      if (financialSummary.procedureClosings.length > 0) {
-        const procedureClosings = financialSummary.procedureClosings.map(pc => ({
-          ...pc,
-          daily_closing_id: newClosing.daily_closing_id
-        }));
+      console.log('✅ Cierre creado, ID:', newClosing.daily_closing_id);
+      
+      // Verificar que tenemos el ID
+      if (!newClosing.daily_closing_id) {
+        console.error('❌ No se recibió daily_closing_id del cierre creado');
+        console.log('📄 Cierre completo recibido:', newClosing);
         
-        await DailyClosing.createProcedureRelations(procedureClosings);
+        // Intentar obtener el ID de diferentes formas
+        const closingId = newClosing.daily_closing_id || newClosing.id || newClosing.daily_closing_ID;
+        console.log('🔍 IDs disponibles:', { 
+          daily_closing_id: newClosing.daily_closing_id,
+          id: newClosing.id,
+          daily_closing_ID: newClosing.daily_closing_ID 
+        });
+        
+        if (!closingId) {
+          throw new Error('No se pudo obtener el ID del cierre creado');
+        }
+        
+        newClosing.daily_closing_id = closingId;
+      }
+      
+      // Crear relaciones con procedimientos - USAR minúsculas
+      if (financialSummary.procedureClosings && financialSummary.procedureClosings.length > 0) {
+        console.log(`📝 Creando ${financialSummary.procedureClosings.length} relaciones de procedimientos`);
+        
+        // Verificar estructura del primer elemento
+        const firstProcedure = financialSummary.procedureClosings[0];
+        console.log('🔍 Estructura del primer procedureClosing:', firstProcedure);
+        
+        try {
+          const procedureClosings = financialSummary.procedureClosings.map(pc => ({
+            // IMPORTANTE: Usar minúsculas
+            procedure_id: pc.procedure_id, // Ya viene como minúscula desde el modelo
+            daily_closing_id: newClosing.daily_closing_id,
+            clinic_income_portion: pc.clinic_income_portion || 0,
+            doctor_income_portion: pc.doctor_income_portion || 0,
+            external_doctor_payment: pc.external_doctor_payment || 0
+          }));
+          
+          console.log('📤 Insertando relaciones con minúsculas:', procedureClosings);
+          await DailyClosing.createProcedureRelations(procedureClosings);
+        } catch (relationError) {
+          console.warn('⚠️ No se pudieron crear relaciones, pero el cierre se guardó:', relationError.message);
+          // Continuar sin relaciones - esto no debería impedir la creación del cierre
+        }
+      } else {
+        console.log('ℹ️ No hay procedimientos para crear relaciones');
       }
       
       // Marcar gastos como procesados
-      if (financialSummary.bills.length > 0) {
+      if (financialSummary.bills && financialSummary.bills.length > 0) {
         const billIds = financialSummary.bills.map(bill => bill.bill_ID);
         await DailyClosing.markBillsAsProcessed(billIds, newClosing.daily_closing_id, 'daily');
       }
@@ -118,17 +165,17 @@ const dailyClosingController = {
         message: `Cierre ${closing_type === 'orthodontics' ? 'de ortodoncia' : 'general'} creado exitosamente`,
         data: {
           ...newClosing,
-          procedure_count: financialSummary.procedures.length,
-          bill_count: financialSummary.bills.length,
+          procedure_count: financialSummary.procedures ? financialSummary.procedures.length : 0,
+          bill_count: financialSummary.bills ? financialSummary.bills.length : 0,
           clinic_percentage: financialSummary.clinic_percentage,
           doctor_percentage: financialSummary.doctor_percentage
         }
       });
     } catch (error) {
-      console.error('Error al crear cierre diario:', error);
+      console.error('❌ Error completo al crear cierre diario:', error);
       res.status(500).json({ 
         success: false, 
-        error: 'Error al crear cierre diario' 
+        error: 'Error al crear cierre diario: ' + error.message 
       });
     }
   },

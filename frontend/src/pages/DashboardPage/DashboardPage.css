@@ -140,3 +140,120 @@
     font-size: 0.8rem;
   }
 }
+
+/* Dashboard mejorado */
+.current-time-display {
+  font-size: 0.9em;
+  color: #666;
+  display: flex;
+  align-items: center;
+  margin-left: 15px;
+}
+
+.time-display {
+  font-size: 1.1em;
+  color: #2196F3;
+}
+
+.appointment-time-section {
+  display: flex;
+  flex-direction: column;
+  min-width: 80px;
+  align-items: center;
+  padding-right: 15px;
+  border-right: 1px solid #eee;
+}
+
+.appointment-date-info {
+  font-size: 0.8em;
+  color: #999;
+  margin-top: 3px;
+}
+
+.section-header-left {
+  display: flex;
+  align-items: center;
+}
+
+.section-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.total-amount-badge {
+  background-color: #4CAF50;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.9em;
+}
+
+.ortho-breakdown {
+  display: flex;
+  gap: 8px;
+  margin-top: 3px;
+}
+
+.clinic-portion {
+  color: #4CAF50;
+  background-color: #4CAF5020;
+  padding: 2px 6px;
+  border-radius: 8px;
+}
+
+.doctor-portion {
+  color: #FF9800;
+  background-color: #FF980020;
+  padding: 2px 6px;
+  border-radius: 8px;
+}
+
+.procedure-meta {
+  display: flex;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.procedure-type.orthodontics {
+  color: #9C27B0;
+  background-color: #9C27B020;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.procedure-type.general {
+  color: #2196F3;
+  background-color: #2196F320;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.procedure-payment {
+  color: #666;
+  font-size: 0.9em;
+}
+
+.loading-procedures {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  color: #666;
+}
+
+.spinner-small {
+  width: 30px;
+  height: 30px;
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #2196F3;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 10px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}

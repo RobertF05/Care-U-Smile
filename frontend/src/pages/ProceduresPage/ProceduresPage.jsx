@@ -200,67 +200,6 @@ export default function ProceduresPage() {
         </div>
       </div>
 
-      {/* Estadísticas desplegables */}
-      <div className={`appointments-stats ${expandedStats ? 'expanded' : ''}`}>
-        <div className="stats-header-mobile" onClick={() => setExpandedStats(!expandedStats)}>
-          <div className="stats-header-content">
-            <h3 className="stats-title">
-              <FontAwesomeIcon icon={faChartBar} />
-              Estadísticas de Procedimientos
-            </h3>
-            <div className="stats-summary-mobile">
-              <span className="stat-summary-item">Total: {filteredProcedures.length}</span>
-              <span className="stat-summary-item">C$: {formatCurrency(statsData.totalCordobas)}</span>
-              <span className="stat-summary-item">US$: {formatCurrencyUSD(statsData.totalDollars)}</span>
-            </div>
-          </div>
-          <FontAwesomeIcon 
-            icon={expandedStats ? faChevronUp : faChevronDown} 
-            className="stats-toggle-icon"
-          />
-        </div>
-        
-        <div className="stats-grid-container">
-          <div className="stat-card total-income">
-            <div className="stat-icon">💰</div>
-            <div className="stat-content">
-              <h3>Total en Córdobas</h3>
-              <p className="stat-value">{formatCurrency(statsData.totalCordobas)}</p>
-              <p className="stat-subtitle">C$ depositados</p>
-            </div>
-          </div>
-          
-          <div className="stat-card total-income-usd">
-            <div className="stat-icon">💵</div>
-            <div className="stat-content">
-              <h3>Total en Dólares</h3>
-              <p className="stat-value">{formatCurrencyUSD(statsData.totalDollars)}</p>
-              <p className="stat-subtitle">US$ depositados</p>
-            </div>
-          </div>
-          
-          <div className="stat-card total-procedure">
-            <div className="stat-icon">📊</div>
-            <div className="stat-content">
-              <h3>Total del Procedimiento</h3>
-              <p className="stat-value">{formatCurrency(statsData.totalProcedure)}</p>
-              <p className="stat-subtitle">Sumatoria total (C$)</p>
-            </div>
-          </div>
-          
-          <div className="stat-card external-doctor">
-            <div className="stat-icon">👨‍⚕️</div>
-            <div className="stat-content">
-              <h3>Doctores Externos</h3>
-              <p className="stat-value">{statsData.externalDoctorCount}</p>
-              <p className="stat-subtitle">
-                Pagos: {formatCurrency(statsData.externalDoctorPayments)}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Filtros desplegables */}
       <div className={`filter-section ${expandedFilters ? 'expanded' : ''}`}>
         <div className="filter-header-mobile" onClick={() => setExpandedFilters(!expandedFilters)}>
@@ -366,7 +305,6 @@ export default function ProceduresPage() {
                   <th>Pago C$</th>
                   <th>Pago US$</th>
                   <th>Total (C$)</th>
-                  <th>Métodos de Pago</th>
                   <th>Doctor Externo</th>
                   <th>Pago Doctor</th>
                   <th>Observaciones</th>
@@ -441,24 +379,6 @@ export default function ProceduresPage() {
                             <small>Pago mixto</small>
                           </div>
                         )}
-                      </td>
-                      
-                      {/* Métodos de Pago (resumen) */}
-                      <td className="payment-methods-cell">
-                        <div className="payment-methods-summary">
-                          <span className={`main-method ${mainPaymentMethod.toLowerCase()}`}>
-                            {mainPaymentMethod}
-                          </span>
-                          {paymentBreakdown.isMixed && (
-                            <div className="mixed-details">
-                              <small>
-                                {procedure.payment_method_cordobas && procedure.payment_method_dollars 
-                                  ? `${procedure.payment_method_cordobas} + ${procedure.payment_method_dollars}`
-                                  : 'Múltiples métodos'}
-                              </small>
-                            </div>
-                          )}
-                        </div>
                       </td>
                       
                       {/* Doctor Externo */}

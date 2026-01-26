@@ -1,4 +1,3 @@
-// models/dailyClosingModel.js
 import { supabaseAdmin } from '../config/supabase.js';
 import { 
   toUTCFromNicaragua,
@@ -76,17 +75,30 @@ const DailyClosing = {
 
   // Crear cierre diario
   async create(closingData) {
-    // closingData.date viene en formato YYYY-MM-DD (Nicaragua)
+    console.log('🔍 DEBUG Model create - Datos recibidos:', closingData);
+    
+    // Determinar fecha
+    let closingDate;
+    if (closingData.closing_date && closingData.closing_date.trim() !== '') {
+      closingDate = adjustDateForQuery(closingData.closing_date);
+    } else if (closingData.date && closingData.date.trim() !== '') {
+      closingDate = adjustDateForQuery(closingData.date);
+    } else {
+      const today = new Date();
+      closingDate = today.toISOString().split('T')[0];
+    }
+    
     const closingWithFormattedDate = {
       ...closingData,
-      closing_date: adjustDateForQuery(closingData.date), // Solo fecha
+      closing_date: closingDate,
       created_at: new Date().toISOString(),
       is_processed: false
     };
     
+    // Eliminar propiedad date si existe
     delete closingWithFormattedDate.date;
     
-    console.log('Creando cierre diario:', closingWithFormattedDate);
+    console.log('📤 Insertando en daily_closings:', closingWithFormattedDate);
     
     const { data, error } = await supabaseAdmin
       .from('daily_closings')
@@ -94,13 +106,31 @@ const DailyClosing = {
       .select()
       .single();
     
-    if (error) throw error;
+    if (error) {
+      console.error('❌ Error Supabase al crear cierre:', error);
+      throw error;
+    }
     
-    return {
+    console.log('✅ Cierre creado en BD, datos:', data);
+    
+    // Asegurar que tenemos el ID
+    const closingId = data.daily_closing_id || data.id || data.daily_closing_ID;
+    console.log('🆔 ID obtenido del cierre:', closingId);
+    
+    if (!closingId) {
+      console.error('❌ No se pudo obtener ID del cierre creado');
+      console.log('📄 Datos completos:', data);
+    }
+    
+    const result = {
       ...data,
+      daily_closing_id: closingId, // Asegurar que siempre haya daily_closing_id
       closing_date_display: formatNicaraguaDate(data.closing_date),
       created_at_display: formatNicaraguaDateTime(data.created_at)
     };
+    
+    console.log('📋 Resultado final a devolver:', result);
+    return result;
   },
 
   // Actualizar cierre diario
@@ -212,18 +242,58 @@ const DailyClosing = {
 
   // Crear relación entre procedimientos y cierre diario
   async createProcedureRelations(procedureClosings) {
-    if (!procedureClosings || procedureClosings.length === 0) return [];
+    if (!procedureClosings || procedureClosings.length === 0) {
+      console.log('ℹ️ No hay relaciones de procedimientos para crear');
+      return [];
+    }
     
-    const { data, error } = await supabaseAdmin
-      .from('procedure_daily_closings')
-      .insert(procedureClosings)
-      .select();
+    console.log('🔍 createProcedureRelations - Datos recibidos:', procedureClosings);
     
-    if (error) throw error;
-    return data;
+    // Verificar que todos tengan los campos necesarios (USAR minúsculas)
+    const validProcedureClosings = procedureClosings.map(pc => {
+      // Verificar procedure_id (minúscula)
+      if (!pc.procedure_id) {
+        console.error('❌ Falta procedure_id en:', pc);
+        throw new Error('procedure_id es requerido');
+      }
+      
+      // Verificar daily_closing_id (minúscula)
+      if (!pc.daily_closing_id) {
+        console.error('❌ Falta daily_closing_id en:', pc);
+        throw new Error('daily_closing_id es requerido');
+      }
+      
+      return {
+        procedure_id: pc.procedure_id,
+        daily_closing_id: pc.daily_closing_id,
+        clinic_income_portion: pc.clinic_income_portion || 0,
+        doctor_income_portion: pc.doctor_income_portion || 0,
+        external_doctor_payment: pc.external_doctor_payment || 0
+      };
+    });
+    
+    console.log('📤 Insertando en procedure_daily_closings:', validProcedureClosings);
+    
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('procedure_daily_closings')
+        .insert(validProcedureClosings)
+        .select();
+      
+      if (error) {
+        console.error('❌ Error Supabase al insertar relaciones:', error);
+        throw error;
+      }
+      
+      console.log('✅ Relaciones creadas exitosamente:', data.length, 'registros');
+      return data;
+    } catch (error) {
+      console.error('❌ Error completo en createProcedureRelations:', error);
+      throw error;
+    }
   },
 
-  // Obtener resumen financiero del día (con fechas Nicaragua)
+  // dailyClosingModel.js - getDailyFinancialSummary corregida
   async getDailyFinancialSummary(date, closingType = 'general') {
     const procedures = await this.getDailyProcedures(date, closingType);
     const bills = await this.getDailyBills(date, closingType);
@@ -243,10 +313,20 @@ const DailyClosing = {
       if (config) {
         clinicPercentage = config.clinic_percentage;
         doctorPercentage = config.doctor_percentage;
+      } else {
+        // Valores por defecto corregidos (clínica 60%, doctora 40%)
+        clinicPercentage = 60;
+        doctorPercentage = 40;
       }
     }
     
-    // Calcular ingresos
+    console.log('🔢 Porcentajes aplicados:', {
+      clinic: clinicPercentage,
+      doctor: doctorPercentage,
+      type: closingType
+    });
+    
+    // Calcular ingresos - USAR TOTAL_PROCEDURE
     let totalIncome = 0;
     let totalClinicIncome = 0;
     let totalDoctorIncome = 0;
@@ -255,7 +335,7 @@ const DailyClosing = {
     const procedureClosings = [];
     
     procedures.forEach(procedure => {
-      const procedureAmount = procedure.total_cost || 0;
+      const procedureAmount = procedure.total_procedure || 0;
       totalIncome += procedureAmount;
       
       let clinicPortion = 0;
@@ -279,8 +359,9 @@ const DailyClosing = {
       totalDoctorIncome += doctorPortion;
       totalExternalDoctorPayments += externalPayment;
       
+      // IMPORTANTE: Usar minúsculas para los IDs
       procedureClosings.push({
-        procedure_id: procedure.procedure_ID,
+        procedure_id: procedure.procedure_ID, // procedure_ID de la tabla, pero guardamos como procedure_id
         clinic_income_portion: clinicPortion,
         doctor_income_portion: doctorPortion,
         external_doctor_payment: externalPayment

@@ -732,39 +732,64 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  const createDailyClosing = async (closingData) => {
-    try {
-      console.log('📝 Datos del cierre diario a crear:', closingData);
-      
-      // Asegurarse de que la fecha esté en formato YYYY-MM-DD
-      const closingWithFormattedDate = {
-        ...closingData,
-        date: adjustDateForQuery(closingData.date)
-      };
-      
-      const data = await apiFetch('/daily-closings', {
-        method: 'POST',
-        body: JSON.stringify(closingWithFormattedDate),
-      });
-      
-      console.log('✅ Cierre diario creado exitosamente:', data);
-      
-      // Formatear fechas para mostrar
-      const closingWithFormattedDates = {
-        ...data.data,
-        closing_date_display: formatNicaraguaDate(data.data.closing_date),
-        created_at_display: formatNicaraguaDateTime(data.data.created_at)
-      };
-      
-      setDailyClosings(prev => [closingWithFormattedDates, ...prev]);
-      
-      return data;
-    } catch (error) {
-      console.error('❌ Error creando cierre diario:', error);
-      setError('Error al crear cierre diario: ' + error.message);
-      return { success: false, error: error.message };
+  // En AppContext.jsx - createDailyClosing
+  // En AppContext.jsx - createDailyClosing mejorada
+const createDailyClosing = async (closingData) => {
+  try {
+    console.log('📝 createDailyClosing - Datos originales:', closingData);
+    
+    // Validar que la fecha no esté vacía
+    if (!closingData.date) {
+      throw new Error('La fecha es requerida');
     }
-  };
+    
+    // Formatear la fecha correctamente
+    const formattedDate = adjustDateForQuery(closingData.date);
+    console.log('📅 Fecha formateada:', formattedDate);
+    
+    // Crear objeto con el nombre de campo CORRECTO para el backend
+    const payload = {
+      closing_date: formattedDate, // ← ¡IMPORTANTE! Usar closing_date
+      closing_type: closingData.closing_type,
+      comentary: closingData.comentary || ''
+    };
+    
+    console.log('📤 Payload para backend:', payload);
+    
+    const data = await apiFetch('/daily-closings', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    
+    console.log('✅ Respuesta del backend:', data);
+    
+    if (!data.success) {
+      // Mostrar error específico si existe
+      const errorMsg = data.error || data.message || 'Error desconocido del backend';
+      throw new Error(errorMsg);
+    }
+    
+    // Formatear fechas para mostrar
+    const closingWithFormattedDates = {
+      ...data.data,
+      closing_date_display: formatNicaraguaDate(data.data.closing_date),
+      created_at_display: formatNicaraguaDateTime(data.data.created_at)
+    };
+    
+    setDailyClosings(prev => [closingWithFormattedDates, ...prev]);
+    
+    return data;
+  } catch (error) {
+    console.error('❌ Error completo en createDailyClosing:', {
+      error: error.message,
+      stack: error.stack,
+      closingData,
+      timestamp: new Date().toISOString()
+    });
+    setError('Error al crear cierre diario: ' + error.message);
+    return { success: false, error: error.message };
+  }
+};
 
   const getDailySummary = async (date, closingType = 'general') => {
     try {

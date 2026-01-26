@@ -1570,7 +1570,6 @@ const AppointmentPage = () => {
                 <label className="form-label">Paciente:</label>
                 <div className="patient-search-container">
                   <div className="search-box-patient">
-                    <FontAwesomeIcon icon={faSearch} className="search-icon-patient" />
                     <input
                       type="text"
                       required
@@ -1985,7 +1984,6 @@ const AppointmentPage = () => {
                           <option value="Efectivo">Efectivo</option>
                           <option value="POS">POS (Tarjeta)</option>
                           <option value="Transferencia">Transferencia</option>
-                          <option value="Cheque">Cheque</option>
                         </select>
                       </div>
                     </div>
@@ -2020,7 +2018,6 @@ const AppointmentPage = () => {
                           <option value="Efectivo">Efectivo</option>
                           <option value="POS">POS (Tarjeta)</option>
                           <option value="Transferencia">Transferencia</option>
-                          <option value="Cheque">Cheque</option>
                         </select>
                       </div>
                     </div>

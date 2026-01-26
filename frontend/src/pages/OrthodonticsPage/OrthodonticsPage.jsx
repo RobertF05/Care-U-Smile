@@ -217,90 +217,6 @@ export default function OrthodonticsPage() {
         </div>
       </div>
 
-      {/* Estadísticas desplegables */}
-      <div className={`appointments-stats ${expandedStats ? 'expanded' : ''}`}>
-        <div className="stats-header-mobile" onClick={() => setExpandedStats(!expandedStats)}>
-          <div className="stats-header-content">
-            <h3 className="stats-title">
-              <FontAwesomeIcon icon={faChartBar} />
-              Estadísticas de Ortodoncia
-            </h3>
-            <div className="stats-summary-mobile">
-              <span className="stat-summary-item">Total: {totalEarnings.count}</span>
-              <span className="stat-summary-item">Clínica: {formatCurrency(totalEarnings.totalClinicEarnings)}</span>
-              <span className="stat-summary-item">Doctora: {formatCurrency(totalEarnings.totalDoctorEarnings)}</span>
-            </div>
-          </div>
-          <FontAwesomeIcon 
-            icon={expandedStats ? faChevronUp : faChevronDown} 
-            className="stats-toggle-icon"
-          />
-        </div>
-        
-        <div className="stats-grid-container">
-          {/* Ganancias Totales actualizadas */}
-          <div className="earnings-card clinic-earnings">
-            <div className="earnings-icon">🏥</div>
-            <div className="earnings-content">
-              <h4>Ganancias Clínica</h4>
-              <p className="earnings-value">{formatCurrency(totalEarnings.totalClinicEarnings)}</p>
-              <p className="earnings-percentage">
-                {formatCurrency(totalEarnings.avgClinic)} promedio
-              </p>
-              <p className="earnings-subtitle">
-                {filteredOrthodontics.length > 0 
-                  ? `${(totalEarnings.totalClinicEarnings / totalEarnings.totalProcedureAll * 100).toFixed(1)}% del total`
-                  : '—'}
-              </p>
-            </div>
-          </div>
-          
-          <div className="earnings-card doctor-earnings">
-            <div className="earnings-icon">👩‍⚕️</div>
-            <div className="earnings-content">
-              <h4>Ganancias Doctora</h4>
-              <p className="earnings-value">{formatCurrency(totalEarnings.totalDoctorEarnings)}</p>
-              <p className="earnings-percentage">
-                {formatCurrency(totalEarnings.avgDoctor)} promedio
-              </p>
-              <p className="earnings-subtitle">
-                {filteredOrthodontics.length > 0 
-                  ? `${(totalEarnings.totalDoctorEarnings / totalEarnings.totalProcedureAll * 100).toFixed(1)}% del total`
-                  : '—'}
-              </p>
-            </div>
-          </div>
-          
-          <div className="earnings-card total-earnings">
-            <div className="earnings-icon">📊</div>
-            <div className="earnings-content">
-              <h4>Total del Procedimiento</h4>
-              <p className="earnings-value">{formatCurrency(totalEarnings.totalProcedureAll)}</p>
-              <p className="earnings-count">
-                {totalEarnings.count} tratamientos
-              </p>
-              <p className="earnings-subtitle">
-                {formatCurrency(totalEarnings.totalCordobas)} C$ + {formatCurrencyUSD(totalEarnings.totalDollars)}
-              </p>
-            </div>
-          </div>
-          
-          <div className="earnings-card external-doctor">
-            <div className="earnings-icon">👨‍⚕️</div>
-            <div className="earnings-content">
-              <h4>Doctores Externos</h4>
-              <p className="earnings-value">{totalEarnings.externalDoctorCount}</p>
-              <p className="earnings-count">
-                Pagos: {formatCurrency(totalEarnings.totalExternalDoctorPayments)}
-              </p>
-              <p className="earnings-subtitle">
-                {totalEarnings.mixedPaymentCount} pagos mixtos
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Filtros desplegables */}
       <div className={`filter-section ${expandedFilters ? 'expanded' : ''}`}>
         <div className="filter-header-mobile" onClick={() => setExpandedFilters(!expandedFilters)}>
@@ -406,7 +322,6 @@ export default function OrthodonticsPage() {
                   <th>Pago C$</th>
                   <th>Pago US$</th>
                   <th>Total (C$)</th>
-                  <th>Métodos de Pago</th>
                   <th>% Clínica</th>
                   <th>Ganancia Clínica</th>
                   <th>% Doctora</th>
@@ -485,24 +400,6 @@ export default function OrthodonticsPage() {
                             <small>Pago mixto</small>
                           </div>
                         )}
-                      </td>
-                      
-                      {/* Métodos de Pago */}
-                      <td className="payment-methods-cell">
-                        <div className="payment-methods-summary">
-                          <span className={`main-method ${mainPaymentMethod.toLowerCase()}`}>
-                            {mainPaymentMethod}
-                          </span>
-                          {earnings.isMixed && (
-                            <div className="mixed-details">
-                              <small>
-                                {orthodontic.payment_method_cordobas && orthodontic.payment_method_dollars 
-                                  ? `${orthodontic.payment_method_cordobas} + ${orthodontic.payment_method_dollars}`
-                                  : 'Múltiples métodos'}
-                              </small>
-                            </div>
-                          )}
-                        </div>
                       </td>
                       
                       {/* Porcentaje Clínica */}

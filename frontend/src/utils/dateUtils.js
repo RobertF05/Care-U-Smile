@@ -1,222 +1,300 @@
-// frontend/src/utils/dateUtils.js
-
-// Constantes para Nicaragua
-export const NICARAGUA_UTC_OFFSET = -6; // UTC-6 horas
-export const NICARAGUA_OFFSET_MS = NICARAGUA_UTC_OFFSET * 60 * 60 * 1000;
+// dateUtils.js - VERSIÓN SIMPLIFICADA Y FUNCIONAL
+/**
+ * Utilidades para fechas - VERSIÓN SIMPLIFICADA
+ */
 
 /**
- * Convierte UTC a hora Nicaragua
+ * Formatea una fecha para mostrar
+ * @param {string|Date} dateString - Fecha en cualquier formato
+ * @returns {string} - Fecha formateada
  */
-export function utcToNicaragua(utcDateString) {
-  if (!utcDateString) return null;
+export const formatDateTimeDisplay = (dateString) => {
+  if (!dateString) return '';
   
-  const date = new Date(utcDateString);
-  return new Date(date.getTime() + NICARAGUA_OFFSET_MS);
-}
-
-/**
- * Convierte hora Nicaragua a UTC (para enviar al backend)
- */
-export function nicaraguaToUTC(nicaraguaDate) {
-  if (!nicaraguaDate) return null;
-  
-  const date = typeof nicaraguaDate === 'string' ? new Date(nicaraguaDate) : nicaraguaDate;
-  return new Date(date.getTime() - NICARAGUA_OFFSET_MS);
-}
-
-/**
- * Formatea fecha en formato Nicaragua para mostrar
- */
-export function formatNicaraguaDateTime(date, includeTime = true) {
-  if (!date) return '';
-  
-  const nicaraguaDate = utcToNicaragua(date);
-  
-  const options = {
-    timeZone: 'UTC', // Ya aplicamos el offset manualmente
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  };
-  
-  if (includeTime) {
-    options.hour = '2-digit';
-    options.minute = '2-digit';
-    options.hour12 = true;
+  try {
+    // Intentar parsear la fecha
+    const date = new Date(dateString);
+    
+    // Verificar si es una fecha válida
+    if (isNaN(date.getTime())) {
+      console.warn('Fecha inválida en formatDateTimeDisplay:', dateString);
+      return 'Fecha inválida';
+    }
+    
+    // Formatear en hora Nicaragua
+    return date.toLocaleString('es-NI', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
+  } catch (error) {
+    console.error('Error formateando fecha:', error, dateString);
+    return dateString || 'Fecha inválida';
   }
-  
-  return nicaraguaDate.toLocaleString('es-NI', options);
-}
+};
 
 /**
- * Formatea solo la fecha (sin hora)
+ * Formatea solo la hora
  */
-export function formatNicaraguaDate(date) {
-  return formatNicaraguaDateTime(date, false);
-}
+export const formatTimeDisplay = (dateString) => {
+  if (!dateString) return '';
+  
+  try {
+    const date = new Date(dateString);
+    
+    if (isNaN(date.getTime())) {
+      return '--:--';
+    }
+    
+    return date.toLocaleTimeString('es-NI', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  } catch (error) {
+    console.error('Error formateando hora:', error);
+    return '--:--';
+  }
+};
 
 /**
- * Crea un string para input datetime-local desde una fecha UTC
+ * Formatea solo la fecha
  */
-export function createDateTimeInputFromUTC(utcDateString) {
-  if (!utcDateString) return '';
+export const formatDateDisplay = (dateString) => {
+  if (!dateString) return '';
   
-  const nicaraguaDate = utcToNicaragua(utcDateString);
+  try {
+    const date = new Date(dateString);
+    
+    if (isNaN(date.getTime())) {
+      return 'Fecha inválida';
+    }
+    
+    return date.toLocaleDateString('es-NI', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+  } catch (error) {
+    console.error('Error formateando fecha corta:', error);
+    return 'Fecha inválida';
+  }
+};
+
+/**
+ * Prepara fecha para input datetime-local
+ */
+export const prepareForDateTimeInput = (dateString) => {
+  if (!dateString) return '';
   
-  const year = nicaraguaDate.getFullYear();
-  const month = String(nicaraguaDate.getMonth() + 1).padStart(2, '0');
-  const day = String(nicaraguaDate.getDate()).padStart(2, '0');
-  const hours = String(nicaraguaDate.getHours()).padStart(2, '0');
-  const minutes = String(nicaraguaDate.getMinutes()).padStart(2, '0');
+  try {
+    const date = new Date(dateString);
+    
+    if (isNaN(date.getTime())) {
+      // Retornar fecha actual si es inválida
+      return getCurrentDateTimeForInput();
+    }
+    
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  } catch (error) {
+    console.error('Error preparando fecha para input:', error);
+    return getCurrentDateTimeForInput();
+  }
+};
+
+/**
+ * Crea string para input datetime-local desde UTC
+ */
+export const createDateTimeInputFromUTC = (utcDateTime) => {
+  if (!utcDateTime) return '';
+  
+  try {
+    const date = new Date(utcDateTime);
+    
+    if (isNaN(date.getTime())) {
+      return getCurrentDateTimeForInput();
+    }
+    
+    // Convertir UTC a Nicaragua (+6 horas)
+    const nicaraguaDate = new Date(date.getTime() + (6 * 60 * 60 * 1000));
+    
+    const year = nicaraguaDate.getFullYear();
+    const month = String(nicaraguaDate.getMonth() + 1).padStart(2, '0');
+    const day = String(nicaraguaDate.getDate()).padStart(2, '0');
+    const hours = String(nicaraguaDate.getHours()).padStart(2, '0');
+    const minutes = String(nicaraguaDate.getMinutes()).padStart(2, '0');
+    
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  } catch (error) {
+    console.error('Error en createDateTimeInputFromUTC:', error);
+    return getCurrentDateTimeForInput();
+  }
+};
+
+/**
+ * Obtiene fecha actual para input
+ */
+export const getCurrentDateTimeForInput = () => {
+  // Obtener hora actual en Nicaragua (UTC-6)
+  const now = new Date();
+  const nicaraguaNow = new Date(now.getTime() - (6 * 60 * 60 * 1000));
+  
+  const year = nicaraguaNow.getFullYear();
+  const month = String(nicaraguaNow.getMonth() + 1).padStart(2, '0');
+  const day = String(nicaraguaNow.getDate()).padStart(2, '0');
+  const hours = String(nicaraguaNow.getHours()).padStart(2, '0');
+  const minutes = String(nicaraguaNow.getMinutes()).padStart(2, '0');
   
   return `${year}-${month}-${day}T${hours}:${minutes}`;
-}
+};
 
 /**
- * Parsea un valor de input datetime-local a UTC (para enviar al backend)
+ * Ajusta fecha para consultas
  */
-export function parseDateTimeInputToUTC(inputValue) {
-  if (!inputValue) return null;
-  
-  // El input está en hora local del navegador (debería ser Nicaragua)
-  const localDate = new Date(inputValue);
-  return nicaraguaToUTC(localDate).toISOString();
-}
-
-/**
- * Obtiene la fecha actual en Nicaragua en formato YYYY-MM-DD
- */
-export function getCurrentNicaraguaDateString() {
-  const now = new Date();
-  const nicaraguaDate = new Date(now.getTime() + NICARAGUA_OFFSET_MS);
-  return nicaraguaDate.toISOString().split('T')[0];
-}
-
-/**
- * Obtiene la fecha/hora actual en Nicaragua
- */
-export function getCurrentNicaraguaDateTime() {
-  const now = new Date();
-  return new Date(now.getTime() + NICARAGUA_OFFSET_MS);
-}
-
-/**
- * Convierte fecha de Nicaragua a formato para inputs date
- */
-export function nicaraguaDateToInput(dateString) {
-  if (!dateString) return '';
-  return dateString.split('T')[0];
-}
-
-/**
- * Ajusta una fecha para queries (solo fecha, sin hora)
- */
-// utils/dateUtils.js - Corregir adjustDateForQuery
-// dateUtils.js - Corregir definitivamente
 export const adjustDateForQuery = (dateString) => {
-  console.log('📅 adjustDateForQuery input:', dateString);
+  if (!dateString) return '';
   
-  if (!dateString || dateString.trim() === '') {
-    console.error('❌ Date string is empty');
-    // Fallback seguro
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    const result = `${year}-${month}-${day}`;
-    console.log('📅 Using fallback date:', result);
-    return result;
-  }
-  
-  // Si ya está en formato YYYY-MM-DD, retornar directamente
-  if (typeof dateString === 'string' && dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
-    console.log('✅ Already in correct format:', dateString);
+  // Si ya es YYYY-MM-DD, dejarlo igual
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
     return dateString;
   }
   
+  // Convertir de otro formato
   try {
-    // Si es un objeto Date
-    let date;
-    if (dateString instanceof Date) {
-      date = dateString;
-    } else {
-      // Intentar parsear como fecha
-      date = new Date(dateString);
-    }
+    const date = new Date(dateString);
     
     if (isNaN(date.getTime())) {
-      throw new Error('Invalid date object');
+      return dateString;
     }
     
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     
-    const result = `${year}-${month}-${day}`;
-    console.log('📅 Formatted date:', result);
-    return result;
+    return `${year}-${month}-${day}`;
   } catch (error) {
-    console.error('❌ Error formatting date:', error, 'Input:', dateString);
-    
-    // Último fallback: fecha actual
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    const result = `${year}-${month}-${day}`;
-    console.log('📅 Using error fallback date:', result);
-    return result;
-  }
-};  
-
-// En AppContext.jsx - Modificar createDailyClosing
-const createDailyClosing = async (closingData) => {
-  try {
-    console.log('📝 Datos del cierre diario a crear:', closingData);
-    
-    // Validar que la fecha no esté vacía
-    if (!closingData.date) {
-      throw new Error('La fecha es requerida');
-    }
-    
-    // Asegurarse de que la fecha esté en formato YYYY-MM-DD
-    const adjustedDate = adjustDateForQuery(closingData.date);
-    console.log('📅 Fecha ajustada para query:', adjustedDate);
-    
-    const closingWithFormattedDate = {
-      ...closingData,
-      date: adjustedDate
-    };
-    
-    const data = await apiFetch('/daily-closings', {
-      method: 'POST',
-      body: JSON.stringify(closingWithFormattedDate),
-    });
-    
-    console.log('✅ Cierre diario creado exitosamente:', data);
-    
-    // Formatear fechas para mostrar
-    const closingWithFormattedDates = {
-      ...data.data,
-      closing_date_display: formatNicaraguaDate(data.data.closing_date),
-      created_at_display: formatNicaraguaDateTime(data.data.created_at)
-    };
-    
-    setDailyClosings(prev => [closingWithFormattedDates, ...prev]);
-    
-    return data;
-  } catch (error) {
-    console.error('❌ Error creando cierre diario:', error);
-    setError('Error al crear cierre diario: ' + error.message);
-    return { success: false, error: error.message };
+    console.error('Error ajustando fecha para consulta:', error);
+    return dateString;
   }
 };
 
 /**
- * Valida si una fecha está en formato válido
+ * Convierte fecha Nicaragua a UTC
  */
-export function isValidDate(dateString) {
-  if (!dateString) return false;
-  const date = new Date(dateString);
-  return !isNaN(date.getTime());
-}
+export const nicaraguaToUTC = (nicaraguaDateTime) => {
+  if (!nicaraguaDateTime) return new Date();
+  
+  try {
+    const date = new Date(nicaraguaDateTime);
+    return new Date(date.getTime() - (6 * 60 * 60 * 1000));
+  } catch (error) {
+    console.error('Error convirtiendo Nicaragua a UTC:', error);
+    return new Date();
+  }
+};
+
+/**
+ * Convierte UTC a fecha Nicaragua
+ */
+export const utcToNicaragua = (utcDateTime) => {
+  if (!utcDateTime) return new Date();
+  
+  try {
+    const date = new Date(utcDateTime);
+    return new Date(date.getTime() + (6 * 60 * 60 * 1000));
+  } catch (error) {
+    console.error('Error convirtiendo UTC a Nicaragua:', error);
+    return new Date();
+  }
+};
+
+/**
+ * Formatea fecha UTC a string Nicaragua
+ */
+export const formatNicaraguaDateTime = (utcDateTime) => {
+  if (!utcDateTime) return '';
+  
+  try {
+    const nicaraguaDate = utcToNicaragua(utcDateTime);
+    return formatDateTimeDisplay(nicaraguaDate);
+  } catch (error) {
+    console.error('Error en formatNicaraguaDateTime:', error);
+    return formatDateTimeDisplay(utcDateTime);
+  }
+};
+
+/**
+ * Formatea solo fecha Nicaragua
+ */
+export const formatNicaraguaDate = (utcDateTime) => {
+  if (!utcDateTime) return '';
+  
+  try {
+    const nicaraguaDate = utcToNicaragua(utcDateTime);
+    return formatDateDisplay(nicaraguaDate);
+  } catch (error) {
+    console.error('Error en formatNicaraguaDate:', error);
+    return formatDateDisplay(utcDateTime);
+  }
+};
+
+/**
+ * Obtiene fecha actual Nicaragua
+ */
+export const getCurrentNicaraguaDateString = () => {
+  const now = new Date();
+  const nicaraguaNow = new Date(now.getTime() + (6 * 60 * 60 * 1000));
+  return nicaraguaNow.toISOString().split('T')[0];
+};
+
+/**
+ * Obtiene fecha/hora actual Nicaragua
+ */
+export const getCurrentNicaraguaDateTime = () => {
+  const now = new Date();
+  return new Date(now.getTime() + (6 * 60 * 60 * 1000));
+};
+
+/**
+ * Parsea input datetime-local a UTC
+ */
+export const parseDateTimeInputToUTC = (inputValue) => {
+  if (!inputValue) return null;
+  
+  try {
+    const nicaraguaDate = new Date(inputValue);
+    const utcDate = new Date(nicaraguaDate.getTime() - (6 * 60 * 60 * 1000));
+    return utcDate.toISOString();
+  } catch (error) {
+    console.error('Error parseando input a UTC:', error);
+    return null;
+  }
+};
+
+// Exportar todas las funciones
+export default {
+  formatDateTimeDisplay,
+  formatTimeDisplay,
+  formatDateDisplay,
+  prepareForDateTimeInput,
+  createDateTimeInputFromUTC,
+  getCurrentDateTimeForInput,
+  adjustDateForQuery,
+  nicaraguaToUTC,
+  utcToNicaragua,
+  formatNicaraguaDateTime,
+  formatNicaraguaDate,
+  getCurrentNicaraguaDateString,
+  getCurrentNicaraguaDateTime,
+  parseDateTimeInputToUTC
+};

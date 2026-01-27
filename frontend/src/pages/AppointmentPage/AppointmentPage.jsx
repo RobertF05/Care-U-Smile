@@ -1,3 +1,4 @@
+// AppointmentPage.jsx - VERSIÓN COMPLETA CORREGIDA
 import React, { useState, useEffect, useMemo, useContext, useRef } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
@@ -60,16 +61,24 @@ const PAYMENT_METHODS = [
   'Mixto'
 ];
 
-// FUNCIONES FORMATADORAS - ACTUALIZADAS para manejar zona horaria Nicaragua (UTC-6)
+// FUNCIONES FORMATADORAS
 const formatDateTime = (dateString) => {
   if (!dateString) return '';
   
   try {
-    // Asumir que dateString viene en UTC y formatear a Nicaragua (UTC-6)
     const date = new Date(dateString);
-    const nicaraguaDate = new Date(date.getTime() - (6 * 60 * 60 * 1000)); // Convertir UTC a Nicaragua
     
-    return nicaraguaDate.toLocaleDateString('es-ES', {
+    if (isNaN(date.getTime())) {
+      // Intentar parsear formato del backend
+      const parts = dateString.split(' ');
+      if (parts.length >= 6) {
+        // Formato: "28/01/2025 08:00:00 p. m."
+        return dateString;
+      }
+      return 'Fecha inválida';
+    }
+    
+    return date.toLocaleString('es-NI', {
       weekday: 'short',
       year: 'numeric',
       month: 'short',
@@ -80,7 +89,7 @@ const formatDateTime = (dateString) => {
     });
   } catch (error) {
     console.error('Error formateando fecha:', error);
-    return dateString;
+    return dateString || 'Fecha inválida';
   }
 };
 
@@ -89,16 +98,29 @@ const formatTime = (dateString) => {
   
   try {
     const date = new Date(dateString);
-    const nicaraguaDate = new Date(date.getTime() - (6 * 60 * 60 * 1000)); // Convertir UTC a Nicaragua
     
-    return nicaraguaDate.toLocaleTimeString('es-ES', {
+    if (isNaN(date.getTime())) {
+      // Intentar extraer hora del string
+      const timeMatch = dateString.match(/(\d{1,2}:\d{2}:\d{2})/);
+      if (timeMatch) {
+        const time = timeMatch[1];
+        const [hours, minutes] = time.split(':');
+        const hourNum = parseInt(hours);
+        const ampm = hourNum >= 12 ? 'p. m.' : 'a. m.';
+        const hour12 = hourNum % 12 || 12;
+        return `${hour12}:${minutes} ${ampm}`;
+      }
+      return '--:--';
+    }
+    
+    return date.toLocaleTimeString('es-NI', {
       hour: '2-digit',
       minute: '2-digit',
       hour12: true
     });
   } catch (error) {
     console.error('Error formateando hora:', error);
-    return dateString;
+    return '--:--';
   }
 };
 
@@ -107,16 +129,24 @@ const formatDateShort = (dateString) => {
   
   try {
     const date = new Date(dateString);
-    const nicaraguaDate = new Date(date.getTime() - (6 * 60 * 60 * 1000)); // Convertir UTC a Nicaragua
     
-    return nicaraguaDate.toLocaleDateString('es-ES', {
+    if (isNaN(date.getTime())) {
+      // Intentar extraer fecha del string
+      const dateMatch = dateString.match(/(\d{2}\/\d{2}\/\d{4})/);
+      if (dateMatch) {
+        return dateMatch[1];
+      }
+      return 'Fecha inválida';
+    }
+    
+    return date.toLocaleDateString('es-NI', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric'
     });
   } catch (error) {
     console.error('Error formateando fecha corta:', error);
-    return dateString;
+    return 'Fecha inválida';
   }
 };
 
@@ -134,40 +164,50 @@ const formatCurrencyUSD = (amount) => {
   }).format(amount || 0);
 };
 
-// Función para convertir fecha UTC a formato de input datetime-local (Nicaragua)
-const utcToDateTimeInput = (utcDateString) => {
-  if (!utcDateString) return '';
+// Función para obtener fecha/hora actual para input
+const getCurrentDateTimeForInput = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
   
-  try {
-    const date = new Date(utcDateString);
-    const nicaraguaDate = new Date(date.getTime() - (6 * 60 * 60 * 1000)); // UTC a Nicaragua
-    
-    const year = nicaraguaDate.getFullYear();
-    const month = String(nicaraguaDate.getMonth() + 1).padStart(2, '0');
-    const day = String(nicaraguaDate.getDate()).padStart(2, '0');
-    const hours = String(nicaraguaDate.getHours()).padStart(2, '0');
-    const minutes = String(nicaraguaDate.getMinutes()).padStart(2, '0');
-    
-    return `${year}-${month}-${day}T${hours}:${minutes}`;
-  } catch (error) {
-    console.error('Error convirtiendo UTC a input:', error);
-    return '';
-  }
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
 };
 
-// Función para convertir input datetime-local (Nicaragua) a UTC
-const dateTimeInputToUTC = (inputValue) => {
-  if (!inputValue) return null;
+// Función para preparar fecha para input datetime-local desde el formato del backend
+// En AppointmentPage.jsx - prepareForDateTimeInput simplificada
+const prepareForDateTimeInput = (dateString) => {
+  if (!dateString) return getCurrentDateTimeForInput();
   
   try {
-    // El input está en hora Nicaragua, convertir a UTC
-    const localDate = new Date(inputValue);
-    const utcDate = new Date(localDate.getTime() + (6 * 60 * 60 * 1000)); // Nicaragua a UTC
+    // El formato que viene del backend: "28/01/2024, 02:00:00 p. m."
+    const parts = dateString.split(', ');
+    if (parts.length === 2) {
+      const [datePart, timePart] = parts;
+      const [day, month, year] = datePart.split('/');
+      
+      let [time, ampm] = timePart.split(' ');
+      let [hours, minutes, seconds] = time.split(':');
+      
+      // Convertir a formato 24h
+      let hourNum = parseInt(hours);
+      if (ampm.includes('p.') && hourNum < 12) {
+        hourNum += 12;
+      } else if (ampm.includes('a.') && hourNum === 12) {
+        hourNum = 0;
+      }
+      
+      return `${year}-${month}-${day}T${String(hourNum).padStart(2, '0')}:${minutes}`;
+    }
     
-    return utcDate.toISOString();
+    // Si no está formateada, devolver la hora actual
+    return getCurrentDateTimeForInput();
+    
   } catch (error) {
-    console.error('Error convirtiendo input a UTC:', error);
-    return null;
+    console.error('Error preparando fecha para input:', error);
+    return getCurrentDateTimeForInput();
   }
 };
 
@@ -187,7 +227,7 @@ const AppointmentPage = () => {
   } = useContext(AppContext);
 
   // Estados
-  const [timeFilter, setTimeFilter] = useState(TIME_FILTERS.THIS_MONTH);
+  const [timeFilter, setTimeFilter] = useState(TIME_FILTERS.ALL); // Cambiado a ALL por defecto
   const [statusFilter, setStatusFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -216,7 +256,7 @@ const AppointmentPage = () => {
   // Formulario de nueva cita
   const [newAppointment, setNewAppointment] = useState({
     patient_id: '',
-    appointment_date: '',
+    appointment_date: getCurrentDateTimeForInput(),
     query_type: 'Consulta',
     is_orthodontics: false,
     observations: ''
@@ -382,22 +422,30 @@ const AppointmentPage = () => {
     return !hasProcedure && !isCompleted && !isCancelled;
   };
 
-  // Filtrar citas
+  // Filtrar citas - VERSIÓN CORREGIDA (filtra por fecha real, no formato)
   const filteredAppointments = useMemo(() => {
     let filtered = [...appointments];
 
-    // Filtrar por tiempo - CORREGIDO para usar fechas en UTC
+    // Filtrar por tiempo - FIXED: Usar fecha real, no formato de string
     const now = new Date();
-    const todayUTC = new Date(now.getTime() + (6 * 60 * 60 * 1000)); // Nicaragua a UTC
     
     switch (timeFilter) {
       case TIME_FILTERS.TODAY:
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        
         filtered = filtered.filter(apt => {
           try {
-            const aptDate = new Date(apt.appointment_date_utc || apt.appointment_date);
-            return aptDate.getUTCDate() === todayUTC.getUTCDate() &&
-                   aptDate.getUTCMonth() === todayUTC.getUTCMonth() &&
-                   aptDate.getUTCFullYear() === todayUTC.getUTCFullYear();
+            // Extraer fecha de la cadena formateada
+            const aptDateStr = apt.appointment_date?.split(', ')[0];
+            if (!aptDateStr) return false;
+            
+            const [day, month, year] = aptDateStr.split('/');
+            const aptDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+            
+            return aptDate >= today && aptDate < tomorrow;
           } catch (error) {
             console.error('Error filtrando por hoy:', error, apt);
             return false;
@@ -405,12 +453,22 @@ const AppointmentPage = () => {
         });
         break;
       case TIME_FILTERS.THIS_WEEK:
-        const lastWeek = new Date(todayUTC);
-        lastWeek.setUTCDate(lastWeek.getUTCDate() - 7);
+        const startOfWeek = new Date(now);
+        startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+        startOfWeek.setHours(0, 0, 0, 0);
+        
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(endOfWeek.getDate() + 7);
+        
         filtered = filtered.filter(apt => {
           try {
-            const aptDate = new Date(apt.appointment_date_utc || apt.appointment_date);
-            return aptDate >= lastWeek;
+            const aptDateStr = apt.appointment_date?.split(', ')[0];
+            if (!aptDateStr) return false;
+            
+            const [day, month, year] = aptDateStr.split('/');
+            const aptDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+            
+            return aptDate >= startOfWeek && aptDate < endOfWeek;
           } catch (error) {
             console.error('Error filtrando por semana:', error, apt);
             return false;
@@ -418,19 +476,27 @@ const AppointmentPage = () => {
         });
         break;
       case TIME_FILTERS.THIS_MONTH:
-        const lastMonth = new Date(todayUTC);
-        lastMonth.setUTCMonth(lastMonth.getUTCMonth() - 1);
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        
         filtered = filtered.filter(apt => {
           try {
-            const aptDate = new Date(apt.appointment_date_utc || apt.appointment_date);
-            return aptDate >= lastMonth;
+            const aptDateStr = apt.appointment_date?.split(', ')[0];
+            if (!aptDateStr) return false;
+            
+            const [day, month, year] = aptDateStr.split('/');
+            const aptDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+            
+            return aptDate >= startOfMonth && aptDate < endOfMonth;
           } catch (error) {
             console.error('Error filtrando por mes:', error, apt);
             return false;
           }
         });
         break;
+      case TIME_FILTERS.ALL:
       default:
+        // No filtrar por tiempo
         break;
     }
 
@@ -451,7 +517,7 @@ const AppointmentPage = () => {
       filtered = filtered.filter(apt => {
         const patientName = (apt.patient_name || '').toLowerCase();
         const queryType = (apt.query_type || '').toLowerCase();
-        const appointmentDate = formatDateTime(apt.appointment_date_utc || apt.appointment_date).toLowerCase();
+        const appointmentDate = (apt.appointment_date || '').toLowerCase();
         
         return patientName.includes(term) || 
                queryType.includes(term) || 
@@ -459,11 +525,21 @@ const AppointmentPage = () => {
       });
     }
 
-    // Ordenar por fecha (más próxima primero) usando UTC
+    // Ordenar por fecha (más próxima primero)
     return filtered.sort((a, b) => {
       try {
-        const dateA = new Date(a.appointment_date_utc || a.appointment_date);
-        const dateB = new Date(b.appointment_date_utc || b.appointment_date);
+        // Convertir strings formateados a Date para ordenar
+        const dateAStr = a.appointment_date?.split(', ')[0];
+        const dateBStr = b.appointment_date?.split(', ')[0];
+        
+        if (!dateAStr || !dateBStr) return 0;
+        
+        const [dayA, monthA, yearA] = dateAStr.split('/');
+        const [dayB, monthB, yearB] = dateBStr.split('/');
+        
+        const dateA = new Date(parseInt(yearA), parseInt(monthA) - 1, parseInt(dayA));
+        const dateB = new Date(parseInt(yearB), parseInt(monthB) - 1, parseInt(dayB));
+        
         return dateA - dateB;
       } catch (error) {
         console.error('Error ordenando citas:', error);
@@ -472,21 +548,25 @@ const AppointmentPage = () => {
     });
   }, [appointments, timeFilter, statusFilter, typeFilter, searchTerm]);
 
-  // Estadísticas - CORREGIDAS para usar UTC
+  // Estadísticas - VERSIÓN CORREGIDA
   const stats = useMemo(() => {
     const total = appointments.length;
     
-    // Calcular citas de hoy en Nicaragua
-    const now = new Date();
-    const todayNicaragua = new Date(now.getTime() - (6 * 60 * 60 * 1000)); // UTC a Nicaragua para comparar
-    const today = appointments.filter(apt => {
+    // Calcular citas de hoy usando fecha real
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    const todayCount = appointments.filter(apt => {
       try {
-        const aptDateUTC = new Date(apt.appointment_date_utc || apt.appointment_date);
-        const aptDateNicaragua = new Date(aptDateUTC.getTime() - (6 * 60 * 60 * 1000));
+        const aptDateStr = apt.appointment_date?.split(', ')[0];
+        if (!aptDateStr) return false;
         
-        return aptDateNicaragua.getDate() === todayNicaragua.getDate() &&
-               aptDateNicaragua.getMonth() === todayNicaragua.getMonth() &&
-               aptDateNicaragua.getFullYear() === todayNicaragua.getFullYear();
+        const [day, month, year] = aptDateStr.split('/');
+        const aptDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        
+        return aptDate >= today && aptDate < tomorrow;
       } catch (error) {
         console.error('Error calculando citas de hoy:', error);
         return false;
@@ -502,7 +582,7 @@ const AppointmentPage = () => {
 
     return {
       total,
-      today,
+      today: todayCount,
       completed,
       cancelled,
       pending,
@@ -576,46 +656,58 @@ const AppointmentPage = () => {
     setProcedureForm(updatedForm);
   };
 
-  // Crear nueva cita - CORREGIDA
-  const handleAddAppointment = async (e) => {
-    e.preventDefault();
+  // Crear nueva cita - VERSIÓN CORREGIDA
+  // AppointmentPage.jsx - handleAddAppointment (VERSIÓN FINAL)
+const handleAddAppointment = async (e) => {
+  e.preventDefault();
+  
+  try {
+    console.log('📝 Datos de la cita original:', newAppointment);
     
-    try {
-      console.log('📝 Datos de la cita original:', newAppointment);
-      
-      // El backend ya maneja la conversión de zona horaria
-      const appointmentData = {
-        Patient_ID: parseInt(newAppointment.patient_id),
-        appointment_date: newAppointment.appointment_date, // En hora Nicaragua
-        query_type: newAppointment.is_orthodontics ? 'Ortodoncia' : newAppointment.query_type,
-        is_orthodontics: newAppointment.is_orthodontics,
-        observations: newAppointment.observations || null
-      };
-
-      console.log('📤 Enviando al backend (hora Nicaragua):', appointmentData);
-      
-      await createAppointment(appointmentData);
-      
-      // Resetear formulario
-      setNewAppointment({
-        patient_id: '',
-        appointment_date: '',
-        query_type: 'Consulta',
-        is_orthodontics: false,
-        observations: ''
-      });
-      setPatientSearchTerm('');
-      
-      setShowAddModal(false);
-      fetchAppointments();
-      
-      alert('✅ Cita creada exitosamente');
-      
-    } catch (error) {
-      console.error('Error al crear cita:', error);
-      alert(`❌ Error al crear la cita: ${error.message || 'Error desconocido'}`);
+    // El input datetime-local devuelve formato: "YYYY-MM-DDTHH:mm"
+    let dateTimeString = newAppointment.appointment_date;
+    
+    // Si no tiene segundos, añadir :00
+    if (dateTimeString.length === 16) {
+      dateTimeString += ':00';
     }
-  };
+    
+    // IMPORTANTE: NO hacer conversión ninguna
+    // Enviar la fecha EXACTAMENTE como viene del input
+    console.log('🕐 Hora exacta del input:', dateTimeString);
+    
+    const appointmentData = {
+      Patient_ID: parseInt(newAppointment.patient_id),
+      appointment_date: dateTimeString, // ¡EXACTAMENTE lo que viene del input!
+      query_type: newAppointment.is_orthodontics ? 'Ortodoncia' : newAppointment.query_type,
+      is_orthodontics: newAppointment.is_orthodontics,
+      observations: newAppointment.observations || null
+    };
+
+    console.log('📤 Enviando al backend (SIN conversión):', appointmentData);
+    
+    await createAppointment(appointmentData);
+    
+    // Resetear formulario
+    setNewAppointment({
+      patient_id: '',
+      appointment_date: getCurrentDateTimeForInput(),
+      query_type: 'Consulta',
+      is_orthodontics: false,
+      observations: ''
+    });
+    setPatientSearchTerm('');
+    
+    setShowAddModal(false);
+    fetchAppointments();
+    
+    alert('✅ Cita creada exitosamente');
+    
+  } catch (error) {
+    console.error('Error al crear cita:', error);
+    alert(`❌ Error al crear la cita: ${error.message || 'Error desconocido'}`);
+  }
+};
 
   // Función para actualizar el estado de la cita (con conversión automática)
   const handleUpdateAppointmentWithAutoConvert = async (appointmentId, newState) => {
@@ -707,7 +799,7 @@ const AppointmentPage = () => {
     }
   };
 
-  // Función para abrir modal de edición - CORREGIDA
+  // Función para abrir modal de edición
   const handleOpenEditModal = (appointment) => {
     if (!canEditAppointment(appointment)) {
       alert('No se puede editar esta cita. Solo se pueden editar citas pendientes sin procedimientos.');
@@ -716,12 +808,11 @@ const AppointmentPage = () => {
     
     setEditingAppointment(appointment);
     
-    // Convertir UTC a hora Nicaragua para el input
-    const appointmentDateUTC = appointment.appointment_date_utc || appointment.appointment_date;
-    const appointmentDateNicaragua = utcToDateTimeInput(appointmentDateUTC);
+    // Convertir fecha para input usando la función helper
+    const appointmentDateForInput = prepareForDateTimeInput(appointment.appointment_date);
     
     setEditFormData({
-      appointment_date: appointmentDateNicaragua,
+      appointment_date: appointmentDateForInput,
       query_type: appointment.query_type || '',
       observations: appointment.observations || '',
       is_orthodontics: appointment.is_orthodontics || false
@@ -729,21 +820,31 @@ const AppointmentPage = () => {
     setShowEditModal(true);
   };
 
-  // Función para guardar cambios en la cita - CORREGIDA
+  // Función para guardar cambios en la cita
   const handleSaveEditAppointment = async (e) => {
     e.preventDefault();
     
     if (!editingAppointment) return;
     
     try {
+      // Convertir fecha de input a formato ISO
+      let dateTimeString = editFormData.appointment_date;
+      
+      if (dateTimeString.length === 16) {
+        dateTimeString += ':00';
+      }
+      
+      const localDate = new Date(dateTimeString);
+      const isoString = localDate.toISOString().replace('Z', '');
+      
       const updateData = {
-        appointment_date: editFormData.appointment_date, // En hora Nicaragua
+        appointment_date: isoString,
         query_type: editFormData.query_type,
         is_orthodontics: editFormData.is_orthodontics,
         observations: editFormData.observations || null
       };
       
-      console.log('📝 Actualizando cita con datos (hora Nicaragua):', updateData);
+      console.log('📝 Actualizando cita con datos:', updateData);
       
       await updateAppointment(editingAppointment.appointment_ID, updateData);
       
@@ -1272,10 +1373,10 @@ const AppointmentPage = () => {
                   {/* Fecha y hora */}
                   <div className="appointment-column date-column compact">
                     <div className="appointment-date-short compact">
-                      {formatDateShort(appointment.appointment_date_utc || appointment.appointment_date)}
+                      {formatDateShort(appointment.appointment_date)}
                     </div>
                     <div className="appointment-time compact">
-                      {formatTime(appointment.appointment_date_utc || appointment.appointment_date)}
+                      {formatTime(appointment.appointment_date)}
                     </div>
                   </div>
 
@@ -1430,7 +1531,7 @@ const AppointmentPage = () => {
                         <div className="expanded-detail">
                           <span className="detail-label">Fecha y hora completa:</span>
                           <span className="detail-value">
-                            {formatDateTime(appointment.appointment_date_utc || appointment.appointment_date)}
+                            {formatDateTime(appointment.appointment_date)}
                           </span>
                         </div>
                         <div className="expanded-detail">
@@ -1638,9 +1739,9 @@ const AppointmentPage = () => {
                 </div>
               </div>
 
-              {/* Fecha y hora - NOTA: El input datetime-local devuelve hora local (Nicaragua) */}
+              {/* Fecha y hora */}
               <div className="form-group">
-                <label className="form-label">Fecha y hora (hora Nicaragua):</label>
+                <label className="form-label">Fecha y hora:</label>
                 <input
                   type="datetime-local"
                   required
@@ -1651,7 +1752,7 @@ const AppointmentPage = () => {
                   })}
                   className="form-input"
                 />
-                <small className="form-help-text">Seleccione la fecha y hora en hora de Nicaragua</small>
+                <small className="form-help-text">Seleccione la fecha y hora</small>
               </div>
 
               {/* Observaciones */}
@@ -1728,7 +1829,7 @@ const AppointmentPage = () => {
               </div>
               
               <div className="form-group">
-                <label className="form-label">Fecha y hora (hora Nicaragua):</label>
+                <label className="form-label">Fecha y hora:</label>
                 <input
                   type="datetime-local"
                   required
@@ -1739,7 +1840,7 @@ const AppointmentPage = () => {
                   })}
                   className="form-input"
                 />
-                <small className="form-help-text">Seleccione la fecha y hora en hora de Nicaragua</small>
+                <small className="form-help-text">Seleccione la fecha y hora</small>
               </div>
               
               <div className="form-group">
@@ -1925,7 +2026,7 @@ const AppointmentPage = () => {
             <div className="appointment-info">
               <h4>Información de la cita:</h4>
               <p><strong>Paciente:</strong> {selectedAppointment.patient_name}</p>
-              <p><strong>Fecha:</strong> {formatDateTime(selectedAppointment.appointment_date_utc || selectedAppointment.appointment_date)}</p>
+              <p><strong>Fecha:</strong> {formatDateTime(selectedAppointment.appointment_date)}</p>
               <p><strong>Tipo:</strong> {selectedAppointment.is_orthodontics ? 'Ortodoncia' : 'Procedimiento Regular'}</p>
               <p><strong>Consulta:</strong> {selectedAppointment.query_type}</p>
             </div>

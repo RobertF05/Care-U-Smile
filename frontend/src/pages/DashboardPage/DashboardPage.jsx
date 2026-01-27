@@ -41,7 +41,7 @@ const DashboardPage = () => {
       const today = new Date().toISOString().split('T')[0];
       fetchAppointments({ startDate: today, endDate: today });
       
-      // Obtener procedimientos completados recientes
+      // Obtener procedimientos completados recientemente
       fetchRecentCompletedProcedures();
     }
   }, [user]);
@@ -217,8 +217,7 @@ const DashboardPage = () => {
       dateTimeDisplay: formatDateTime(apt.appointment_date),
       procedure: apt.query_type || 'Consulta',
       status: apt.state || 'scheduled',
-      identification: apt.patient_identification || apt.patients?.identification || 'N/A',
-      notes: apt.observations || ''
+      notes: apt.observations || '' // Removido: identification
     }));
 
   // Preparar datos de procedimientos completados para mostrar
@@ -226,9 +225,15 @@ const DashboardPage = () => {
     id: proc.procedure_ID || proc.id || Math.random(),
     patient: proc.patient_name || proc.patients?.first_name || 'Paciente',
     description: proc.procedure_description || 'Procedimiento dental',
-    // Usar total_procedure como prioridad, si no existe usar total_cost
-    amount: proc.total_procedure || proc.total_cost || 0,
-    formattedAmount: formatCurrency(proc.total_procedure || proc.total_cost || 0),
+    // Para ortodoncia, usar solo la porción de la clínica
+    amount: proc.is_orthodontics 
+      ? (proc.clinic_portion || (proc.total_procedure * 0.4) || 0)
+      : (proc.total_procedure || proc.total_cost || 0),
+    formattedAmount: formatCurrency(
+      proc.is_orthodontics 
+        ? (proc.clinic_portion || (proc.total_procedure * 0.4) || 0)
+        : (proc.total_procedure || proc.total_cost || 0)
+    ),
     date: formatDateTime(proc.procedure_date),
     type: proc.procedure_type || (proc.is_orthodontics ? 'Ortodoncia' : 'General'),
     isOrthodontics: proc.is_orthodontics || false,
@@ -237,9 +242,7 @@ const DashboardPage = () => {
     doctorPortion: proc.doctor_portion || 0,
     clinicPortionFormatted: formatCurrency(proc.clinic_portion || 0),
     doctorPortionFormatted: formatCurrency(proc.doctor_portion || 0),
-    // Información adicional
-    paymentMethod: proc.payment_method || 'No especificado',
-    patientIdentification: proc.patients?.identification || 'N/A'
+    // Removidos: paymentMethod y patientIdentification
   }));
 
   if (loading && !stats.totalPatients) {
@@ -348,7 +351,7 @@ const DashboardPage = () => {
                     <div className="appointment-info">
                       <div className="patient-name">
                         <strong>{appointment.patient}</strong>
-                        <span className="patient-id">ID: {appointment.identification}</span>
+                        {/* Removido: ID del paciente */}
                       </div>
                       <div className="appointment-details">
                         <span className="procedure">
@@ -395,8 +398,11 @@ const DashboardPage = () => {
             </h3>
             <div className="section-header-right">
               <span className="section-badge">{preparedProcedures.length}</span>
+              {/* Mostrar solo el total de ganancias de la clínica */}
               <span className="total-amount-badge">
-                Total: {formatCurrency(preparedProcedures.reduce((sum, proc) => sum + proc.amount, 0))}
+                Total Clínica: {formatCurrency(
+                  preparedProcedures.reduce((sum, proc) => sum + proc.amount, 0)
+                )}
               </span>
             </div>
           </div>
@@ -420,18 +426,19 @@ const DashboardPage = () => {
                       <div className="procedure-header">
                         <div className="procedure-patient">
                           <strong>{procedure.patient}</strong>
-                          <span className="procedure-id">ID: {procedure.patientIdentification}</span>
+                          {/* Removido: ID del paciente */}
                         </div>
                         <div className="procedure-amount-section">
-                          <span className="procedure-amount" title={`Total: ${procedure.formattedAmount}`}>
+                          {/* Mostrar solo la porción de la clínica para ortodoncia */}
+                          <span className="procedure-amount" title={`Ganancia Clínica: ${procedure.formattedAmount}`}>
                             {procedure.formattedAmount}
                           </span>
                           {procedure.isOrthodontics && (
                             <div className="ortho-breakdown">
-                              <small className="clinic-portion" title="Porción Clínica (40%)">
+                              <small className="clinic-portion" title="Porción Clínica">
                                 C: {procedure.clinicPortionFormatted}
                               </small>
-                              <small className="doctor-portion" title="Porción Doctora (60%)">
+                              <small className="doctor-portion" title="Porción Doctora">
                                 D: {procedure.doctorPortionFormatted}
                               </small>
                             </div>
@@ -453,10 +460,7 @@ const DashboardPage = () => {
                             <FontAwesomeIcon icon={faClock} style={{ marginRight: '3px' }} />
                             {procedure.date}
                           </span>
-                          <span className="procedure-payment">
-                            <FontAwesomeIcon icon={faMoneyBillWave} style={{ marginRight: '3px' }} />
-                            {procedure.paymentMethod}
-                          </span>
+                          {/* Removido: Método de pago */}
                         </div>
                       </div>
                     </div>

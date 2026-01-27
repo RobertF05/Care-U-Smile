@@ -1,159 +1,284 @@
-// backend/utils/timezoneUtils.js
-// CAMBIA module.exports por export
+// timezoneUtils.js - VERSIÓN COMPLETA CON TODAS LAS EXPORTACIONES
+/**
+ * Utilidades para manejo de zona horaria de Nicaragua (UTC-6)
+ */
 
-// Constantes para Nicaragua
-export const NICARAGUA_TIMEZONE = 'America/Managua';
-export const NICARAGUA_UTC_OFFSET = -6; // UTC-6 horas
-export const NICARAGUA_OFFSET_MS = NICARAGUA_UTC_OFFSET * 60 * 60 * 1000;
+// Nicaragua está en UTC-6 todo el año (no hay horario de verano)
+const NICARAGUA_OFFSET = -6 * 60 * 60 * 1000; // -6 horas en milisegundos
 
 /**
- * Convierte cualquier fecha a hora de Nicaragua (para mostrar)
+ * Convierte una fecha de Nicaragua a UTC
+ * @param {string|Date} dateTimeNicaragua - Fecha/hora en zona Nicaragua
+ * @returns {Date} - Fecha en UTC
  */
-export function toNicaraguaTime(date) {
-  if (!date) return null;
+export const toUTCFromNicaragua = (dateTimeNicaragua) => {
+  if (!dateTimeNicaragua) return new Date();
   
-  // Si es string, convertirlo a Date
-  const dateObj = typeof date === 'string' ? new Date(date) : date;
-  
-  // Aplicar offset de Nicaragua (UTC-6)
-  return new Date(dateObj.getTime() + NICARAGUA_OFFSET_MS);
-}
-
-/**
- * Convierte hora Nicaragua a UTC para guardar en BD
- */
-export function toUTCFromNicaragua(nicaraguaDate) {
-  if (!nicaraguaDate) return null;
-  
-  const dateObj = typeof nicaraguaDate === 'string' ? new Date(nicaraguaDate) : nicaraguaDate;
-  
-  // Remover offset de Nicaragua (convertir a UTC)
-  return new Date(dateObj.getTime() - NICARAGUA_OFFSET_MS);
-}
-
-/**
- * Obtiene fecha actual en Nicaragua
- */
-export function getCurrentNicaraguaDate() {
-  return toNicaraguaTime(new Date());
-}
-
-/**
- * Formatea fecha en formato Nicaragua CON hora
- */
-export function formatNicaraguaDateTime(date, includeTime = true) {
-  if (!date) return '';
-  
-  const nicaraguaDate = toNicaraguaTime(date);
-  
-  const options = {
-    timeZone: 'UTC', // Porque ya aplicamos el offset manualmente
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  };
-  
-  if (includeTime) {
-    options.hour = '2-digit';
-    options.minute = '2-digit';
-    options.hour12 = true;
+  let date;
+  if (typeof dateTimeNicaragua === 'string') {
+    date = new Date(dateTimeNicaragua);
+  } else {
+    date = new Date(dateTimeNicaragua);
   }
   
-  return nicaraguaDate.toLocaleString('es-NI', options);
-}
+  // Crear fecha UTC equivalente
+  const utcDate = new Date(date.getTime() - NICARAGUA_OFFSET);
+  return utcDate;
+};
 
 /**
- * Formatea solo la fecha (SIN hora) en formato Nicaragua
+ * Convierte UTC a hora Nicaragua
+ * @param {string|Date} utcDateTime - Fecha/hora en UTC
+ * @returns {Date} - Fecha en hora Nicaragua
  */
-export function formatNicaraguaDate(date) {
-  if (!date) return '';
+export const toNicaraguaTime = (utcDateTime) => {
+  if (!utcDateTime) return new Date();
   
-  const nicaraguaDate = toNicaraguaTime(date);
+  const date = new Date(utcDateTime);
+  return new Date(date.getTime() + NICARAGUA_OFFSET);
+};
+
+/**
+ * Formatea fecha UTC como string Nicaragua
+ * @param {string|Date} utcDateTime - Fecha/hora en UTC
+ * @returns {string} - Fecha formateada en Nicaragua
+ */
+export const formatNicaraguaDateTime = (utcDateTime) => {
+  if (!utcDateTime) return '';
   
-  const options = {
-    timeZone: 'UTC',
+  const nicaraguaDate = toNicaraguaTime(utcDateTime);
+  
+  return nicaraguaDate.toLocaleString('es-NI', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true
+  });
+};
+
+/**
+ * Formatea solo la fecha (sin hora)
+ */
+export const formatNicaraguaDate = (utcDateTime) => {
+  if (!utcDateTime) return '';
+  
+  const nicaraguaDate = toNicaraguaTime(utcDateTime);
+  
+  return nicaraguaDate.toLocaleDateString('es-NI', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit'
-  };
-  
-  return nicaraguaDate.toLocaleString('es-NI', options);
-}
+  });
+};
 
 /**
- * Crea un rango de fechas para Nicaragua
- * Convierte fechas Nicaragua a UTC para consultas
+ * Crea un rango de fechas UTC para consultas
  */
-export function createNicaraguaDateRange(dateString) {
-  // dateString en formato YYYY-MM-DD (asumido en hora Nicaragua)
-  const nicaraguaStart = new Date(`${dateString}T00:00:00`);
-  const nicaraguaEnd = new Date(`${dateString}T23:59:59.999`);
+export const createNicaraguaDateRange = (dateString) => {
+  // dateString está en hora Nicaragua (YYYY-MM-DD)
+  const nicaraguaStart = new Date(dateString + 'T00:00:00');
+  const nicaraguaEnd = new Date(dateString + 'T23:59:59');
+  
+  // Convertir a UTC para consultas
+  const startUTC = new Date(nicaraguaStart.getTime() - NICARAGUA_OFFSET);
+  const endUTC = new Date(nicaraguaEnd.getTime() - NICARAGUA_OFFSET);
   
   return {
-    start: toUTCFromNicaragua(nicaraguaStart).toISOString(),
-    end: toUTCFromNicaragua(nicaraguaEnd).toISOString(),
+    start: startUTC.toISOString(),
+    end: endUTC.toISOString()
+  };
+};
+
+/**
+ * Crea un rango de fechas para un mes completo
+ */
+export const createMonthlyDateRange = (year, month) => {
+  // Asegurar que el mes esté en formato 0-11
+  const monthIndex = parseInt(month) - 1;
+  
+  // Primer día del mes en Nicaragua
+  const nicaraguaStart = new Date(year, monthIndex, 1, 0, 0, 0);
+  
+  // Último día del mes en Nicaragua
+  const nicaraguaEnd = new Date(year, monthIndex + 1, 0, 23, 59, 59);
+  
+  // Convertir a UTC para consultas
+  const startUTC = new Date(nicaraguaStart.getTime() - NICARAGUA_OFFSET);
+  const endUTC = new Date(nicaraguaEnd.getTime() - NICARAGUA_OFFSET);
+  
+  return {
+    start: startUTC.toISOString(),
+    end: endUTC.toISOString(),
     startNicaragua: nicaraguaStart,
     endNicaragua: nicaraguaEnd
   };
-}
+};
 
 /**
- * Crea un rango de fechas para consultas mensuales
+ * Convierte fecha string a UTC (inicio del día)
  */
-export function createMonthlyDateRange(year, monthName) {
-  const months = {
-    'ENERO': '01', 'FEBRERO': '02', 'MARZO': '03', 'ABRIL': '04',
-    'MAYO': '05', 'JUNIO': '06', 'JULIO': '07', 'AGOSTO': '08',
-    'SEPTIEMBRE': '09', 'OCTUBRE': '10', 'NOVIEMBRE': '11', 'DICIEMBRE': '12'
-  };
-  
-  const monthNumber = months[monthName.toUpperCase()] || '01';
-  const firstDay = `${year}-${monthNumber}-01`;
-  const lastDay = new Date(year, parseInt(monthNumber), 0).getDate();
-  
-  const nicaraguaStart = new Date(`${firstDay}T00:00:00`);
-  const nicaraguaEnd = new Date(`${year}-${monthNumber}-${lastDay}T23:59:59.999`);
-  
-  return {
-    start: toUTCFromNicaragua(nicaraguaStart).toISOString(),
-    end: toUTCFromNicaragua(nicaraguaEnd).toISOString(),
-    startNicaragua: nicaraguaStart,
-    endNicaragua: nicaraguaEnd
-  };
-}
+export const convertDateStringToUTCStart = (dateString) => {
+  const nicaraguaStart = new Date(dateString + 'T00:00:00');
+  const utcStart = new Date(nicaraguaStart.getTime() - NICARAGUA_OFFSET);
+  return utcStart.toISOString();
+};
 
 /**
- * Convierte un string de fecha (YYYY-MM-DD) a fecha inicial del día en UTC
+ * Convierte fecha string a UTC (fin del día)
  */
-export function convertDateStringToUTCStart(dateString) {
-  if (!dateString) return null;
-  const nicaraguaDate = new Date(`${dateString}T00:00:00`);
-  return toUTCFromNicaragua(nicaraguaDate).toISOString();
-}
+export const convertDateStringToUTCEnd = (dateString) => {
+  const nicaraguaEnd = new Date(dateString + 'T23:59:59');
+  const utcEnd = new Date(nicaraguaEnd.getTime() - NICARAGUA_OFFSET);
+  return utcEnd.toISOString();
+};
 
 /**
- * Convierte un string de fecha (YYYY-MM-DD) a fecha final del día en UTC
+ * Obtiene fecha actual en Nicaragua como string (YYYY-MM-DD)
  */
-export function convertDateStringToUTCEnd(dateString) {
-  if (!dateString) return null;
-  const nicaraguaDate = new Date(`${dateString}T23:59:59.999`);
-  return toUTCFromNicaragua(nicaraguaDate).toISOString();
-}
+export const getCurrentNicaraguaDateString = () => {
+  const now = new Date();
+  const nicaraguaNow = new Date(now.getTime() + NICARAGUA_OFFSET);
+  return nicaraguaNow.toISOString().split('T')[0];
+};
 
 /**
- * Obtiene la fecha actual en Nicaragua en formato YYYY-MM-DD
+ * Ajusta fecha para consultas (convierte Nicaragua a UTC)
+ * @param {string} dateString - Fecha en formato YYYY-MM-DD (Nicaragua)
+ * @returns {string} - Fecha en formato YYYY-MM-DD (UTC)
  */
-export function getCurrentNicaraguaDateString() {
-  const nicaraguaDate = getCurrentNicaraguaDate();
-  return nicaraguaDate.toISOString().split('T')[0];
-}
-
-/**
- * Ajusta una fecha ISO para consultas de rango (para fechas DATE en BD)
- */
-export function adjustDateForQuery(dateString) {
-  // Para campos DATE (no TIMESTAMP), no necesitamos conversión de zona horaria
-  // Solo asegurarnos de que esté en formato YYYY-MM-DD
+export const adjustDateForQuery = (dateString) => {
   if (!dateString) return '';
-  return dateString.split('T')[0];
-}
+  
+  // Si ya es YYYY-MM-DD, convertir a UTC
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+    const nicaraguaDate = new Date(dateString + 'T00:00:00');
+    const utcDate = new Date(nicaraguaDate.getTime() - NICARAGUA_OFFSET);
+    return utcDate.toISOString().split('T')[0];
+  }
+  
+  return dateString;
+};
+
+/**
+ * Crea string para input datetime-local desde UTC
+ */
+export const createDateTimeInputFromUTC = (utcDateTime) => {
+  if (!utcDateTime) return '';
+  
+  const nicaraguaDate = toNicaraguaTime(utcDateTime);
+  const year = nicaraguaDate.getFullYear();
+  const month = String(nicaraguaDate.getMonth() + 1).padStart(2, '0');
+  const day = String(nicaraguaDate.getDate()).padStart(2, '0');
+  const hours = String(nicaraguaDate.getHours()).padStart(2, '0');
+  const minutes = String(nicaraguaDate.getMinutes()).padStart(2, '0');
+  
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+};
+
+/**
+ * Parsea input datetime-local a UTC
+ */
+export const parseDateTimeInputToUTC = (inputValue) => {
+  if (!inputValue) return null;
+  
+  // El input datetime-local ya está en hora local (Nicaragua)
+  const nicaraguaDate = new Date(inputValue);
+  const utcDate = new Date(nicaraguaDate.getTime() - NICARAGUA_OFFSET);
+  
+  return utcDate.toISOString();
+};
+
+/**
+ * Obtiene fecha/hora actual Nicaragua
+ */
+export const getCurrentNicaraguaDateTime = () => {
+  const now = new Date();
+  return new Date(now.getTime() + NICARAGUA_OFFSET);
+};
+
+/**
+ * Obtiene el primer y último día del mes actual en Nicaragua
+ */
+export const getCurrentMonthRange = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  
+  // Convertir a Nicaragua
+  const firstDayNicaragua = new Date(firstDay.getTime() + NICARAGUA_OFFSET);
+  const lastDayNicaragua = new Date(lastDay.getTime() + NICARAGUA_OFFSET);
+  
+  return {
+    firstDay: firstDayNicaragua.toISOString().split('T')[0],
+    lastDay: lastDayNicaragua.toISOString().split('T')[0],
+    firstDayUTC: new Date(firstDay.getTime() - NICARAGUA_OFFSET).toISOString(),
+    lastDayUTC: new Date(lastDay.getTime() - NICARAGUA_OFFSET).toISOString()
+  };
+};
+
+/**
+ * Convierte fecha string a Nicaragua (inicio del día)
+ */
+export const convertDateStringToNicaraguaStart = (dateString) => {
+  const start = new Date(dateString + 'T00:00:00');
+  return start.toISOString().replace('Z', '');
+};
+
+/**
+ * Convierte fecha string a Nicaragua (fin del día)
+ */
+export const convertDateStringToNicaraguaEnd = (dateString) => {
+  const end = new Date(dateString + 'T23:59:59');
+  return end.toISOString().replace('Z', '');
+};
+
+/**
+ * Ajusta fecha para consultas Nicaragua (mantiene Nicaragua)
+ */
+export const adjustDateForNicaraguaQuery = (dateString) => {
+  if (!dateString) return '';
+  
+  // Si ya es YYYY-MM-DD, dejarlo igual
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+    return dateString;
+  }
+  
+  // Convertir de otro formato a YYYY-MM-DD
+  try {
+    const date = new Date(dateString);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    
+    return `${year}-${month}-${day}`;
+  } catch (error) {
+    return dateString;
+  }
+};
+
+// Exportar todas las funciones necesarias
+export default {
+  toUTCFromNicaragua,
+  toNicaraguaTime,
+  formatNicaraguaDateTime,
+  formatNicaraguaDate,
+  createNicaraguaDateRange,
+  createMonthlyDateRange, // ¡AÑADIDA!
+  convertDateStringToUTCStart,
+  convertDateStringToUTCEnd,
+  getCurrentNicaraguaDateString,
+  adjustDateForQuery,
+  createDateTimeInputFromUTC,
+  parseDateTimeInputToUTC,
+  getCurrentNicaraguaDateTime,
+  getCurrentMonthRange,
+  convertDateStringToNicaraguaStart,
+  convertDateStringToNicaraguaEnd,
+  adjustDateForNicaraguaQuery
+};

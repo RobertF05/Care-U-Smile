@@ -1,117 +1,112 @@
+// controllers/appointmentController.js
 import { supabaseAdmin } from '../config/supabase.js';
-import { 
-  toUTCFromNicaragua, 
-  toNicaraguaTime,
-  formatNicaraguaDateTime,
-  createNicaraguaDateRange,
-  convertDateStringToUTCStart,
-  convertDateStringToUTCEnd,
-  getCurrentNicaraguaDateString
-} from '../utils/timezoneUtils.js';
 
 const appointmentController = {
   // Obtener todas las citas
-  getAll: async (req, res) => {
-    try {
-      const { 
-        page = 1, 
-        limit = 20, 
-        startDate, 
-        endDate, 
-        state,
-        patientId,
-        isOrthodontics,
-        isRegistered
-      } = req.query;
-      
-      const from = (page - 1) * limit;
-      const to = from + limit - 1;
-      
-      let query = supabaseAdmin
-        .from('clinical_appointments')
-        .select(`
-          *,
-          patients (
-            first_name,
-            first_last_name,
-            identification,
-            number_phone
-          )
-        `, { count: 'exact' })
-        .order('appointment_date', { ascending: true });
-      
-      // Aplicar filtros con conversión de zona horaria
-      if (startDate) {
-        const startUTC = convertDateStringToUTCStart(startDate);
-        console.log(`🔍 Filtro startDate: ${startDate} → UTC: ${startUTC}`);
-        query = query.gte('appointment_date', startUTC);
-      }
-      
-      if (endDate) {
-        const endUTC = convertDateStringToUTCEnd(endDate);
-        console.log(`🔍 Filtro endDate: ${endDate} → UTC: ${endUTC}`);
-        query = query.lte('appointment_date', endUTC);
-      }
-      
-      if (state) {
-        query = query.eq('state', state);
-      }
-      
-      if (patientId) {
-        query = query.eq('Patient_ID', patientId);
-      }
-      
-      if (isOrthodontics !== undefined) {
-        query = query.eq('is_orthodontics', isOrthodontics === 'true');
-      }
-      
-      if (isRegistered !== undefined) {
-        query = query.eq('is_registered', isRegistered === 'true');
-      }
-      
-      query = query.range(from, to);
-      
-      const { data, error, count } = await query;
-      
-      if (error) throw error;
-      
-      // Transformar datos y convertir fechas a Nicaragua para mostrar
-      const transformedData = data.map(item => {
-        // Convertir UTC a Nicaragua
-        const appointmentDateNicaragua = formatNicaraguaDateTime(item.appointment_date);
-        
-        console.log(`📅 Conversión para mostrar:`, {
-          utc: item.appointment_date,
-          nicaragua: appointmentDateNicaragua
-        });
-        
-        return {
-          ...item,
-          appointment_date: appointmentDateNicaragua, // Mostrar en Nicaragua
-          appointment_date_utc: item.appointment_date, // Guardar original UTC
-          patient_name: `${item.patients?.first_name || ''} ${item.patients?.first_last_name || ''}`.trim(),
-          patient_identification: item.patients?.identification,
-          patient_phone: item.patients?.number_phone,
-          is_registered: item.is_registered || false
-        };
-      });
-      
-      res.json({ 
-        success: true, 
-        data: transformedData,
-        total: count,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        totalPages: Math.ceil(count / limit)
-      });
-    } catch (error) {
-      console.error('Error al obtener citas:', error);
-      res.status(500).json({ 
-        success: false, 
-        error: 'Error al obtener citas' 
-      });
+  // appointmentController.js - getAll method (VERSIÓN FINAL)
+getAll: async (req, res) => {
+  try {
+    const { 
+      page = 1, 
+      limit = 20, 
+      startDate, 
+      endDate, 
+      state,
+      patientId,
+      isOrthodontics,
+      isRegistered
+    } = req.query;
+    
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+    
+    let query = supabaseAdmin
+      .from('clinical_appointments')
+      .select(`
+        *,
+        patients (
+          first_name,
+          first_last_name,
+          identification,
+          number_phone
+        )
+      `, { count: 'exact' })
+      .order('appointment_date', { ascending: true });
+    
+    // Filtros directos - SIN conversiones
+    if (startDate) {
+      const startNicaragua = `${startDate}T00:00:00`;
+      console.log(`🔍 Filtro startDate: ${startNicaragua}`);
+      query = query.gte('appointment_date', startNicaragua);
     }
-  },
+    
+    if (endDate) {
+      const endNicaragua = `${endDate}T23:59:59`;
+      console.log(`🔍 Filtro endDate: ${endNicaragua}`);
+      query = query.lte('appointment_date', endNicaragua);
+    }
+    
+    // ... resto de filtros
+    
+    query = query.range(from, to);
+    
+    const { data, error, count } = await query;
+    
+    if (error) throw error;
+    
+    // Transformar datos - SIN conversión de zona horaria
+    const transformedData = data.map(item => {
+      // Parsear fecha directamente del string
+      const [datePart, timePart] = item.appointment_date.split('T');
+      const [year, month, day] = datePart.split('-');
+      const [hours, minutes, seconds] = timePart.split(':');
+      
+      // Crear fecha manualmente
+      const dateObj = new Date(
+        parseInt(year),
+        parseInt(month) - 1,
+        parseInt(day),
+        parseInt(hours),
+        parseInt(minutes),
+        parseInt(seconds)
+      );
+      
+      const formattedDate = dateObj.toLocaleString('es-NI', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+      });
+      
+      return {
+        ...item,
+        appointment_date: formattedDate,
+        patient_name: `${item.patients?.first_name || ''} ${item.patients?.first_last_name || ''}`.trim(),
+        patient_identification: item.patients?.identification,
+        patient_phone: item.patients?.number_phone,
+        is_registered: item.is_registered || false
+      };
+    });
+    
+    res.json({ 
+      success: true, 
+      data: transformedData,
+      total: count,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(count / limit)
+    });
+  } catch (error) {
+    console.error('Error al obtener citas:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Error al obtener citas' 
+    });
+  }
+},
 
   // Obtener cita por ID
   getById: async (req, res) => {
@@ -142,11 +137,20 @@ const appointmentController = {
         });
       }
       
-      // Convertir UTC a Nicaragua para mostrar
+      const fechaBD = new Date(data.appointment_date);
+      const formattedDate = fechaBD.toLocaleString('es-NI', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+      });
+      
       const transformedData = {
         ...data,
-        appointment_date: formatNicaraguaDateTime(data.appointment_date),
-        appointment_date_utc: data.appointment_date,
+        appointment_date: formattedDate,
         patient_name: `${data.patients?.first_name || ''} ${data.patients?.first_last_name || ''}`.trim(),
         patient_identification: data.patients?.identification,
         patient_phone: data.patients?.number_phone,
@@ -167,100 +171,132 @@ const appointmentController = {
     }
   },
 
-  // Crear cita (conversión Nicaragua a UTC)
-  create: async (req, res) => {
-    try {
-      const appointmentData = req.body;
-      
-      console.log('📥 Datos recibidos para crear cita:', appointmentData);
-      console.log('🕐 Hora Nicaragua recibida:', appointmentData.appointment_date);
-      
-      // Normalizar nombres de campos
-      const normalizedData = {
-        Patient_ID: parseInt(appointmentData.Patient_ID || appointmentData.patient_id),
-        appointment_date: appointmentData.appointment_date,
-        query_type: appointmentData.query_type || 'Consulta general',
-        is_orthodontics: appointmentData.is_orthodontics || false,
-        observations: appointmentData.observations || null,
-        is_registered: false
-      };
-      
-      // Validar datos requeridos
-      if (!normalizedData.Patient_ID || !normalizedData.appointment_date) {
-        return res.status(400).json({ 
-          success: false, 
-          error: 'Paciente y fecha son requeridos' 
-        });
-      }
-      
-      // Verificar que el paciente exista
-      const { data: patient, error: patientError } = await supabaseAdmin
-        .from('patients')
-        .select('Patient_ID')
-        .eq('Patient_ID', normalizedData.Patient_ID)
-        .single();
-      
-      if (patientError || !patient) {
-        return res.status(404).json({ 
-          success: false, 
-          error: 'Paciente no encontrado' 
-        });
-      }
-      
-      // Convertir fecha de Nicaragua a UTC para guardar
-      console.log('🔄 Convirtiendo Nicaragua → UTC');
-      const appointmentDateUTC = toUTCFromNicaragua(normalizedData.appointment_date);
-      
-      console.log('📊 Resumen conversión:', {
-        horaNicaragua: normalizedData.appointment_date,
-        horaUTC: appointmentDateUTC.toISOString(),
-        diferenciaHoras: 'Nicaragua (UTC-6) → UTC (+6 horas)'
-      });
-      
-      // Crear la cita en UTC
-      const { data: newAppointment, error: createError } = await supabaseAdmin
-        .from('clinical_appointments')
-        .insert([{
-          ...normalizedData,
-          appointment_date: appointmentDateUTC.toISOString(), // GUARDAR EN UTC
-          state: 'scheduled',
-          is_registered: false
-        }])
-        .select(`
-          *,
-          patients (
-            first_name,
-            first_last_name,
-            identification
-          )
-        `)
-        .single();
-      
-      if (createError) throw createError;
-      
-      // Para la respuesta, convertir UTC → Nicaragua
-      const formattedAppointment = {
-        ...newAppointment,
-        appointment_date: formatNicaraguaDateTime(newAppointment.appointment_date), // Mostrar en Nicaragua
-        appointment_date_utc: newAppointment.appointment_date, // Mantener UTC
-        patient_name: `${newAppointment.patients?.first_name || ''} ${newAppointment.patients?.first_last_name || ''}`.trim(),
-        patient_identification: newAppointment.patients?.identification,
-        is_registered: newAppointment.is_registered || false
-      };
-      
-      res.status(201).json({ 
-        success: true, 
-        message: 'Cita creada exitosamente',
-        data: formattedAppointment 
-      });
-    } catch (error) {
-      console.error('Error al crear cita:', error);
-      res.status(500).json({ 
+  // Crear cita - SIN CONVERSIONES de zona horaria
+  // appointmentController.js - create method (VERSIÓN FINAL)
+create: async (req, res) => {
+  try {
+    const appointmentData = req.body;
+    
+    console.log('📥 Datos recibidos para crear cita:', appointmentData);
+    console.log('🕐 Hora recibida del frontend (EXACTA):', appointmentData.appointment_date);
+    
+    // Validar datos requeridos
+    if (!appointmentData.Patient_ID || !appointmentData.appointment_date) {
+      return res.status(400).json({ 
         success: false, 
-        error: error.message || 'Error al crear cita' 
+        error: 'Paciente y fecha son requeridos' 
       });
     }
-  },
+    
+    // Verificar que el paciente exista
+    const { data: patient, error: patientError } = await supabaseAdmin
+      .from('patients')
+      .select('Patient_ID')
+      .eq('Patient_ID', appointmentData.Patient_ID)
+      .single();
+    
+    if (patientError || !patient) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Paciente no encontrada' 
+      });
+    }
+    
+    // IMPORTANTE: NO validar con Date() porque puede añadir conversiones
+    // Solo verificar que tenga formato válido
+    if (!appointmentData.appointment_date.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Formato de fecha/hora inválido. Use YYYY-MM-DDTHH:mm:ss' 
+      });
+    }
+    
+    // Guardar EXACTAMENTE lo que viene del frontend
+    const appointmentToInsert = {
+      Patient_ID: appointmentData.Patient_ID,
+      appointment_date: appointmentData.appointment_date, // EXACTAMENTE igual
+      query_type: appointmentData.query_type || 'Consulta general',
+      state: 'scheduled',
+      is_orthodontics: appointmentData.is_orthodontics || false,
+      observations: appointmentData.observations || null,
+      is_registered: false
+    };
+    
+    console.log('📊 Guardando en BD (EXACTO):', appointmentToInsert);
+    
+    // Crear la cita
+    const { data: newAppointment, error: createError } = await supabaseAdmin
+      .from('clinical_appointments')
+      .insert([appointmentToInsert])
+      .select(`
+        *,
+        patients (
+          first_name,
+          first_last_name,
+          identification
+        )
+      `)
+      .single();
+    
+    if (createError) {
+      console.error('Error de Supabase:', createError);
+      throw createError;
+    }
+    
+    // Para mostrar al usuario: NO convertir, interpretar directamente
+    // La fecha ya está en formato "2024-01-28T14:00:00"
+    // Parsearla directamente
+    const [datePart, timePart] = newAppointment.appointment_date.split('T');
+    const [year, month, day] = datePart.split('-');
+    const [hours, minutes, seconds] = timePart.split(':');
+    
+    // Crear fecha manualmente para evitar conversiones automáticas
+    const dateObj = new Date(
+      parseInt(year),
+      parseInt(month) - 1,
+      parseInt(day),
+      parseInt(hours),
+      parseInt(minutes),
+      parseInt(seconds)
+    );
+    
+    const formattedDate = dateObj.toLocaleString('es-NI', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
+    
+    console.log('🔄 MOSTRAR al usuario:', {
+      bd: newAppointment.appointment_date,
+      fechaObjeto: dateObj.toISOString(),
+      mostrado: formattedDate
+    });
+    
+    const formattedAppointment = {
+      ...newAppointment,
+      appointment_date: formattedDate,
+      patient_name: `${newAppointment.patients?.first_name || ''} ${newAppointment.patients?.first_last_name || ''}`.trim(),
+      patient_identification: newAppointment.patients?.identification,
+      is_registered: newAppointment.is_registered || false
+    };
+    
+    res.status(201).json({ 
+      success: true, 
+      message: 'Cita creada exitosamente',
+      data: formattedAppointment 
+    });
+  } catch (error) {
+    console.error('Error al crear cita:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Error al crear cita' 
+    });
+  }
+},
 
   // Actualizar cita
   update: async (req, res) => {
@@ -292,13 +328,22 @@ const appointmentController = {
         });
       }
       
-      // Si se actualiza la fecha, convertir a UTC
+      // Si se actualiza la fecha, guardar tal cual
       const updateData = { ...appointmentData };
       if (updateData.appointment_date) {
-        console.log('🔄 Convirtiendo fecha para actualizar:', updateData.appointment_date);
-        const appointmentDateUTC = toUTCFromNicaragua(updateData.appointment_date);
-        updateData.appointment_date = appointmentDateUTC.toISOString();
-        console.log('📤 Guardando en UTC:', updateData.appointment_date);
+        console.log('📅 Procesando fecha para actualizar:', updateData.appointment_date);
+        
+        const newDate = new Date(updateData.appointment_date);
+        
+        if (isNaN(newDate.getTime())) {
+          return res.status(400).json({ 
+            success: false, 
+            error: 'Fecha/hora inválida' 
+          });
+        }
+        
+        // Crear string en formato ISO SIN conversiones
+        updateData.appointment_date = newDate.toISOString().replace('Z', '');
       }
       
       const { data, error } = await supabaseAdmin
@@ -310,11 +355,21 @@ const appointmentController = {
       
       if (error) throw error;
       
-      // Formatear fecha para respuesta (UTC → Nicaragua)
+      // Formatear fecha para respuesta (SIN conversión)
+      const fechaBD = new Date(data.appointment_date);
+      const formattedDate = fechaBD.toLocaleString('es-NI', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+      });
+      
       const formattedAppointment = {
         ...data,
-        appointment_date: formatNicaraguaDateTime(data.appointment_date),
-        appointment_date_utc: data.appointment_date,
+        appointment_date: formattedDate,
         is_registered: data.is_registered || false
       };
       
@@ -368,22 +423,14 @@ const appointmentController = {
         });
       }
       
-      // Validar que haya al menos un método de pago
-      if (!procedureData.payment_method_cordobas && !procedureData.payment_method_dollars) {
-        return res.status(400).json({ 
-          success: false, 
-          error: 'Debe especificar al menos un método de pago' 
-        });
-      }
-      
-      // La fecha del procedimiento se mantiene en UTC (misma que la cita)
-      console.log('📅 Fecha del procedimiento (manteniendo UTC):', appointment.appointment_date);
+      // La fecha del procedimiento se mantiene igual
+      console.log('📅 Fecha del procedimiento:', appointment.appointment_date);
       
       // Preparar datos para insertar
       const procedureToInsert = {
         appointment_ID: id,
         Patient_ID: appointment.Patient_ID,
-        procedure_date: appointment.appointment_date, // Mantener UTC
+        procedure_date: appointment.appointment_date, // Mantener igual
         procedure_description: procedureData.procedure_description,
         total_cost: procedureData.total_cost || 0,
         total_cost_USD: procedureData.total_cost_USD || 0,
@@ -391,7 +438,7 @@ const appointmentController = {
         payment_method: procedureData.payment_method || 'Mixto',
         is_orthodontics: appointment.is_orthodontics,
         observations: procedureData.observations || appointment.observations,
-        creation_date: new Date().toISOString(),
+        creation_date: new Date().toISOString().replace('Z', ''),
         // Campos de pagos múltiples
         amount_cordobas: procedureData.amount_cordobas || 0,
         amount_dollars: procedureData.amount_dollars || 0,
@@ -446,18 +493,38 @@ const appointmentController = {
         throw new Error(`Error al actualizar cita: ${updateError.message}`);
       }
       
-      // Formatear fechas para respuesta
+      // Formatear fechas para respuesta (SIN conversión)
+      const updatedDate = new Date(updatedAppointment.appointment_date);
+      const formattedUpdatedDate = updatedDate.toLocaleString('es-NI', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+      });
+      
+      const procedureDate = new Date(procedure.procedure_date);
+      const formattedProcedureDate = procedureDate.toLocaleString('es-NI', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+      });
+      
       const formattedAppointment = {
         ...updatedAppointment,
-        appointment_date: formatNicaraguaDateTime(updatedAppointment.appointment_date),
-        appointment_date_utc: updatedAppointment.appointment_date,
+        appointment_date: formattedUpdatedDate,
         is_registered: true
       };
       
       const formattedProcedure = {
         ...procedure,
-        procedure_date: formatNicaraguaDateTime(procedure.procedure_date),
-        procedure_date_utc: procedure.procedure_date
+        procedure_date: formattedProcedureDate
       };
       
       res.json({ 
@@ -515,11 +582,21 @@ const appointmentController = {
       
       if (error) throw error;
       
-      // Formatear fecha para respuesta
+      // Formatear fecha para respuesta (SIN conversión)
+      const fechaBD = new Date(data.appointment_date);
+      const formattedDate = fechaBD.toLocaleString('es-NI', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+      });
+      
       const formattedAppointment = {
         ...data,
-        appointment_date: formatNicaraguaDateTime(data.appointment_date),
-        appointment_date_utc: data.appointment_date,
+        appointment_date: formattedDate,
         is_registered: data.is_registered || false
       };
       
@@ -537,15 +614,14 @@ const appointmentController = {
     }
   },
 
-  // Obtener citas por fecha (Nicaragua)
+  // Obtener citas por fecha
   getByDate: async (req, res) => {
     try {
       const { date } = req.params;
-      console.log('📅 Buscando citas para fecha Nicaragua:', date);
+      console.log('📅 Buscando citas para fecha:', date);
       
-      // Crear rango de fechas en UTC para consulta
-      const { start, end } = createNicaraguaDateRange(date);
-      console.log('🕐 Rango UTC para consulta:', { start, end });
+      const startNicaragua = `${date}T00:00:00`;
+      const endNicaragua = `${date}T23:59:59`;
       
       const { data, error } = await supabaseAdmin
         .from('clinical_appointments')
@@ -557,20 +633,32 @@ const appointmentController = {
             number_phone
           )
         `)
-        .gte('appointment_date', start)
-        .lte('appointment_date', end)
+        .gte('appointment_date', startNicaragua)
+        .lte('appointment_date', endNicaragua)
         .order('appointment_date', { ascending: true });
       
       if (error) throw error;
       
-      const transformedData = data.map(item => ({
-        ...item,
-        appointment_date: formatNicaraguaDateTime(item.appointment_date),
-        appointment_date_utc: item.appointment_date,
-        patient_name: `${item.patients?.first_name || ''} ${item.patients?.first_last_name || ''}`.trim(),
-        patient_phone: item.patients?.number_phone,
-        is_registered: item.is_registered || false
-      }));
+      const transformedData = data.map(item => {
+        const fechaBD = new Date(item.appointment_date);
+        const formattedDate = fechaBD.toLocaleString('es-NI', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true
+        });
+        
+        return {
+          ...item,
+          appointment_date: formattedDate,
+          patient_name: `${item.patients?.first_name || ''} ${item.patients?.first_last_name || ''}`.trim(),
+          patient_phone: item.patients?.number_phone,
+          is_registered: item.is_registered || false
+        };
+      });
       
       res.json({ 
         success: true, 
@@ -598,12 +686,24 @@ const appointmentController = {
       
       if (error) throw error;
       
-      const transformedData = data.map(item => ({
-        ...item,
-        appointment_date: formatNicaraguaDateTime(item.appointment_date),
-        appointment_date_utc: item.appointment_date,
-        is_registered: item.is_registered || false
-      }));
+      const transformedData = data.map(item => {
+        const fechaBD = new Date(item.appointment_date);
+        const formattedDate = fechaBD.toLocaleString('es-NI', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true
+        });
+        
+        return {
+          ...item,
+          appointment_date: formattedDate,
+          is_registered: item.is_registered || false
+        };
+      });
       
       res.json({ 
         success: true, 

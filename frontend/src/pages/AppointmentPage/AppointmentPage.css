@@ -2567,3 +2567,55 @@ input:checked + .slider:before {
     font-size: 0.9rem;
   }
 }
+
+/* En AppointmentPage.css */
+.deduction-info {
+  background-color: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 4px;
+  padding: 8px;
+  margin-top: 5px;
+  font-size: 0.85em;
+}
+
+.deduction-info small {
+  color: #856404;
+}
+
+.warning-text {
+  color: #d63031 !important;
+  font-weight: bold;
+}
+
+.deduction-row {
+  color: #d63031;
+}
+
+.deduction-row .total-label {
+  font-weight: normal;
+}
+
+.deduction {
+  color: #d63031;
+}
+
+.total-deduction {
+  background-color: #ffeaa7;
+  padding: 8px;
+  border-radius: 4px;
+  margin: 5px 0;
+}
+
+.total-gross {
+  border-top: 2px solid #ddd;
+  padding-top: 10px;
+  margin-top: 10px;
+}
+
+.total-procedure {
+  background-color: #d4edda;
+  padding: 12px;
+  border-radius: 6px;
+  margin-top: 10px;
+  border: 1px solid #c3e6cb;
+}

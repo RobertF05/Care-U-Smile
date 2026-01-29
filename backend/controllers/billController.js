@@ -60,18 +60,25 @@ const billController = {
     }
   },
 
-  // Crear gasto
+  // Crear gasto CON SOPORTE PARA DÓLARES
   create: async (req, res) => {
     try {
       const billData = req.body;
       
       // Validar datos requeridos
-      if (!billData.description || !billData.amount || !billData.bill_date) {
+      if (!billData.description || (!billData.amount && !billData.amount_usd) || !billData.bill_date) {
         return res.status(400).json({ 
           success: false, 
           error: 'Descripción, monto y fecha son requeridos' 
         });
       }
+      
+      // Asegurar campos por defecto
+      billData.amount = parseFloat(billData.amount) || 0;
+      billData.amount_usd = parseFloat(billData.amount_usd) || 0;
+      billData.currency_used = billData.currency_used || 'NIO';
+      billData.exchange_rate_bill = parseFloat(billData.exchange_rate_bill) || 36.5;
+      billData.is_recurrent = billData.is_recurrent || false;
       
       const newBill = await Bill.create(billData);
       
@@ -84,12 +91,12 @@ const billController = {
       console.error('Error al crear gasto:', error);
       res.status(500).json({ 
         success: false, 
-        error: 'Error al crear gasto' 
+        error: error.message || 'Error al crear gasto' 
       });
     }
   },
 
-  // Actualizar gasto
+  // Actualizar gasto CON SOPORTE PARA DÓLARES
   update: async (req, res) => {
     try {
       const { id } = req.params;
@@ -103,6 +110,24 @@ const billController = {
         });
       }
       
+      // Si viene amount_usd (con guión), convertir a amount_usd (sin guión)
+      if (billData.amount_USD !== undefined) {
+        billData.amount_usd = billData.amount_USD;
+        delete billData.amount_USD;
+      }
+      
+      // Asegurar campos por defecto
+      if (billData.amount !== undefined) {
+        billData.amount = parseFloat(billData.amount) || 0;
+      }
+      
+      if (billData.amount_usd !== undefined) {
+        billData.amount_usd = parseFloat(billData.amount_usd) || 0;
+      }
+      
+      billData.currency_used = billData.currency_used || bill.currency_used || 'NIO';
+      billData.exchange_rate_bill = parseFloat(billData.exchange_rate_bill) || bill.exchange_rate_bill || 36.5;
+      
       const updatedBill = await Bill.update(id, billData);
       
       res.json({ 
@@ -114,7 +139,7 @@ const billController = {
       console.error('Error al actualizar gasto:', error);
       res.status(500).json({ 
         success: false, 
-        error: 'Error al actualizar gasto' 
+        error: error.message || 'Error al actualizar gasto' 
       });
     }
   },
@@ -142,7 +167,7 @@ const billController = {
       console.error('Error al eliminar gasto:', error);
       res.status(500).json({ 
         success: false, 
-        error: 'Error al eliminar gasto' 
+        error: error.message || 'Error al eliminar gasto' 
       });
     }
   },

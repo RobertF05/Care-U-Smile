@@ -4,9 +4,18 @@ import { supabaseAdmin } from '../config/supabase.js';
 import { formatNicaraguaDate } from '../utils/timezoneUtils.js';
 
 // Función formatCurrency local
-const formatCurrency = (amount) => {
+const formatCurrency = (amount, currency = 'NIO') => {
   if (amount === null || amount === undefined || isNaN(amount)) {
     amount = 0;
+  }
+  
+  if (currency === 'USD') {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(amount);
   }
   
   return new Intl.NumberFormat('es-NI', {
@@ -17,9 +26,61 @@ const formatCurrency = (amount) => {
   }).format(amount);
 };
 
+// Funciones auxiliares
+function getMonthNumber(month) {
+  const months = {
+    'ENERO': '01', 'FEBRERO': '02', 'MARZO': '03', 'ABRIL': '04',
+    'MAYO': '05', 'JUNIO': '06', 'JULIO': '07', 'AGOSTO': '08',
+    'SEPTIEMBRE': '09', 'OCTUBRE': '10', 'NOVIEMBRE': '11', 'DICIEMBRE': '12'
+  };
+  return months[month.toUpperCase()] || '01';
+}
+
+function getLastDayOfMonth(year, month) {
+  const monthNumber = getMonthNumber(month);
+  const lastDay = new Date(parseInt(year), parseInt(monthNumber), 0).getDate();
+  return `${year}-${monthNumber}-${lastDay}`;
+}
+
+// Función auxiliar para dibujar tabla en PDF
+function drawTableHeader(doc, startX, y, col1Width, col2Width, col3Width) {
+  const fontSize = 10;
+  
+  // Encabezados con fondo
+  doc.rect(startX, y, col1Width + col2Width + col3Width + 30, fontSize * 2.2)
+     .fillColor('#2196F3')
+     .fill();
+  
+  doc.fontSize(fontSize).font('Helvetica-Bold').fillColor('#FFFFFF');
+  doc.text('Descripción', startX + 10, y + 8);
+  doc.text('Total Córdobas', startX + col1Width + 10, y + 8, { width: col2Width, align: 'right' });
+  doc.text('Total Dólares', startX + col1Width + col2Width + 20, y + 8, { width: col3Width, align: 'right' });
+  
+  return y + fontSize * 2.2 + 5;
+}
+
+function drawTableRow(doc, startX, y, col1Width, col2Width, col3Width, col1Text, col2Value, col3Value, isSubtotal = false) {
+  const fontSize = isSubtotal ? 10 : 9;
+  const fontType = isSubtotal ? 'Helvetica-Bold' : 'Helvetica';
+  
+  doc.fontSize(fontSize).font(fontType).fillColor('#000000');
+  
+  // Columna 1: Descripción
+  doc.text(col1Text, startX + (isSubtotal ? 0 : 10), y, { width: col1Width - (isSubtotal ? 0 : 20) });
+  
+  // Columna 2: Córdobas
+  const cordobasText = typeof col2Value === 'number' ? formatCurrency(col2Value, 'NIO') : col2Value;
+  doc.text(cordobasText, startX + col1Width + 10, y, { width: col2Width, align: 'right' });
+  
+  // Columna 3: Dólares
+  const dollarsText = typeof col3Value === 'number' ? formatCurrency(col3Value, 'USD') : col3Value;
+  doc.text(dollarsText, startX + col1Width + col2Width + 20, y, { width: col3Width, align: 'right' });
+  
+  return y + fontSize * 1.5;
+}
+
 const exportController = {
-  // Exportar cierre mensual a PDF
-  // Exportar cierre mensual a PDF - CORREGIDO
+  // Exportar cierre mensual a PDF - FORMATO MEJORADO
   exportMonthlyPDF: async (req, res) => {
     try {
       const { closingId } = req.params;
@@ -59,6 +120,10 @@ const exportController = {
       
       if (proceduresError) throw proceduresError;
       
+      // Separar procedimientos generales y de ortodoncia
+      const generalProcedures = procedures ? procedures.filter(p => !p.is_orthodontics) : [];
+      const orthoProcedures = procedures ? procedures.filter(p => p.is_orthodontics) : [];
+      
       // Obtener gastos del período con desglose fijo/variable
       const { data: bills, error: billsError } = await supabaseAdmin
         .from('bills')
@@ -73,8 +138,31 @@ const exportController = {
       const fixedBills = bills ? bills.filter(bill => bill.is_recurrent) : [];
       const variableBills = bills ? bills.filter(bill => !bill.is_recurrent) : [];
       
-      // Crear documento PDF
-      const doc = new PDFDocument({ margin: 50, size: 'A4' });
+      // Calcular totales
+      const totalGeneralCordobas = generalProcedures.reduce((sum, p) => sum + (p.total_procedure || 0), 0);
+      const totalGeneralDollars = generalProcedures.reduce((sum, p) => sum + (p.total_procedure_usd || 0), 0);
+      const totalOrthoCordobas = orthoProcedures.reduce((sum, p) => sum + (p.total_procedure || 0), 0);
+      const totalOrthoDollars = orthoProcedures.reduce((sum, p) => sum + (p.total_procedure_usd || 0), 0);
+      const totalProceduresCordobas = totalGeneralCordobas + totalOrthoCordobas;
+      const totalProceduresDollars = totalGeneralDollars + totalOrthoDollars;
+      
+      // Calcular totales de gastos
+      const totalFixedCordobas = fixedBills.reduce((sum, b) => sum + (b.amount_cordobas || b.amount || 0), 0);
+      const totalFixedDollars = fixedBills.reduce((sum, b) => sum + (b.amount_usd || b.amount_dollars || 0), 0);
+      const totalVariableCordobas = variableBills.reduce((sum, b) => sum + (b.amount_cordobas || b.amount || 0), 0);
+      const totalVariableDollars = variableBills.reduce((sum, b) => sum + (b.amount_usd || b.amount_dollars || 0), 0);
+      const totalExpensesCordobas = totalFixedCordobas + totalVariableCordobas;
+      const totalExpensesDollars = totalFixedDollars + totalVariableDollars;
+      
+      const netProfitCordobas = totalProceduresCordobas - totalExpensesCordobas;
+      const netProfitDollars = totalProceduresDollars - totalExpensesDollars;
+      
+      // Crear documento PDF con márgenes mejorados
+      const doc = new PDFDocument({ 
+        margin: 50,
+        size: 'A4',
+        layout: 'portrait'
+      });
       
       // Configurar encabezados de respuesta
       res.setHeader('Content-Type', 'application/pdf');
@@ -83,268 +171,313 @@ const exportController = {
       // Pipe del documento a la respuesta
       doc.pipe(res);
       
-      // Función para agregar pie de página
-      const addFooter = (pageNumber, totalPages) => {
-        doc.fontSize(8).font('Helvetica').fillColor('#666666')
-          .text(`Página ${pageNumber} de ${totalPages}`, 50, doc.page.height - 50, { align: 'center' });
-        doc.text('Care U Smile - Sistema de Gestión Odontológica', 50, doc.page.height - 35, { align: 'center' });
-      };
-      
-      // Contador de páginas
-      let pageNumber = 1;
-      let totalPages = 1;
-      
-      // Encabezado
-      doc.fontSize(20).font('Helvetica-Bold').text('CARE U SMILE', { align: 'center' });
-      doc.moveDown(0.5);
-      doc.fontSize(16).font('Helvetica').text('Reporte de Cierre Mensual', { align: 'center' });
-      doc.moveDown(0.5);
-      doc.fontSize(14).text(`${closing.month.toUpperCase()} ${closing.year}`, { align: 'center' });
-      doc.moveDown(1);
-      doc.fontSize(10).text(`Fecha de generación: ${formatNicaraguaDate(new Date().toISOString())}`, { align: 'right' });
-      doc.moveDown(2);
-      
-      // Sección 1: Resumen Ejecutivo
-      doc.fontSize(14).font('Helvetica-Bold').text('RESUMEN EJECUTIVO', { underline: true });
+      // =========== ENCABEZADO MEJORADO ===========
+      doc.fontSize(20).font('Helvetica-Bold').fillColor('#2196F3')
+         .text('CARE U SMILE', { align: 'center' });
+      doc.moveDown(0.3);
+      doc.fontSize(14).font('Helvetica').fillColor('#000000')
+         .text('Reporte de Cierre Mensual', { align: 'center' });
+      doc.moveDown(0.3);
+      doc.fontSize(12).text(`${closing.month.toUpperCase()} ${closing.year}`, { align: 'center' });
       doc.moveDown(1);
       
-      const summaryData = [
-        ['DESCRIPCIÓN', 'VALOR'],
-        ['INGRESOS', ''],
-        ['Procedimientos Generales (100% clínica)', formatCurrency(closing.total_general_income)],
-        ['Ortodoncia (40% Clínica)', formatCurrency(closing.total_clinical_orthodontic_income)],
-        ['TOTAL INGRESOS CLÍNICA', formatCurrency(closing.total_general_income + closing.total_clinical_orthodontic_income)],
-        ['', ''],
-        ['GASTOS', ''],
-        ['Gastos Fijos', formatCurrency(closing.total_fixed_expenses)],
-        ['Gastos Variables', formatCurrency(closing.total_variable_expenses)],
-        ['TOTAL GASTOS', formatCurrency(closing.total_fixed_expenses + closing.total_variable_expenses)],
-        ['', ''],
-        ['RESULTADO FINAL', ''],
-        ['Ingresos Totales Clínica', formatCurrency(closing.total_general_income + closing.total_clinical_orthodontic_income)],
-        ['Gastos Totales', formatCurrency(closing.total_fixed_expenses + closing.total_variable_expenses)],
-        ['UTILIDAD NETA', formatCurrency(closing.net_profit)]
-      ];
+      // Línea separadora
+      doc.moveTo(50, doc.y).lineTo(550, doc.y).strokeColor('#CCCCCC').stroke();
+      doc.moveDown(1);
       
-      const summaryTableTop = doc.y;
-      const summaryTableLeft = 50;
-      const summaryColWidths = [300, 150];
+      // Información de fecha
+      doc.fontSize(9).text(`Fecha de generación: ${formatNicaraguaDate(new Date().toISOString())}`, { align: 'right' });
+      doc.moveDown(1.5);
       
-      doc.font('Helvetica');
-      summaryData.forEach((row, rowIndex) => {
-        const y = summaryTableTop + (rowIndex * 20);
-        
-        if (row[0] === 'INGRESOS' || row[0] === 'GASTOS' || row[0] === 'RESULTADO FINAL') {
-          doc.font('Helvetica-Bold').fillColor('#000000');
-          doc.rect(summaryTableLeft, y, summaryColWidths[0] + summaryColWidths[1], 20).fill('#F0F0F0');
-        } else if (row[0] === 'UTILIDAD NETA') {
-          doc.font('Helvetica-Bold').fillColor(closing.net_profit >= 0 ? '#4CAF50' : '#F44336');
-        } else {
-          doc.font('Helvetica').fillColor('#000000');
-        }
-        
-        doc.text(row[0], summaryTableLeft + 5, y + 5, { width: summaryColWidths[0] - 10, continued: false });
-        doc.text(row[1] || '', summaryTableLeft + summaryColWidths[0] + 5, y + 5, { width: summaryColWidths[1] - 10, align: 'right' });
-      });
+      // Dimensiones de tabla
+      const startX = 50;
+      const col1Width = 250;
+      const col2Width = 100;
+      const col3Width = 100;
+      let currentY = doc.y;
       
-      // Agregar pie de página a la primera página
-      addFooter(pageNumber, totalPages);
+      // =========== SECCIÓN INGRESOS ===========
+      doc.fontSize(14).font('Helvetica-Bold').fillColor('#4CAF50')
+         .text('* INGRESOS', { underline: true });
+      doc.moveDown(0.5);
       
-      // Sección 2: Detalle de Procedimientos
-      if (procedures && procedures.length > 0) {
-        doc.addPage();
-        pageNumber++;
-        totalPages++;
-        
-        doc.fontSize(14).font('Helvetica-Bold').text('DETALLE DE PROCEDIMIENTOS', { underline: true });
-        doc.moveDown(1);
-        
-        const procData = [
-          ['FECHA', 'PACIENTE', 'PROCEDIMIENTO', 'MONTO']
-        ];
-        
-        procedures.forEach(proc => {
+      // Encabezado de tabla
+      currentY = drawTableHeader(doc, startX, doc.y, col1Width, col2Width, col3Width);
+      doc.y = currentY;
+      
+      // Subsección: Consultas Generales
+      doc.fontSize(10).font('Helvetica-Bold')
+         .text('- Consultas Generales', startX, doc.y);
+      doc.moveDown(0.3);
+      
+      // Lista de consultas generales
+      if (generalProcedures.length > 0) {
+        doc.fontSize(9).font('Helvetica');
+        generalProcedures.forEach((proc, index) => {
           const patientName = proc.patients ? 
             `${proc.patients.first_name || ''} ${proc.patients.first_last_name || ''}`.trim() : 
             'Sin paciente';
+          const procDesc = proc.procedure_description || 'Consulta';
           
-          procData.push([
-            formatNicaraguaDate(proc.procedure_date).split(' ')[0],
-            patientName.substring(0, 30),
-            proc.procedure_description || 'Sin descripción',
-            formatCurrency(proc.total_procedure || proc.total_cost || 0)
-          ]);
+          drawTableRow(
+            doc, startX, doc.y, col1Width, col2Width, col3Width,
+            `  ${index + 1}. ${procDesc} - ${patientName}`,
+            proc.total_procedure || 0,
+            proc.total_procedure_usd || 0
+          );
         });
-        
-        // Total
-        const totalAmount = procedures.reduce((sum, proc) => sum + (proc.total_procedure || proc.total_cost || 0), 0);
-        procData.push(['', '', 'TOTAL:', formatCurrency(totalAmount)]);
-        
-        const procTableTop = doc.y;
-        const procTableLeft = 30;
-        const procColWidths = [60, 100, 170, 80];
-        
-        doc.font('Helvetica');
-        procData.forEach((row, rowIndex) => {
-          const y = procTableTop + (rowIndex * 20);
-          
-          if (rowIndex === 0) {
-            doc.font('Helvetica-Bold').fillColor('#FFFFFF');
-            doc.rect(procTableLeft, y, procColWidths.reduce((a, b) => a + b, 0), 20).fill('#4CAF50');
-          } else if (rowIndex === procData.length - 1) {
-            doc.font('Helvetica-Bold').fillColor('#000000');
-          } else {
-            doc.font('Helvetica').fillColor('#000000');
-            if (rowIndex % 2 === 0) {
-              doc.rect(procTableLeft, y, procColWidths.reduce((a, b) => a + b, 0), 20).fill('#F9F9F9');
-            }
-          }
-          
-          doc.text(row[0], procTableLeft + 5, y + 5, { width: procColWidths[0] - 10 });
-          doc.text(row[1], procTableLeft + procColWidths[0] + 5, y + 5, { width: procColWidths[1] - 10 });
-          doc.text(row[2], procTableLeft + procColWidths[0] + procColWidths[1] + 5, y + 5, { width: procColWidths[2] - 10 });
-          doc.text(row[3], procTableLeft + procColWidths[0] + procColWidths[1] + procColWidths[2] + 5, y + 5, { width: procColWidths[3] - 10, align: 'right' });
-        });
-        
-        doc.moveDown(2);
-        
-        // Agregar pie de página a la segunda página
-        addFooter(pageNumber, totalPages);
+      } else {
+        doc.text('  No hay consultas generales', startX + 10, doc.y);
+        doc.moveDown(0.5);
       }
       
-      // Sección 3: Detalle de Gastos con desglose fijo/variable
-      if (bills && bills.length > 0) {
-        doc.addPage();
-        pageNumber++;
-        totalPages++;
-        
-        doc.fontSize(14).font('Helvetica-Bold').text('DETALLE DE GASTOS', { underline: true });
-        doc.moveDown(1);
-        
-        // Gastos Fijos
-        if (fixedBills.length > 0) {
-          doc.fontSize(12).font('Helvetica-Bold').fillColor('#2196F3').text('GASTOS FIJOS', { underline: true });
-          doc.moveDown(0.5);
+      // Línea separadora antes del subtotal
+      doc.moveDown(0.3);
+      doc.moveTo(startX + 10, doc.y).lineTo(startX + col1Width + col2Width + col3Width + 20, doc.y)
+         .strokeColor('#CCCCCC').stroke();
+      doc.moveDown(0.3);
+      
+      // Subtotal General
+      doc.y = drawTableRow(
+        doc, startX, doc.y, col1Width, col2Width, col3Width,
+        '- Subtotal General',
+        totalGeneralCordobas,
+        totalGeneralDollars,
+        true
+      );
+      
+      doc.moveDown(0.8);
+      
+      // Subsección: Consultas de Ortodoncia
+      doc.fontSize(10).font('Helvetica-Bold')
+         .text('- Consultas de Ortodoncia', startX, doc.y);
+      doc.moveDown(0.3);
+      
+      // Lista de consultas de ortodoncia
+      if (orthoProcedures.length > 0) {
+        doc.fontSize(9).font('Helvetica');
+        orthoProcedures.forEach((proc, index) => {
+          const patientName = proc.patients ? 
+            `${proc.patients.first_name || ''} ${proc.patients.first_last_name || ''}`.trim() : 
+            'Sin paciente';
+          const procDesc = proc.procedure_description || 'Ortodoncia';
           
-          const fixedData = [
-            ['FECHA', 'DESCRIPCIÓN', 'CATEGORÍA', 'MONTO']
-          ];
-          
-          fixedBills.forEach(bill => {
-            fixedData.push([
-              formatNicaraguaDate(bill.bill_date).split(' ')[0],
-              bill.description || 'Sin descripción',
-              bill.category || 'No categorizado',
-              formatCurrency(bill.amount || 0)
-            ]);
-          });
-          
-          const fixedTotal = fixedBills.reduce((sum, bill) => sum + (bill.amount || 0), 0);
-          fixedData.push(['', '', 'SUBTOTAL GASTOS FIJOS:', formatCurrency(fixedTotal)]);
-          
-          const fixedTableTop = doc.y;
-          const fixedTableLeft = 30;
-          const fixedColWidths = [60, 130, 100, 80];
-          
-          fixedData.forEach((row, rowIndex) => {
-            const y = fixedTableTop + (rowIndex * 20);
-            
-            if (rowIndex === 0) {
-              doc.font('Helvetica-Bold').fillColor('#FFFFFF');
-              doc.rect(fixedTableLeft, y, fixedColWidths.reduce((a, b) => a + b, 0), 20).fill('#2196F3');
-            } else if (rowIndex === fixedData.length - 1) {
-              doc.font('Helvetica-Bold').fillColor('#000000');
-            } else {
-              doc.font('Helvetica').fillColor('#000000');
-              if (rowIndex % 2 === 0) {
-                doc.rect(fixedTableLeft, y, fixedColWidths.reduce((a, b) => a + b, 0), 20).fill('#F0F7FF');
-              }
-            }
-            
-            doc.text(row[0], fixedTableLeft + 5, y + 5, { width: fixedColWidths[0] - 10 });
-            doc.text(row[1], fixedTableLeft + fixedColWidths[0] + 5, y + 5, { width: fixedColWidths[1] - 10 });
-            doc.text(row[2], fixedTableLeft + fixedColWidths[0] + fixedColWidths[1] + 5, y + 5, { width: fixedColWidths[2] - 10 });
-            doc.text(row[3], fixedTableLeft + fixedColWidths[0] + fixedColWidths[1] + fixedColWidths[2] + 5, y + 5, { width: fixedColWidths[3] - 10, align: 'right' });
-          });
-          
-          doc.moveDown(2);
-        }
-        
-        // Gastos Variables
-        if (variableBills.length > 0) {
-          doc.fontSize(12).font('Helvetica-Bold').fillColor('#FF9800').text('GASTOS VARIABLES', { underline: true });
-          doc.moveDown(0.5);
-          
-          const variableData = [
-            ['FECHA', 'DESCRIPCIÓN', 'CATEGORÍA', 'MONTO']
-          ];
-          
-          variableBills.forEach(bill => {
-            variableData.push([
-              formatNicaraguaDate(bill.bill_date).split(' ')[0],
-              bill.description || 'Sin descripción',
-              bill.category || 'No categorizado',
-              formatCurrency(bill.amount || 0)
-            ]);
-          });
-          
-          const variableTotal = variableBills.reduce((sum, bill) => sum + (bill.amount || 0), 0);
-          variableData.push(['', '', 'SUBTOTAL GASTOS VARIABLES:', formatCurrency(variableTotal)]);
-          
-          const variableTableTop = doc.y;
-          const variableTableLeft = 30;
-          const variableColWidths = [60, 130, 100, 80];
-          
-          variableData.forEach((row, rowIndex) => {
-            const y = variableTableTop + (rowIndex * 20);
-            
-            if (rowIndex === 0) {
-              doc.font('Helvetica-Bold').fillColor('#FFFFFF');
-              doc.rect(variableTableLeft, y, variableColWidths.reduce((a, b) => a + b, 0), 20).fill('#FF9800');
-            } else if (rowIndex === variableData.length - 1) {
-              doc.font('Helvetica-Bold').fillColor('#000000');
-            } else {
-              doc.font('Helvetica').fillColor('#000000');
-              if (rowIndex % 2 === 0) {
-                doc.rect(variableTableLeft, y, variableColWidths.reduce((a, b) => a + b, 0), 20).fill('#FFF8E1');
-              }
-            }
-            
-            doc.text(row[0], variableTableLeft + 5, y + 5, { width: variableColWidths[0] - 10 });
-            doc.text(row[1], variableTableLeft + variableColWidths[0] + 5, y + 5, { width: variableColWidths[1] - 10 });
-            doc.text(row[2], variableTableLeft + variableColWidths[0] + variableColWidths[1] + 5, y + 5, { width: variableColWidths[2] - 10 });
-            doc.text(row[3], variableTableLeft + variableColWidths[0] + variableColWidths[1] + variableColWidths[2] + 5, y + 5, { width: variableColWidths[3] - 10, align: 'right' });
-          });
-          
-          doc.moveDown(1);
-          
-          // Total de todos los gastos
-          doc.fontSize(12).font('Helvetica-Bold').text('TOTAL GENERAL DE GASTOS:', { continued: true });
-          doc.font('Helvetica').text(` ${formatCurrency((fixedBills.reduce((sum, bill) => sum + (bill.amount || 0), 0) + variableBills.reduce((sum, bill) => sum + (bill.amount || 0), 0)))}`, { align: 'right' });
-        }
-        
-        // Agregar pie de página a la tercera página
-        addFooter(pageNumber, totalPages);
+          drawTableRow(
+            doc, startX, doc.y, col1Width, col2Width, col3Width,
+            `  ${index + 1}. ${procDesc} - ${patientName}`,
+            proc.total_procedure || 0,
+            proc.total_procedure_usd || 0
+          );
+        });
+      } else {
+        doc.text('  No hay consultas de ortodoncia', startX + 10, doc.y);
+        doc.moveDown(0.5);
       }
+      
+      // Línea separadora antes del subtotal
+      doc.moveDown(0.3);
+      doc.moveTo(startX + 10, doc.y).lineTo(startX + col1Width + col2Width + col3Width + 20, doc.y)
+         .strokeColor('#CCCCCC').stroke();
+      doc.moveDown(0.3);
+      
+      // Subtotal Ortodoncia
+      doc.y = drawTableRow(
+        doc, startX, doc.y, col1Width, col2Width, col3Width,
+        '- Subtotal Ortodoncia',
+        totalOrthoCordobas,
+        totalOrthoDollars,
+        true
+      );
+      
+      doc.moveDown(0.8);
+      
+      // Línea gruesa antes del total
+      doc.moveTo(startX, doc.y).lineTo(startX + col1Width + col2Width + col3Width + 30, doc.y)
+         .strokeColor('#000000').lineWidth(1.5).stroke();
+      doc.moveDown(0.5);
+      
+      // Total Procedimientos
+      doc.y = drawTableRow(
+        doc, startX, doc.y, col1Width, col2Width, col3Width,
+        'TOTAL PROCEDIMIENTOS',
+        totalProceduresCordobas,
+        totalProceduresDollars,
+        true
+      );
+      doc.moveDown(1.5);
+      
+      // =========== SECCIÓN GASTOS ===========
+      doc.fontSize(14).font('Helvetica-Bold').fillColor('#FF9800')
+         .text('* GASTOS', { underline: true });
+      doc.moveDown(0.5);
+      
+      // Encabezado de tabla para gastos
+      currentY = drawTableHeader(doc, startX, doc.y, col1Width, col2Width, col3Width);
+      doc.y = currentY;
+      
+      // Subsección: Gastos Fijos
+      doc.fontSize(10).font('Helvetica-Bold')
+         .text('- Gastos Fijos', startX, doc.y);
+      doc.moveDown(0.3);
+      
+      // Lista de gastos fijos
+      if (fixedBills.length > 0) {
+        doc.fontSize(9).font('Helvetica');
+        fixedBills.forEach((bill, index) => {
+          const desc = bill.description || 'Gasto fijo';
+          
+          drawTableRow(
+            doc, startX, doc.y, col1Width, col2Width, col3Width,
+            `  ${index + 1}. ${desc}`,
+            bill.amount_cordobas || bill.amount || 0,
+            bill.amount_usd || bill.amount_dollars || 0
+          );
+        });
+      } else {
+        doc.text('  No hay gastos fijos', startX + 10, doc.y);
+        doc.moveDown(0.5);
+      }
+      
+      // Línea separadora antes del subtotal
+      doc.moveDown(0.3);
+      doc.moveTo(startX + 10, doc.y).lineTo(startX + col1Width + col2Width + col3Width + 20, doc.y)
+         .strokeColor('#CCCCCC').stroke();
+      doc.moveDown(0.3);
+      
+      // Subtotal Gastos Fijos
+      doc.y = drawTableRow(
+        doc, startX, doc.y, col1Width, col2Width, col3Width,
+        '- Subtotal Gastos Fijos',
+        totalFixedCordobas,
+        totalFixedDollars,
+        true
+      );
+      
+      doc.moveDown(0.8);
+      
+      // Subsección: Gastos Variables
+      doc.fontSize(10).font('Helvetica-Bold')
+         .text('- Gastos Variables', startX, doc.y);
+      doc.moveDown(0.3);
+      
+      // Lista de gastos variables
+      if (variableBills.length > 0) {
+        doc.fontSize(9).font('Helvetica');
+        variableBills.forEach((bill, index) => {
+          const desc = bill.description || 'Gasto variable';
+          
+          drawTableRow(
+            doc, startX, doc.y, col1Width, col2Width, col3Width,
+            `  ${index + 1}. ${desc}`,
+            bill.amount_cordobas || bill.amount || 0,
+            bill.amount_usd || bill.amount_dollars || 0
+          );
+        });
+      } else {
+        doc.text('  No hay gastos variables', startX + 10, doc.y);
+        doc.moveDown(0.5);
+      }
+      
+      // Línea separadora antes del subtotal
+      doc.moveDown(0.3);
+      doc.moveTo(startX + 10, doc.y).lineTo(startX + col1Width + col2Width + col3Width + 20, doc.y)
+         .strokeColor('#CCCCCC').stroke();
+      doc.moveDown(0.3);
+      
+      // Subtotal Gastos Variables
+      doc.y = drawTableRow(
+        doc, startX, doc.y, col1Width, col2Width, col3Width,
+        '- Subtotal Gastos Variables',
+        totalVariableCordobas,
+        totalVariableDollars,
+        true
+      );
+      
+      doc.moveDown(0.8);
+      
+      // Línea gruesa antes del total
+      doc.moveTo(startX, doc.y).lineTo(startX + col1Width + col2Width + col3Width + 30, doc.y)
+         .strokeColor('#000000').lineWidth(1.5).stroke();
+      doc.moveDown(0.5);
+      
+      // Total Gastos
+      doc.y = drawTableRow(
+        doc, startX, doc.y, col1Width, col2Width, col3Width,
+        'TOTAL GASTOS',
+        totalExpensesCordobas,
+        totalExpensesDollars,
+        true
+      );
+      doc.moveDown(1.5);
+      
+      // =========== SECCIÓN RESULTADO FINAL ===========
+      doc.fontSize(14).font('Helvetica-Bold').fillColor('#9C27B0')
+         .text('* RESULTADO FINAL', { underline: true });
+      doc.moveDown(0.8);
+      
+      // Marco para resumen final
+      const summaryBoxY = doc.y;
+      doc.rect(startX - 5, summaryBoxY - 10, 510, 120)
+         .strokeColor('#9C27B0')
+         .lineWidth(1)
+         .stroke();
+      
+      // Fila 1: Ingresos Totales
+      doc.fontSize(12).font('Helvetica-Bold')
+         .text('Ingresos Totales:', startX + 10, summaryBoxY);
+      doc.fontSize(12).font('Helvetica')
+         .text(formatCurrency(totalProceduresCordobas, 'NIO'), startX + 150, summaryBoxY);
+      doc.text(formatCurrency(totalProceduresDollars, 'USD'), startX + 350, summaryBoxY, { align: 'right' });
+      
+      // Fila 2: Gastos Totales
+      doc.fontSize(12).font('Helvetica-Bold')
+         .text('Gastos Totales:', startX + 10, summaryBoxY + 25);
+      doc.fontSize(12).font('Helvetica')
+         .text(`-${formatCurrency(totalExpensesCordobas, 'NIO')}`, startX + 150, summaryBoxY + 25);
+      doc.text(`-${formatCurrency(totalExpensesDollars, 'USD')}`, startX + 350, summaryBoxY + 25, { align: 'right' });
+      
+      // Línea separadora
+      doc.moveTo(startX + 10, summaryBoxY + 50).lineTo(startX + 500, summaryBoxY + 50)
+         .strokeColor('#9C27B0').stroke();
+      
+      // Fila 3: Utilidad Neta (DESTACADA)
+      doc.fontSize(14).font('Helvetica-Bold')
+         .text('UTILIDAD NETA:', startX + 10, summaryBoxY + 65);
+      doc.fontSize(14).font('Helvetica-Bold')
+         .fillColor(netProfitCordobas >= 0 ? '#4CAF50' : '#F44336')
+         .text(formatCurrency(netProfitCordobas, 'NIO'), startX + 150, summaryBoxY + 65);
+      doc.text(formatCurrency(netProfitDollars, 'USD'), startX + 350, summaryBoxY + 65, { align: 'right' });
+      doc.fillColor('#000000');
+      
+      // Fila 4: Margen de Utilidad
+      if (totalProceduresCordobas > 0) {
+        const profitMargin = ((netProfitCordobas / totalProceduresCordobas) * 100).toFixed(2);
+        doc.fontSize(12).font('Helvetica-Bold')
+           .text('Margen de Utilidad:', startX + 10, summaryBoxY + 95);
+        doc.fontSize(12).font('Helvetica-Bold')
+           .fillColor(profitMargin >= 0 ? '#4CAF50' : '#F44336')
+           .text(`${profitMargin}%`, startX + 150, summaryBoxY + 95);
+      }
+      
+      doc.y = summaryBoxY + 140;
       
       // Comentarios
       if (closing.comentary) {
-        doc.addPage();
-        pageNumber++;
-        totalPages++;
-        
-        doc.fontSize(14).font('Helvetica-Bold').text('COMENTARIOS ADICIONALES', { underline: true });
         doc.moveDown(1);
-        doc.fontSize(11).font('Helvetica').text(closing.comentary, { align: 'justify' });
-        
-        // Agregar pie de página a la página de comentarios
-        addFooter(pageNumber, totalPages);
+        doc.fontSize(10).font('Helvetica-Bold').text('COMENTARIOS:', { underline: true });
+        doc.moveDown(0.5);
+        doc.fontSize(9).font('Helvetica').text(closing.comentary, { 
+          width: 500,
+          align: 'left' 
+        });
       }
       
-      // Actualizar pies de página en todas las páginas anteriores
-      // Esta es una solución alternativa que evita el error switchToPage
-      // Nota: No podemos retroceder a páginas anteriores fácilmente en PDFKit
-      // La mejor práctica es agregar el pie de página inmediatamente después de cada página
+      // Pie de página
+      doc.fontSize(8).font('Helvetica').fillColor('#666666')
+         .text('Care U Smile - Sistema de Gestión Odontológica', 50, doc.page.height - 40, { 
+           align: 'center',
+           width: 500 
+         });
       
       doc.end();
       
@@ -357,7 +490,7 @@ const exportController = {
     }
   },
 
-  // Exportar cierre diario a PDF
+  // Exportar cierre diario a PDF - FORMATO MEJORADO
   exportDailyPDF: async (req, res) => {
     try {
       const { closingId } = req.params;
@@ -395,6 +528,23 @@ const exportController = {
       
       if (relationsError) throw relationsError;
       
+      // Separar procedimientos por tipo
+      const generalProcedures = [];
+      const orthoProcedures = [];
+      
+      if (procedureRelations) {
+        procedureRelations.forEach(relation => {
+          const proc = relation.procedures;
+          if (!proc) return;
+          
+          if (proc.is_orthodontics) {
+            orthoProcedures.push(proc);
+          } else {
+            generalProcedures.push(proc);
+          }
+        });
+      }
+      
       // Obtener gastos del día
       const { data: bills, error: billsError } = await supabaseAdmin
         .from('bills')
@@ -408,318 +558,341 @@ const exportController = {
       const fixedBills = bills ? bills.filter(bill => bill.is_recurrent) : [];
       const variableBills = bills ? bills.filter(bill => !bill.is_recurrent) : [];
       
+      // Calcular totales
+      const totalGeneralCordobas = generalProcedures.reduce((sum, p) => sum + (p.total_procedure || 0), 0);
+      const totalGeneralDollars = generalProcedures.reduce((sum, p) => sum + (p.total_procedure_usd || 0), 0);
+      const totalOrthoCordobas = orthoProcedures.reduce((sum, p) => sum + (p.total_procedure || 0), 0);
+      const totalOrthoDollars = orthoProcedures.reduce((sum, p) => sum + (p.total_procedure_usd || 0), 0);
+      const totalProceduresCordobas = totalGeneralCordobas + totalOrthoCordobas;
+      const totalProceduresDollars = totalGeneralDollars + totalOrthoDollars;
+      
+      // Calcular totales de gastos
+      const totalFixedCordobas = fixedBills.reduce((sum, b) => sum + (b.amount_cordobas || b.amount || 0), 0);
+      const totalFixedDollars = fixedBills.reduce((sum, b) => sum + (b.amount_usd || b.amount_dollars || 0), 0);
+      const totalVariableCordobas = variableBills.reduce((sum, b) => sum + (b.amount_cordobas || b.amount || 0), 0);
+      const totalVariableDollars = variableBills.reduce((sum, b) => sum + (b.amount_usd || b.amount_dollars || 0), 0);
+      const totalExpensesCordobas = totalFixedCordobas + totalVariableCordobas;
+      const totalExpensesDollars = totalFixedDollars + totalVariableDollars;
+      
+      const netProfitCordobas = totalProceduresCordobas - totalExpensesCordobas;
+      const netProfitDollars = totalProceduresDollars - totalExpensesDollars;
+      
       // Crear documento PDF
-      const doc = new PDFDocument({ margin: 50, size: 'A4' });
+      const doc = new PDFDocument({ 
+        margin: 50,
+        size: 'A4',
+        layout: 'portrait'
+      });
       
       // Configurar encabezados de respuesta
       res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="Cierre_Diario_${formatNicaraguaDate(closing.closing_date).replace(/\//g, '-')}_${closing.closing_type}_${new Date().toISOString().split('T')[0]}.pdf"`);
+      const fileName = `Cierre_Diario_${formatNicaraguaDate(closing.closing_date).replace(/\//g, '-')}_${closing.closing_type}_${new Date().toISOString().split('T')[0]}.pdf`;
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
       
       // Pipe del documento a la respuesta
       doc.pipe(res);
       
-      // Función para agregar pie de página
-      const addFooter = (pageNumber, totalPages) => {
-        doc.fontSize(8).font('Helvetica').fillColor('#666666')
-          .text(`Página ${pageNumber} de ${totalPages}`, 50, doc.page.height - 50, { align: 'center' });
-        doc.text('Care U Smile - Sistema de Gestión Odontológica', 50, doc.page.height - 35, { align: 'center' });
-      };
+      // =========== ENCABEZADO ===========
+      doc.fontSize(20).font('Helvetica-Bold').fillColor('#2196F3')
+         .text('CARE U SMILE', { align: 'center' });
+      doc.moveDown(0.3);
+      doc.fontSize(14).font('Helvetica').fillColor('#000000')
+         .text('Reporte de Cierre Diario', { align: 'center' });
+      doc.moveDown(0.3);
       
-      // Contador de páginas
-      let pageNumber = 1;
-      let totalPages = 1;
-      
-      // Encabezado
-      doc.fontSize(20).font('Helvetica-Bold').text('CARE U SMILE', { align: 'center' });
-      doc.moveDown(0.5);
-      doc.fontSize(16).font('Helvetica').text('Reporte de Cierre Diario', { align: 'center' });
-      doc.moveDown(0.5);
-      doc.fontSize(14).text(`Fecha: ${formatNicaraguaDate(closing.closing_date)}`, { align: 'center' });
-      
+      let dateText = `Fecha: ${formatNicaraguaDate(closing.closing_date)}`;
       if (closing.closing_type === 'orthodontics') {
-        doc.fontSize(12).text('(Cierre de Ortodoncia)', { align: 'center', color: '#9C27B0' });
+        dateText += ' (Ortodoncia)';
       }
       
-      doc.moveDown(1);
-      doc.fontSize(10).text(`Fecha de generación: ${formatNicaraguaDate(new Date().toISOString())}`, { align: 'right' });
-      doc.moveDown(2);
-      
-      // Sección 1: Resumen del Día
-      doc.fontSize(14).font('Helvetica-Bold').text('RESUMEN DEL DÍA', { underline: true });
+      doc.fontSize(12).text(dateText, { align: 'center' });
       doc.moveDown(1);
       
-      const summaryData = [
-        ['DESCRIPCIÓN', 'VALOR'],
-        ['Ingresos Totales', formatCurrency(closing.total_income)],
-        ['Ingresos Clínica', formatCurrency(closing.total_clinic_income)]
-      ];
+      // Línea separadora
+      doc.moveTo(50, doc.y).lineTo(550, doc.y).strokeColor('#CCCCCC').stroke();
+      doc.moveDown(1);
       
-      // Agregar pago doctora solo para ortodoncia
-      if (closing.closing_type === 'orthodontics') {
-        summaryData.push(['Pago Doctora Ortodoncia (60%)', formatCurrency(closing.total_doctor_income)]);
-      }
+      // Información de fecha
+      doc.fontSize(9).text(`Fecha de generación: ${formatNicaraguaDate(new Date().toISOString())}`, { align: 'right' });
+      doc.moveDown(1.5);
       
-      // Agregar pagos externos si existen
-      if (closing.total_external_doctor_payments > 0) {
-        summaryData.push(['Pagos Doctores Externos', formatCurrency(closing.total_external_doctor_payments)]);
-      }
+      // Dimensiones de tabla
+      const startX = 50;
+      const col1Width = 250;
+      const col2Width = 100;
+      const col3Width = 100;
       
-      summaryData.push(
-        ['Gastos del Día', formatCurrency(closing.total_expenses || 0)],
-        ['', ''],
-        ['UTILIDAD NETA', formatCurrency(closing.net_profit)]
-      );
+      // =========== SECCIÓN INGRESOS ===========
+      doc.fontSize(14).font('Helvetica-Bold').fillColor('#4CAF50')
+         .text('* INGRESOS', { underline: true });
+      doc.moveDown(0.5);
       
-      if (closing.total_clinic_income > 0) {
-        const profitMargin = ((closing.net_profit / closing.total_clinic_income) * 100).toFixed(2);
-        summaryData.push(['Margen de Utilidad', `${profitMargin}%`]);
-      }
+      // Encabezado de tabla
+      let currentY = drawTableHeader(doc, startX, doc.y, col1Width, col2Width, col3Width);
+      doc.y = currentY;
       
-      const summaryTableTop = doc.y;
-      const summaryTableLeft = 50;
-      const summaryColWidths = [300, 150];
+      // Subsección: Consultas Generales
+      doc.fontSize(10).font('Helvetica-Bold')
+         .text('- Consultas Generales', startX, doc.y);
+      doc.moveDown(0.3);
       
-      doc.font('Helvetica');
-      summaryData.forEach((row, rowIndex) => {
-        const y = summaryTableTop + (rowIndex * 20);
-        
-        if (row[0] === 'UTILIDAD NETA') {
-          doc.font('Helvetica-Bold').fillColor(closing.net_profit >= 0 ? '#4CAF50' : '#F44336');
-        } else if (row[0] === 'DESCRIPCIÓN') {
-          doc.font('Helvetica-Bold').fillColor('#FFFFFF');
-          doc.rect(summaryTableLeft, y, summaryColWidths[0] + summaryColWidths[1], 20).fill('#2196F3');
-        } else {
-          doc.font('Helvetica').fillColor('#000000');
-        }
-        
-        doc.text(row[0], summaryTableLeft + 5, y + 5, { width: summaryColWidths[0] - 10, continued: false });
-        doc.text(row[1] || '', summaryTableLeft + summaryColWidths[0] + 5, y + 5, { width: summaryColWidths[1] - 10, align: 'right' });
-      });
-      
-      // Agregar pie de página a la primera página
-      addFooter(pageNumber, totalPages);
-      
-      // Sección 2: Detalle de Procedimientos
-      if (procedureRelations && procedureRelations.length > 0) {
-        doc.addPage();
-        pageNumber++;
-        totalPages++;
-        
-        doc.fontSize(14).font('Helvetica-Bold').text('DETALLE DE PROCEDIMIENTOS', { underline: true });
-        doc.moveDown(1);
-        
-        const procData = [
-          ['FECHA', 'PACIENTE', 'PROCEDIMIENTO', 'TOTAL', 'CLÍNICA', 'DOCTORA', 'EXTERNO']
-        ];
-        
-        let totalClinic = 0;
-        let totalDoctor = 0;
-        let totalExternal = 0;
-        
-        procedureRelations.forEach(relation => {
-          const proc = relation.procedures;
-          if (!proc) return;
-          
+      // Lista de consultas generales
+      if (generalProcedures.length > 0) {
+        doc.fontSize(9).font('Helvetica');
+        generalProcedures.forEach((proc, index) => {
           const patientName = proc.patients ? 
             `${proc.patients.first_name || ''} ${proc.patients.first_last_name || ''}`.trim() : 
             'Sin paciente';
+          const procDesc = proc.procedure_description || 'Consulta';
           
-          procData.push([
-            formatNicaraguaDate(proc.procedure_date).split(' ')[0],
-            patientName.substring(0, 20),
-            proc.procedure_description || 'Sin descripción',
-            formatCurrency(proc.total_procedure || proc.total_cost || 0),
-            formatCurrency(relation.clinic_income_portion || 0),
-            formatCurrency(relation.doctor_income_portion || 0),
-            formatCurrency(relation.external_doctor_payment || 0)
-          ]);
-          
-          totalClinic += relation.clinic_income_portion || 0;
-          totalDoctor += relation.doctor_income_portion || 0;
-          totalExternal += relation.external_doctor_payment || 0;
+          drawTableRow(
+            doc, startX, doc.y, col1Width, col2Width, col3Width,
+            `  ${index + 1}. ${procDesc} - ${patientName}`,
+            proc.total_procedure || 0,
+            proc.total_procedure_usd || 0
+          );
         });
-        
-        // Totales
-        procData.push(['', '', '', '', '', '', '']);
-        procData.push(['TOTAL CLÍNICA:', '', '', '', formatCurrency(totalClinic), '', '']);
-        
-        if (closing.closing_type === 'orthodontics') {
-          procData.push(['TOTAL DOCTORA:', '', '', '', '', formatCurrency(totalDoctor), '']);
-        }
-        
-        if (totalExternal > 0) {
-          procData.push(['TOTAL EXTERNOS:', '', '', '', '', '', formatCurrency(totalExternal)]);
-        }
-        
-        procData.push(['TOTAL GENERAL:', '', '', formatCurrency(totalClinic + totalDoctor + totalExternal), '', '', '']);
-        
-        const procTableTop = doc.y;
-        const procTableLeft = 20;
-        const procColWidths = [50, 70, 110, 50, 50, 50, 50];
-        
-        doc.font('Helvetica');
-        procData.forEach((row, rowIndex) => {
-          const y = procTableTop + (rowIndex * 20);
-          
-          if (rowIndex === 0) {
-            doc.font('Helvetica-Bold').fillColor('#FFFFFF');
-            doc.rect(procTableLeft, y, procColWidths.reduce((a, b) => a + b, 0), 20).fill('#4CAF50');
-          } else if (rowIndex >= procData.length - 5) {
-            doc.font('Helvetica-Bold').fillColor('#000000');
-          } else {
-            doc.font('Helvetica').fillColor('#000000');
-            if (rowIndex % 2 === 0) {
-              doc.rect(procTableLeft, y, procColWidths.reduce((a, b) => a + b, 0), 20).fill('#F9F9F9');
-            }
-          }
-          
-          // Ajustar texto para cada columna
-          row.forEach((cell, cellIndex) => {
-            const x = procTableLeft + procColWidths.slice(0, cellIndex).reduce((a, b) => a + b, 0) + 5;
-            const align = cellIndex >= 3 ? 'right' : 'left';
-            doc.text(cell, x, y + 5, { 
-              width: procColWidths[cellIndex] - 10, 
-              align: align 
-            });
-          });
-        });
-        
-        doc.moveDown(2);
-        
-        // Agregar pie de página a la segunda página
-        addFooter(pageNumber, totalPages);
+      } else {
+        doc.text('  No hay consultas generales', startX + 10, doc.y);
+        doc.moveDown(0.5);
       }
       
-      // Sección 3: Detalle de Gastos
-      if (bills && bills.length > 0) {
-        doc.addPage();
-        pageNumber++;
-        totalPages++;
-        
-        doc.fontSize(14).font('Helvetica-Bold').text('DETALLE DE GASTOS', { underline: true });
-        doc.moveDown(1);
-        
-        // Gastos Fijos
-        if (fixedBills.length > 0) {
-          doc.fontSize(12).font('Helvetica-Bold').fillColor('#2196F3').text('GASTOS FIJOS', { underline: true });
-          doc.moveDown(0.5);
+      // Línea separadora antes del subtotal
+      doc.moveDown(0.3);
+      doc.moveTo(startX + 10, doc.y).lineTo(startX + col1Width + col2Width + col3Width + 20, doc.y)
+         .strokeColor('#CCCCCC').stroke();
+      doc.moveDown(0.3);
+      
+      // Subtotal General
+      doc.y = drawTableRow(
+        doc, startX, doc.y, col1Width, col2Width, col3Width,
+        '- Subtotal General',
+        totalGeneralCordobas,
+        totalGeneralDollars,
+        true
+      );
+      
+      doc.moveDown(0.8);
+      
+      // Subsección: Consultas de Ortodoncia
+      doc.fontSize(10).font('Helvetica-Bold')
+         .text('- Consultas de Ortodoncia', startX, doc.y);
+      doc.moveDown(0.3);
+      
+      // Lista de consultas de ortodoncia
+      if (orthoProcedures.length > 0) {
+        doc.fontSize(9).font('Helvetica');
+        orthoProcedures.forEach((proc, index) => {
+          const patientName = proc.patients ? 
+            `${proc.patients.first_name || ''} ${proc.patients.first_last_name || ''}`.trim() : 
+            'Sin paciente';
+          const procDesc = proc.procedure_description || 'Ortodoncia';
           
-          const fixedData = [
-            ['FECHA', 'DESCRIPCIÓN', 'CATEGORÍA', 'MONTO']
-          ];
-          
-          fixedBills.forEach(bill => {
-            fixedData.push([
-              formatNicaraguaDate(bill.bill_date).split(' ')[0],
-              bill.description || 'Sin descripción',
-              bill.category || 'No categorizado',
-              formatCurrency(bill.amount || 0)
-            ]);
-          });
-          
-          const fixedTotal = fixedBills.reduce((sum, bill) => sum + (bill.amount || 0), 0);
-          fixedData.push(['', '', 'SUBTOTAL GASTOS FIJOS:', formatCurrency(fixedTotal)]);
-          
-          const fixedTableTop = doc.y;
-          const fixedTableLeft = 30;
-          const fixedColWidths = [60, 130, 100, 80];
-          
-          fixedData.forEach((row, rowIndex) => {
-            const y = fixedTableTop + (rowIndex * 20);
-            
-            if (rowIndex === 0) {
-              doc.font('Helvetica-Bold').fillColor('#FFFFFF');
-              doc.rect(fixedTableLeft, y, fixedColWidths.reduce((a, b) => a + b, 0), 20).fill('#2196F3');
-            } else if (rowIndex === fixedData.length - 1) {
-              doc.font('Helvetica-Bold').fillColor('#000000');
-            } else {
-              doc.font('Helvetica').fillColor('#000000');
-              if (rowIndex % 2 === 0) {
-                doc.rect(fixedTableLeft, y, fixedColWidths.reduce((a, b) => a + b, 0), 20).fill('#F0F7FF');
-              }
-            }
-            
-            doc.text(row[0], fixedTableLeft + 5, y + 5, { width: fixedColWidths[0] - 10 });
-            doc.text(row[1], fixedTableLeft + fixedColWidths[0] + 5, y + 5, { width: fixedColWidths[1] - 10 });
-            doc.text(row[2], fixedTableLeft + fixedColWidths[0] + fixedColWidths[1] + 5, y + 5, { width: fixedColWidths[2] - 10 });
-            doc.text(row[3], fixedTableLeft + fixedColWidths[0] + fixedColWidths[1] + fixedColWidths[2] + 5, y + 5, { width: fixedColWidths[3] - 10, align: 'right' });
-          });
-          
-          doc.moveDown(2);
-        }
-        
-        // Gastos Variables
-        if (variableBills.length > 0) {
-          doc.fontSize(12).font('Helvetica-Bold').fillColor('#FF9800').text('GASTOS VARIABLES', { underline: true });
-          doc.moveDown(0.5);
-          
-          const variableData = [
-            ['FECHA', 'DESCRIPCIÓN', 'CATEGORÍA', 'MONTO']
-          ];
-          
-          variableBills.forEach(bill => {
-            variableData.push([
-              formatNicaraguaDate(bill.bill_date).split(' ')[0],
-              bill.description || 'Sin descripción',
-              bill.category || 'No categorizado',
-              formatCurrency(bill.amount || 0)
-            ]);
-          });
-          
-          const variableTotal = variableBills.reduce((sum, bill) => sum + (bill.amount || 0), 0);
-          variableData.push(['', '', 'SUBTOTAL GASTOS VARIABLES:', formatCurrency(variableTotal)]);
-          
-          const variableTableTop = doc.y;
-          const variableTableLeft = 30;
-          const variableColWidths = [60, 130, 100, 80];
-          
-          variableData.forEach((row, rowIndex) => {
-            const y = variableTableTop + (rowIndex * 20);
-            
-            if (rowIndex === 0) {
-              doc.font('Helvetica-Bold').fillColor('#FFFFFF');
-              doc.rect(variableTableLeft, y, variableColWidths.reduce((a, b) => a + b, 0), 20).fill('#FF9800');
-            } else if (rowIndex === variableData.length - 1) {
-              doc.font('Helvetica-Bold').fillColor('#000000');
-            } else {
-              doc.font('Helvetica').fillColor('#000000');
-              if (rowIndex % 2 === 0) {
-                doc.rect(variableTableLeft, y, variableColWidths.reduce((a, b) => a + b, 0), 20).fill('#FFF8E1');
-              }
-            }
-            
-            doc.text(row[0], variableTableLeft + 5, y + 5, { width: variableColWidths[0] - 10 });
-            doc.text(row[1], variableTableLeft + variableColWidths[0] + 5, y + 5, { width: variableColWidths[1] - 10 });
-            doc.text(row[2], variableTableLeft + variableColWidths[0] + variableColWidths[1] + 5, y + 5, { width: variableColWidths[2] - 10 });
-            doc.text(row[3], variableTableLeft + variableColWidths[0] + variableColWidths[1] + variableColWidths[2] + 5, y + 5, { width: variableColWidths[3] - 10, align: 'right' });
-          });
-          
-          doc.moveDown(1);
-          
-          // Total de todos los gastos
-          const totalGastos = (fixedBills.reduce((sum, bill) => sum + (bill.amount || 0), 0) + 
-                              variableBills.reduce((sum, bill) => sum + (bill.amount || 0), 0));
-          doc.fontSize(12).font('Helvetica-Bold').text('TOTAL GENERAL DE GASTOS:', { continued: true });
-          doc.font('Helvetica').text(` ${formatCurrency(totalGastos)}`, { align: 'right' });
-        }
-        
-        // Agregar pie de página a la tercera página
-        addFooter(pageNumber, totalPages);
+          drawTableRow(
+            doc, startX, doc.y, col1Width, col2Width, col3Width,
+            `  ${index + 1}. ${procDesc} - ${patientName}`,
+            proc.total_procedure || 0,
+            proc.total_procedure_usd || 0
+          );
+        });
+      } else {
+        doc.text('  No hay consultas de ortodoncia', startX + 10, doc.y);
+        doc.moveDown(0.5);
       }
+      
+      // Línea separadora antes del subtotal
+      doc.moveDown(0.3);
+      doc.moveTo(startX + 10, doc.y).lineTo(startX + col1Width + col2Width + col3Width + 20, doc.y)
+         .strokeColor('#CCCCCC').stroke();
+      doc.moveDown(0.3);
+      
+      // Subtotal Ortodoncia
+      doc.y = drawTableRow(
+        doc, startX, doc.y, col1Width, col2Width, col3Width,
+        '- Subtotal Ortodoncia',
+        totalOrthoCordobas,
+        totalOrthoDollars,
+        true
+      );
+      
+      doc.moveDown(0.8);
+      
+      // Línea gruesa antes del total
+      doc.moveTo(startX, doc.y).lineTo(startX + col1Width + col2Width + col3Width + 30, doc.y)
+         .strokeColor('#000000').lineWidth(1.5).stroke();
+      doc.moveDown(0.5);
+      
+      // Total Procedimientos
+      doc.y = drawTableRow(
+        doc, startX, doc.y, col1Width, col2Width, col3Width,
+        'TOTAL PROCEDIMIENTOS',
+        totalProceduresCordobas,
+        totalProceduresDollars,
+        true
+      );
+      doc.moveDown(1.5);
+      
+      // =========== SECCIÓN GASTOS ===========
+      doc.fontSize(14).font('Helvetica-Bold').fillColor('#FF9800')
+         .text('* GASTOS', { underline: true });
+      doc.moveDown(0.5);
+      
+      // Encabezado de tabla para gastos
+      currentY = drawTableHeader(doc, startX, doc.y, col1Width, col2Width, col3Width);
+      doc.y = currentY;
+      
+      // Subsección: Gastos Fijos
+      doc.fontSize(10).font('Helvetica-Bold')
+         .text('- Gastos Fijos', startX, doc.y);
+      doc.moveDown(0.3);
+      
+      // Lista de gastos fijos
+      if (fixedBills.length > 0) {
+        doc.fontSize(9).font('Helvetica');
+        fixedBills.forEach((bill, index) => {
+          const desc = bill.description || 'Gasto fijo';
+          
+          drawTableRow(
+            doc, startX, doc.y, col1Width, col2Width, col3Width,
+            `  ${index + 1}. ${desc}`,
+            bill.amount_cordobas || bill.amount || 0,
+            bill.amount_usd || bill.amount_dollars || 0
+          );
+        });
+      } else {
+        doc.text('  No hay gastos fijos', startX + 10, doc.y);
+        doc.moveDown(0.5);
+      }
+      
+      // Línea separadora antes del subtotal
+      doc.moveDown(0.3);
+      doc.moveTo(startX + 10, doc.y).lineTo(startX + col1Width + col2Width + col3Width + 20, doc.y)
+         .strokeColor('#CCCCCC').stroke();
+      doc.moveDown(0.3);
+      
+      // Subtotal Gastos Fijos
+      doc.y = drawTableRow(
+        doc, startX, doc.y, col1Width, col2Width, col3Width,
+        '- Subtotal Gastos Fijos',
+        totalFixedCordobas,
+        totalFixedDollars,
+        true
+      );
+      
+      doc.moveDown(0.8);
+      
+      // Subsección: Gastos Variables
+      doc.fontSize(10).font('Helvetica-Bold')
+         .text('- Gastos Variables', startX, doc.y);
+      doc.moveDown(0.3);
+      
+      // Lista de gastos variables
+      if (variableBills.length > 0) {
+        doc.fontSize(9).font('Helvetica');
+        variableBills.forEach((bill, index) => {
+          const desc = bill.description || 'Gasto variable';
+          
+          drawTableRow(
+            doc, startX, doc.y, col1Width, col2Width, col3Width,
+            `  ${index + 1}. ${desc}`,
+            bill.amount_cordobas || bill.amount || 0,
+            bill.amount_usd || bill.amount_dollars || 0
+          );
+        });
+      } else {
+        doc.text('  No hay gastos variables', startX + 10, doc.y);
+        doc.moveDown(0.5);
+      }
+      
+      // Línea separadora antes del subtotal
+      doc.moveDown(0.3);
+      doc.moveTo(startX + 10, doc.y).lineTo(startX + col1Width + col2Width + col3Width + 20, doc.y)
+         .strokeColor('#CCCCCC').stroke();
+      doc.moveDown(0.3);
+      
+      // Subtotal Gastos Variables
+      doc.y = drawTableRow(
+        doc, startX, doc.y, col1Width, col2Width, col3Width,
+        '- Subtotal Gastos Variables',
+        totalVariableCordobas,
+        totalVariableDollars,
+        true
+      );
+      
+      doc.moveDown(0.8);
+      
+      // Línea gruesa antes del total
+      doc.moveTo(startX, doc.y).lineTo(startX + col1Width + col2Width + col3Width + 30, doc.y)
+         .strokeColor('#000000').lineWidth(1.5).stroke();
+      doc.moveDown(0.5);
+      
+      // Total Gastos
+      doc.y = drawTableRow(
+        doc, startX, doc.y, col1Width, col2Width, col3Width,
+        'TOTAL GASTOS',
+        totalExpensesCordobas,
+        totalExpensesDollars,
+        true
+      );
+      doc.moveDown(1.5);
+      
+      // =========== SECCIÓN RESULTADO FINAL ===========
+      doc.fontSize(14).font('Helvetica-Bold').fillColor('#9C27B0')
+         .text('* RESULTADO FINAL', { underline: true });
+      doc.moveDown(0.8);
+      
+      // Marco para resumen final
+      const summaryBoxY = doc.y;
+      doc.rect(startX - 5, summaryBoxY - 10, 510, 100)
+         .strokeColor('#9C27B0')
+         .lineWidth(1)
+         .stroke();
+      
+      // Fila 1: Ingresos Totales
+      doc.fontSize(12).font('Helvetica-Bold')
+         .text('Ingresos Totales:', startX + 10, summaryBoxY);
+      doc.fontSize(12).font('Helvetica')
+         .text(formatCurrency(totalProceduresCordobas, 'NIO'), startX + 150, summaryBoxY);
+      doc.text(formatCurrency(totalProceduresDollars, 'USD'), startX + 350, summaryBoxY, { align: 'right' });
+      
+      // Fila 2: Gastos Totales
+      doc.fontSize(12).font('Helvetica-Bold')
+         .text('Gastos Totales:', startX + 10, summaryBoxY + 25);
+      doc.fontSize(12).font('Helvetica')
+         .text(`-${formatCurrency(totalExpensesCordobas, 'NIO')}`, startX + 150, summaryBoxY + 25);
+      doc.text(`-${formatCurrency(totalExpensesDollars, 'USD')}`, startX + 350, summaryBoxY + 25, { align: 'right' });
+      
+      // Línea separadora
+      doc.moveTo(startX + 10, summaryBoxY + 50).lineTo(startX + 500, summaryBoxY + 50)
+         .strokeColor('#9C27B0').stroke();
+      
+      // Fila 3: Utilidad Neta (DESTACADA)
+      doc.fontSize(14).font('Helvetica-Bold')
+         .text('UTILIDAD NETA:', startX + 10, summaryBoxY + 65);
+      doc.fontSize(14).font('Helvetica-Bold')
+         .fillColor(netProfitCordobas >= 0 ? '#4CAF50' : '#F44336')
+         .text(formatCurrency(netProfitCordobas, 'NIO'), startX + 150, summaryBoxY + 65);
+      doc.text(formatCurrency(netProfitDollars, 'USD'), startX + 350, summaryBoxY + 65, { align: 'right' });
+      
+      doc.y = summaryBoxY + 120;
       
       // Comentarios
       if (closing.comentary) {
-        doc.addPage();
-        pageNumber++;
-        totalPages++;
-        
-        doc.fontSize(14).font('Helvetica-Bold').text('OBSERVACIONES', { underline: true });
         doc.moveDown(1);
-        doc.fontSize(11).font('Helvetica').text(closing.comentary, { align: 'justify' });
-        
-        // Agregar pie de página a la página de comentarios
-        addFooter(pageNumber, totalPages);
+        doc.fontSize(10).font('Helvetica-Bold').text('COMENTARIOS:', { underline: true });
+        doc.moveDown(0.5);
+        doc.fontSize(9).font('Helvetica').text(closing.comentary, { 
+          width: 500,
+          align: 'left' 
+        });
       }
+      
+      // Pie de página
+      doc.fontSize(8).font('Helvetica').fillColor('#666666')
+         .text('Care U Smile - Sistema de Gestión Odontológica', 50, doc.page.height - 40, { 
+           align: 'center',
+           width: 500 
+         });
       
       doc.end();
       
@@ -732,7 +905,7 @@ const exportController = {
     }
   },
 
-  // Exportar cierre mensual a Excel con formato vertical y desglose
+  // Exportar cierre mensual a Excel con NUEVO FORMATO
   exportMonthlyToExcelDetailed: async (req, res) => {
     try {
       const { closingId } = req.params;
@@ -772,7 +945,11 @@ const exportController = {
       
       if (proceduresError) throw proceduresError;
       
-      // Obtener gastos del período con desglose
+      // Separar procedimientos generales y de ortodoncia
+      const generalProcedures = procedures ? procedures.filter(p => !p.is_orthodontics) : [];
+      const orthoProcedures = procedures ? procedures.filter(p => p.is_orthodontics) : [];
+      
+      // Obtener gastos del período con desglose fijo/variable
       const { data: bills, error: billsError } = await supabaseAdmin
         .from('bills')
         .select('*')
@@ -786,408 +963,370 @@ const exportController = {
       const fixedBills = bills ? bills.filter(bill => bill.is_recurrent) : [];
       const variableBills = bills ? bills.filter(bill => !bill.is_recurrent) : [];
       
+      // Calcular totales
+      const totalGeneralCordobas = generalProcedures.reduce((sum, p) => sum + (p.total_procedure || 0), 0);
+      const totalGeneralDollars = generalProcedures.reduce((sum, p) => sum + (p.total_procedure_usd || 0), 0);
+      const totalOrthoCordobas = orthoProcedures.reduce((sum, p) => sum + (p.total_procedure || 0), 0);
+      const totalOrthoDollars = orthoProcedures.reduce((sum, p) => sum + (p.total_procedure_usd || 0), 0);
+      const totalProceduresCordobas = totalGeneralCordobas + totalOrthoCordobas;
+      const totalProceduresDollars = totalGeneralDollars + totalOrthoDollars;
+      
+      // Calcular totales de gastos
+      const totalFixedCordobas = fixedBills.reduce((sum, b) => sum + (b.amount_cordobas || b.amount || 0), 0);
+      const totalFixedDollars = fixedBills.reduce((sum, b) => sum + (b.amount_usd || b.amount_dollars || 0), 0);
+      const totalVariableCordobas = variableBills.reduce((sum, b) => sum + (b.amount_cordobas || b.amount || 0), 0);
+      const totalVariableDollars = variableBills.reduce((sum, b) => sum + (b.amount_usd || b.amount_dollars || 0), 0);
+      const totalExpensesCordobas = totalFixedCordobas + totalVariableCordobas;
+      const totalExpensesDollars = totalFixedDollars + totalVariableDollars;
+      
+      const netProfitCordobas = totalProceduresCordobas - totalExpensesCordobas;
+      const netProfitDollars = totalProceduresDollars - totalExpensesDollars;
+      
       // Crear workbook de Excel
       const workbook = new ExcelJS.Workbook();
       workbook.creator = 'Care U Smile';
       workbook.created = new Date();
       
-      // Hoja 1: Resumen Ejecutivo (formato vertical como PDF)
-      const summarySheet = workbook.addWorksheet('RESUMEN EJECUTIVO');
+      // Hoja 1: RESUMEN MENSUAL (NUEVO FORMATO)
+      const summarySheet = workbook.addWorksheet('RESUMEN MENSUAL');
       
       // Configurar anchos de columna
       summarySheet.columns = [
-        { header: 'DESCRIPCIÓN', key: 'description', width: 40 },
-        { header: 'VALOR', key: 'value', width: 25 }
+        { header: 'CONSULTAS', key: 'description', width: 40 },
+        { header: 'TOTAL CÓRDOBAS', key: 'cordobas', width: 20 },
+        { header: 'TOTAL DÓLARES', key: 'dollars', width: 20 }
       ];
       
-      // Título - CAMBIO: Clínica Odontológica por Care U Smile
-      const titleRow = summarySheet.addRow(['CARE U SMILE', '']);
+      // Título
+      const titleRow = summarySheet.addRow(['CARE U SMILE', '', '']);
       titleRow.font = { bold: true, size: 16 };
       titleRow.alignment = { horizontal: 'center' };
-      summarySheet.mergeCells('A1:B1');
+      summarySheet.mergeCells('A1:C1');
       
-      summarySheet.addRow(['Reporte de Cierre Mensual', '']);
-      summarySheet.mergeCells('A2:B2');
+      summarySheet.addRow(['Reporte de Cierre Mensual', '', '']);
+      summarySheet.mergeCells('A2:C2');
       
-      summarySheet.addRow([`${closing.month.toUpperCase()} ${closing.year}`, '']);
-      summarySheet.mergeCells('A3:B3');
+      summarySheet.addRow([`${closing.month.toUpperCase()} ${closing.year}`, '', '']);
+      summarySheet.mergeCells('A3:C3');
       
-      summarySheet.addRow([`Fecha de generación: ${formatNicaraguaDate(new Date().toISOString())}`, '']);
-      summarySheet.mergeCells('A4:B4');
+      summarySheet.addRow([`Fecha de generación: ${formatNicaraguaDate(new Date().toISOString())}`, '', '']);
+      summarySheet.mergeCells('A4:C4');
       
-      summarySheet.addRow(['', '']); // Espacio
+      summarySheet.addRow(['', '', '']); // Espacio
       
-      // Encabezado de sección
-      const headerRow = summarySheet.addRow(['RESUMEN FINANCIERO', '']);
-      headerRow.font = { bold: true, size: 14 };
-      headerRow.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FF2196F3' }
-      };
-      headerRow.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-      summarySheet.mergeCells('A6:B6');
-      
-      summarySheet.addRow(['', '']); // Espacio
-      
-      // INGRESOS
-      const incomeHeader = summarySheet.addRow(['INGRESOS', '']);
-      incomeHeader.font = { bold: true };
+      // *INGRESOS
+      const incomeHeader = summarySheet.addRow(['*INGRESOS', '', '']);
+      incomeHeader.font = { bold: true, size: 14 };
       incomeHeader.fill = {
         type: 'pattern',
         pattern: 'solid',
         fgColor: { argb: 'FFE8F5E9' }
       };
-      summarySheet.mergeCells('A8:B8');
+      summarySheet.mergeCells('A6:C6');
       
-      summarySheet.addRow(['Procedimientos Generales (100% clínica)', closing.total_general_income]);
-      summarySheet.addRow(['Ortodoncia (40% Clínica)', closing.total_clinical_orthodontic_income]);
-      summarySheet.addRow(['TOTAL INGRESOS CLÍNICA', closing.total_general_income + closing.total_clinical_orthodontic_income]);
+      // Encabezado de tabla
+      const tableHeader = summarySheet.addRow(['Consultas', 'Total Córdobas', 'Total Dólares']);
+      tableHeader.font = { bold: true };
+      tableHeader.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF2196F3' }
+      };
+      tableHeader.font = { color: { argb: 'FFFFFFFF' }, bold: true };
       
-      // GASTOS - CAMBIO: Eliminar pago a doctora ortodoncia de cierres mensuales
-      const expensesHeader = summarySheet.addRow(['', '']);
-      summarySheet.addRow(['GASTOS', '']);
-      expensesHeader.font = { bold: true };
+      summarySheet.addRow(['', '', '']);
+      
+      // -Consultas Generales
+      const generalHeader = summarySheet.addRow(['-Consultas Generales', '', '']);
+      generalHeader.font = { bold: true };
+      
+      // Lista de consultas generales
+      if (generalProcedures.length > 0) {
+        generalProcedures.forEach(proc => {
+          const patientName = proc.patients ? 
+            `${proc.patients.first_name || ''} ${proc.patients.first_last_name || ''}`.trim() : 
+            'Sin paciente';
+          const procDesc = proc.procedure_description || 'Consulta';
+          
+          summarySheet.addRow([
+            `${procDesc} - ${patientName}`,
+            proc.total_procedure || 0,
+            proc.total_procedure_usd || 0
+          ]);
+        });
+      } else {
+        summarySheet.addRow(['No hay consultas generales', '', '']);
+      }
+      
+      summarySheet.addRow(['', '', '']);
+      
+      // -Subtotal General
+      const subtotalGeneral = summarySheet.addRow(['-Subtotal General', totalGeneralCordobas, totalGeneralDollars]);
+      subtotalGeneral.font = { bold: true };
+      subtotalGeneral.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFF1F8E9' }
+      };
+      
+      summarySheet.addRow(['', '', '']);
+      
+      // -Consultas de Ortodoncia
+      const orthoHeader = summarySheet.addRow(['-Consultas de Ortodoncia', '', '']);
+      orthoHeader.font = { bold: true };
+      
+      // Lista de consultas de ortodoncia
+      if (orthoProcedures.length > 0) {
+        orthoProcedures.forEach(proc => {
+          const patientName = proc.patients ? 
+            `${proc.patients.first_name || ''} ${proc.patients.first_last_name || ''}`.trim() : 
+            'Sin paciente';
+          const procDesc = proc.procedure_description || 'Ortodoncia';
+          
+          summarySheet.addRow([
+            `${procDesc} - ${patientName}`,
+            proc.total_procedure || 0,
+            proc.total_procedure_usd || 0
+          ]);
+        });
+      } else {
+        summarySheet.addRow(['No hay consultas de ortodoncia', '', '']);
+      }
+      
+      summarySheet.addRow(['', '', '']);
+      
+      // -Subtotal Ortodoncia
+      const subtotalOrtho = summarySheet.addRow(['-Subtotal Ortodoncia', totalOrthoCordobas, totalOrthoDollars]);
+      subtotalOrtho.font = { bold: true };
+      subtotalOrtho.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFF1F8E9' }
+      };
+      
+      summarySheet.addRow(['', '', '']);
+      
+      // -Total Procedimientos
+      const totalProceduresRow = summarySheet.addRow(['-Total Procedimientos', totalProceduresCordobas, totalProceduresDollars]);
+      totalProceduresRow.font = { bold: true, size: 12 };
+      totalProceduresRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFC8E6C9' }
+      };
+      
+      summarySheet.addRow(['', '', '']);
+      summarySheet.addRow(['', '', '']);
+      
+      // *GASTOS
+      const expensesHeader = summarySheet.addRow(['*GASTOS', '', '']);
+      expensesHeader.font = { bold: true, size: 14 };
       expensesHeader.fill = {
         type: 'pattern',
         pattern: 'solid',
         fgColor: { argb: 'FFFFF3E0' }
       };
-      summarySheet.mergeCells(`A${summarySheet.rowCount}:B${summarySheet.rowCount}`);
+      summarySheet.mergeCells(`A${summarySheet.rowCount}:C${summarySheet.rowCount}`);
       
-      summarySheet.addRow(['Gastos Fijos', closing.total_fixed_expenses]);
-      summarySheet.addRow(['Gastos Variables', closing.total_variable_expenses]);
-      // NOTA: Se elimina la fila de pago doctora ortodoncia para cierres mensuales
-      summarySheet.addRow(['TOTAL GASTOS', closing.total_fixed_expenses + closing.total_variable_expenses]);
+      // -Gastos Fijos
+      const fixedHeader = summarySheet.addRow(['-Gastos Fijos', '', '']);
+      fixedHeader.font = { bold: true };
       
-      summarySheet.addRow(['', '']); // Espacio
+      // Lista de gastos fijos
+      if (fixedBills.length > 0) {
+        fixedBills.forEach(bill => {
+          const desc = bill.description || 'Gasto fijo';
+          summarySheet.addRow([
+            desc,
+            bill.amount_cordobas || bill.amount || 0,
+            bill.amount_usd || bill.amount_dollars || 0
+          ]);
+        });
+      } else {
+        summarySheet.addRow(['No hay gastos fijos', '', '']);
+      }
       
-      // RESULTADO FINAL
-      const resultHeader = summarySheet.addRow(['RESULTADO FINAL', '']);
-      resultHeader.font = { bold: true, size: 12 };
+      summarySheet.addRow(['', '', '']);
+      
+      // -Subtotal Gastos Fijos
+      const subtotalFixed = summarySheet.addRow(['-Subtotal Gastos Fijos', totalFixedCordobas, totalFixedDollars]);
+      subtotalFixed.font = { bold: true };
+      subtotalFixed.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFF3F3F3' }
+      };
+      
+      summarySheet.addRow(['', '', '']);
+      
+      // -Gastos Variables
+      const variableHeader = summarySheet.addRow(['-Gastos Variables', '', '']);
+      variableHeader.font = { bold: true };
+      
+      // Lista de gastos variables
+      if (variableBills.length > 0) {
+        variableBills.forEach(bill => {
+          const desc = bill.description || 'Gasto variable';
+          summarySheet.addRow([
+            desc,
+            bill.amount_cordobas || bill.amount || 0,
+            bill.amount_usd || bill.amount_dollars || 0
+          ]);
+        });
+      } else {
+        summarySheet.addRow(['No hay gastos variables', '', '']);
+      }
+      
+      summarySheet.addRow(['', '', '']);
+      
+      // -Subtotal Gastos Variables
+      const subtotalVariable = summarySheet.addRow(['-Subtotal Gastos Variables', totalVariableCordobas, totalVariableDollars]);
+      subtotalVariable.font = { bold: true };
+      subtotalVariable.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFF3F3F3' }
+      };
+      
+      summarySheet.addRow(['', '', '']);
+      
+      // -Total Gastos
+      const totalExpensesRow = summarySheet.addRow(['-Total Gastos', totalExpensesCordobas, totalExpensesDollars]);
+      totalExpensesRow.font = { bold: true, size: 12 };
+      totalExpensesRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFFFCC80' }
+      };
+      
+      summarySheet.addRow(['', '', '']);
+      summarySheet.addRow(['', '', '']);
+      
+      // *RESULTADO FINAL
+      const resultHeader = summarySheet.addRow(['*RESULTADO FINAL', '', '']);
+      resultHeader.font = { bold: true, size: 14 };
       resultHeader.fill = {
         type: 'pattern',
         pattern: 'solid',
         fgColor: { argb: 'FFF3E5F5' }
       };
-      summarySheet.mergeCells(`A${summarySheet.rowCount}:B${summarySheet.rowCount}`);
+      summarySheet.mergeCells(`A${summarySheet.rowCount}:C${summarySheet.rowCount}`);
       
-      const totalIncome = closing.total_general_income + closing.total_clinical_orthodontic_income;
-      const totalExpenses = closing.total_fixed_expenses + closing.total_variable_expenses;
-      const netProfit = closing.net_profit;
+      summarySheet.addRow(['', '', '']);
       
-      summarySheet.addRow(['Ingresos Totales Clínica', totalIncome]);
-      summarySheet.addRow(['Gastos Totales', totalExpenses]);
+      // Ingresos Totales
+      const totalIncomeRow = summarySheet.addRow(['Ingresos Totales', totalProceduresCordobas, totalProceduresDollars]);
+      totalIncomeRow.font = { bold: true };
       
-      const netProfitRow = summarySheet.addRow(['UTILIDAD NETA', netProfit]);
-      netProfitRow.font = { bold: true, size: 14 };
+      summarySheet.addRow(['', '', '']);
+      
+      // Gastos Totales
+      const totalExpensesFinalRow = summarySheet.addRow(['Gastos Totales', totalExpensesCordobas, totalExpensesDollars]);
+      totalExpensesFinalRow.font = { bold: true };
+      
+      summarySheet.addRow(['', '', '']);
+      
+      // Utilidad Neta
+      const netProfitRow = summarySheet.addRow(['Utilidad Neta', netProfitCordobas, netProfitDollars]);
+      netProfitRow.font = { bold: true, size: 12 };
+      netProfitRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFF3E5F5' }
+      };
       netProfitRow.getCell(2).font = { 
         bold: true, 
-        size: 14,
-        color: { argb: netProfit >= 0 ? 'FF4CAF50' : 'FFF44336' }
+        size: 12,
+        color: { argb: netProfitCordobas >= 0 ? 'FF4CAF50' : 'FFF44336' }
+      };
+      netProfitRow.getCell(3).font = { 
+        bold: true, 
+        size: 12,
+        color: { argb: netProfitDollars >= 0 ? 'FF4CAF50' : 'FFF44336' }
       };
       
-      // Porcentaje de utilidad
-      if (totalIncome > 0) {
-        const profitMargin = ((netProfit / totalIncome) * 100).toFixed(2);
-        summarySheet.addRow(['Margen de Utilidad', `${profitMargin}%`]);
+      summarySheet.addRow(['', '', '']);
+      
+      // Margen de Utilidad
+      if (totalProceduresCordobas > 0) {
+        const profitMargin = ((netProfitCordobas / totalProceduresCordobas) * 100).toFixed(2);
+        const marginRow = summarySheet.addRow(['Margen de Utilidad', `${profitMargin}%`, '']);
+        marginRow.font = { bold: true };
+        summarySheet.mergeCells(`B${summarySheet.rowCount}:C${summarySheet.rowCount}`);
       }
       
       // Comentarios
       if (closing.comentary) {
-        summarySheet.addRow(['', '']); // Espacio
-        summarySheet.addRow(['COMENTARIOS:', '']);
-        summarySheet.mergeCells(`A${summarySheet.rowCount}:B${summarySheet.rowCount}`);
-        summarySheet.addRow([closing.comentary, '']);
-        summarySheet.mergeCells(`A${summarySheet.rowCount}:B${summarySheet.rowCount}`);
+        summarySheet.addRow(['', '', '']);
+        summarySheet.addRow(['COMENTARIOS:', '', '']);
+        summarySheet.mergeCells(`A${summarySheet.rowCount}:C${summarySheet.rowCount}`);
+        summarySheet.addRow([closing.comentary, '', '']);
+        summarySheet.mergeCells(`A${summarySheet.rowCount}:C${summarySheet.rowCount}`);
       }
       
-      // Aplicar formato de moneda a las celdas de valores
+      // Aplicar formato de moneda a las columnas
       summarySheet.eachRow((row, rowNumber) => {
         if (rowNumber > 8 && row.getCell(2).value && typeof row.getCell(2).value === 'number') {
           row.getCell(2).numFmt = '"C$"#,##0.00';
         }
+        if (rowNumber > 8 && row.getCell(3).value && typeof row.getCell(3).value === 'number') {
+          row.getCell(3).numFmt = '"$"#,##0.00';
+        }
       });
       
-      // Estilo para las filas de totales
-      [13, 17, 20, 21].forEach(rowNum => {
-        const row = summarySheet.getRow(rowNum);
-        row.font = { bold: true };
-        row.getCell(1).font = { bold: true };
-        row.getCell(2).font = { bold: true };
-      });
-      
-      // Hoja 2: DETALLE DE PROCEDIMIENTOS (si hay procedimientos)
-      if (procedures && procedures.length > 0) {
-        const proceduresSheet = workbook.addWorksheet('DETALLE PROCEDIMIENTOS');
+      // Hoja 2: DETALLE COMPLETO (opcional)
+      if ((generalProcedures.length + orthoProcedures.length) > 0) {
+        const detailSheet = workbook.addWorksheet('DETALLE COMPLETO');
         
-        proceduresSheet.columns = [
+        detailSheet.columns = [
           { header: 'FECHA', key: 'date', width: 15 },
           { header: 'PACIENTE', key: 'patient', width: 30 },
           { header: 'PROCEDIMIENTO', key: 'procedure', width: 40 },
-          { header: 'MONTO TOTAL', key: 'total_amount', width: 20 },
-          { header: 'MÉTODO PAGO', key: 'payment_method', width: 20 },
-          { header: 'ORTODONCIA', key: 'orthodontics', width: 15 },
-          { header: 'OBSERVACIONES', key: 'observations', width: 30 }
+          { header: 'TIPO', key: 'type', width: 15 },
+          { header: 'MONTO C$', key: 'cordobas', width: 15 },
+          { header: 'MONTO $', key: 'dollars', width: 15 },
+          { header: 'MÉTODO PAGO', key: 'payment', width: 20 }
         ];
         
         // Encabezado
-        const procHeaderRow = proceduresSheet.getRow(1);
-        procHeaderRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-        procHeaderRow.fill = {
+        const detailHeader = detailSheet.getRow(1);
+        detailHeader.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        detailHeader.fill = {
           type: 'pattern',
           pattern: 'solid',
           fgColor: { argb: 'FF4CAF50' }
         };
-        procHeaderRow.alignment = { horizontal: 'center' };
+        detailHeader.alignment = { horizontal: 'center' };
         
-        // Agregar procedimientos
-        procedures.forEach(proc => {
+        // Agregar todos los procedimientos
+        const allProcedures = [...generalProcedures, ...orthoProcedures];
+        allProcedures.forEach(proc => {
           const patientName = proc.patients ? 
             `${proc.patients.first_name || ''} ${proc.patients.first_last_name || ''}`.trim() : 
             'Sin paciente';
           
-          proceduresSheet.addRow({
+          detailSheet.addRow({
             date: formatNicaraguaDate(proc.procedure_date),
             patient: patientName,
             procedure: proc.procedure_description || 'Sin descripción',
-            total_amount: proc.total_procedure || proc.total_cost || 0,
-            payment_method: proc.payment_method || 'No especificado',
-            orthodontics: proc.is_orthodontics ? 'Sí' : 'No',
-            observations: proc.observations || ''
+            type: proc.is_orthodontics ? 'Ortodoncia' : 'General',
+            cordobas: proc.total_procedure || 0,
+            dollars: proc.total_procedure_usd || 0,
+            payment: proc.payment_method || 'No especificado'
           });
         });
-        
-        // Totales al final
-        const totalProcedures = procedures.length;
-        const totalAmount = procedures.reduce((sum, proc) => sum + (proc.total_procedure || proc.total_cost || 0), 0);
-        
-        proceduresSheet.addRow(['', '', '', '', '', '', '']);
-        proceduresSheet.addRow(['TOTAL PROCEDIMIENTOS:', '', '', totalProcedures, '', '', '']);
-        proceduresSheet.addRow(['MONTO TOTAL:', '', '', totalAmount, '', '', '']);
         
         // Aplicar formato de moneda
-        proceduresSheet.eachRow((row, rowNumber) => {
-          if (rowNumber > 1 && rowNumber <= procedures.length + 1) {
-            row.getCell(4).numFmt = '"C$"#,##0.00';
-          }
-        });
-        
-        // Formato para totales
-        const lastRow = proceduresSheet.getRow(proceduresSheet.rowCount);
-        lastRow.font = { bold: true };
-        lastRow.getCell(4).numFmt = '"C$"#,##0.00';
-        
-        const secondLastRow = proceduresSheet.getRow(proceduresSheet.rowCount - 1);
-        secondLastRow.font = { bold: true };
-      }
-      
-      // Hoja 3: DETALLE DE GASTOS (si hay gastos) - CON DESGLOSE COMPLETO
-      if (bills && bills.length > 0) {
-        const billsSheet = workbook.addWorksheet('DETALLE GASTOS');
-        
-        billsSheet.columns = [
-          { header: 'FECHA', key: 'date', width: 15 },
-          { header: 'DESCRIPCIÓN', key: 'description', width: 40 },
-          { header: 'CATEGORÍA', key: 'category', width: 25 },
-          { header: 'MONTO', key: 'amount', width: 20 },
-          { header: 'TIPO', key: 'type', width: 15 },
-          { header: 'PROCESADO', key: 'processed', width: 15 }
-        ];
-        
-        // Encabezado
-        const billsHeaderRow = billsSheet.getRow(1);
-        billsHeaderRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-        billsHeaderRow.fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'FFFF9800' }
-        };
-        billsHeaderRow.alignment = { horizontal: 'center' };
-        
-        // Agregar gastos
-        let currentRow = 2;
-        
-        // Sección de Gastos Fijos
-        if (fixedBills.length > 0) {
-          // Subtítulo Gastos Fijos
-          billsSheet.getCell(`A${currentRow}`).value = 'GASTOS FIJOS';
-          billsSheet.getCell(`A${currentRow}`).font = { bold: true, size: 12 };
-          billsSheet.getCell(`A${currentRow}`).fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FFE3F2FD' }
-          };
-          billsSheet.mergeCells(`A${currentRow}:F${currentRow}`);
-          currentRow++;
-          
-          // Datos de gastos fijos
-          fixedBills.forEach(bill => {
-            billsSheet.addRow({
-              date: formatNicaraguaDate(bill.bill_date),
-              description: bill.description || 'Sin descripción',
-              category: bill.category || 'No categorizado',
-              amount: bill.amount || 0,
-              type: 'Fijo',
-              processed: bill.is_processed_in_closing ? 'Sí' : 'No'
-            });
-            currentRow++;
-          });
-          
-          // Subtotal Gastos Fijos
-          const fixedTotal = fixedBills.reduce((sum, bill) => sum + (bill.amount || 0), 0);
-          billsSheet.getCell(`C${currentRow}`).value = 'SUBTOTAL GASTOS FIJOS:';
-          billsSheet.getCell(`C${currentRow}`).font = { bold: true };
-          billsSheet.getCell(`D${currentRow}`).value = fixedTotal;
-          billsSheet.getCell(`D${currentRow}`).font = { bold: true };
-          billsSheet.getCell(`D${currentRow}`).numFmt = '"C$"#,##0.00';
-          billsSheet.mergeCells(`C${currentRow}:D${currentRow}`);
-          currentRow += 2;
-        }
-        
-        // Sección de Gastos Variables
-        if (variableBills.length > 0) {
-          // Subtítulo Gastos Variables
-          billsSheet.getCell(`A${currentRow}`).value = 'GASTOS VARIABLES';
-          billsSheet.getCell(`A${currentRow}`).font = { bold: true, size: 12 };
-          billsSheet.getCell(`A${currentRow}`).fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FFFFF8E1' }
-          };
-          billsSheet.mergeCells(`A${currentRow}:F${currentRow}`);
-          currentRow++;
-          
-          // Datos de gastos variables
-          variableBills.forEach(bill => {
-            billsSheet.addRow({
-              date: formatNicaraguaDate(bill.bill_date),
-              description: bill.description || 'Sin descripción',
-              category: bill.category || 'No categorizado',
-              amount: bill.amount || 0,
-              type: 'Variable',
-              processed: bill.is_processed_in_closing ? 'Sí' : 'No'
-            });
-            currentRow++;
-          });
-          
-          // Subtotal Gastos Variables
-          const variableTotal = variableBills.reduce((sum, bill) => sum + (bill.amount || 0), 0);
-          billsSheet.getCell(`C${currentRow}`).value = 'SUBTOTAL GASTOS VARIABLES:';
-          billsSheet.getCell(`C${currentRow}`).font = { bold: true };
-          billsSheet.getCell(`D${currentRow}`).value = variableTotal;
-          billsSheet.getCell(`D${currentRow}`).font = { bold: true };
-          billsSheet.getCell(`D${currentRow}`).numFmt = '"C$"#,##0.00';
-          billsSheet.mergeCells(`C${currentRow}:D${currentRow}`);
-          currentRow++;
-        }
-        
-        // Total General de Gastos
-        const totalBillsAmount = bills.reduce((sum, bill) => sum + (bill.amount || 0), 0);
-        billsSheet.getCell(`C${currentRow}`).value = 'TOTAL GENERAL DE GASTOS:';
-        billsSheet.getCell(`C${currentRow}`).font = { bold: true, size: 12 };
-        billsSheet.getCell(`C${currentRow}`).fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'FFFCE4EC' }
-        };
-        billsSheet.getCell(`D${currentRow}`).value = totalBillsAmount;
-        billsSheet.getCell(`D${currentRow}`).font = { bold: true, size: 12 };
-        billsSheet.getCell(`D${currentRow}`).numFmt = '"C$"#,##0.00';
-        billsSheet.getCell(`D${currentRow}`).fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'FFFCE4EC' }
-        };
-        billsSheet.mergeCells(`C${currentRow}:D${currentRow}`);
-        
-        // Aplicar formato de moneda a todas las celdas de monto
-        billsSheet.eachRow((row, rowNumber) => {
-          if (row.getCell(4).value && typeof row.getCell(4).value === 'number') {
-            row.getCell(4).numFmt = '"C$"#,##0.00';
+        detailSheet.eachRow((row, rowNumber) => {
+          if (rowNumber > 1) {
+            row.getCell(5).numFmt = '"C$"#,##0.00';
+            row.getCell(6).numFmt = '"$"#,##0.00';
           }
         });
       }
-      
-      // Hoja 4: ANÁLISIS DETALLADO
-      const analysisSheet = workbook.addWorksheet('ANÁLISIS');
-      
-      analysisSheet.columns = [
-        { header: 'INDICADOR', key: 'indicator', width: 35 },
-        { header: 'VALOR', key: 'value', width: 25 },
-        { header: 'PORCENTAJE', key: 'percentage', width: 20 }
-      ];
-      
-      // Encabezado
-      const analysisHeaderRow = analysisSheet.getRow(1);
-      analysisHeaderRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-      analysisHeaderRow.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FF9C27B0' }
-      };
-      analysisHeaderRow.alignment = { horizontal: 'center' };
-      
-      // Análisis de rentabilidad
-      const analysisData = [
-        ['Ingresos Totales', totalIncome, '100%'],
-        ['Gastos Totales', totalExpenses, `${((totalExpenses / totalIncome) * 100).toFixed(2)}%`],
-        ['Utilidad Neta', netProfit, `${((netProfit / totalIncome) * 100).toFixed(2)}%`],
-        ['', '', ''],
-        ['Composición de Gastos:', '', ''],
-        ['  • Gastos Fijos', closing.total_fixed_expenses, `${((closing.total_fixed_expenses / totalExpenses) * 100).toFixed(2)}%`],
-        ['  • Gastos Variables', closing.total_variable_expenses, `${((closing.total_variable_expenses / totalExpenses) * 100).toFixed(2)}%`],
-        // NOTA: Se elimina pago doctora ortodoncia del análisis mensual
-        ['', '', ''],
-        ['Composición de Ingresos:', '', ''],
-        ['  • Procedimientos Generales', closing.total_general_income, `${((closing.total_general_income / totalIncome) * 100).toFixed(2)}%`],
-        ['  • Ortodoncia (40% Clínica)', closing.total_clinical_orthodontic_income, `${((closing.total_clinical_orthodontic_income / totalIncome) * 100).toFixed(2)}%`]
-      ];
-      
-      analysisData.forEach(([indicator, value, percentage]) => {
-        analysisSheet.addRow({ indicator, value, percentage });
-      });
-      
-      // Aplicar formato
-      analysisSheet.eachRow((row, rowNumber) => {
-        if (rowNumber > 1 && typeof row.getCell(2).value === 'number') {
-          row.getCell(2).numFmt = '"C$"#,##0.00';
-        }
-        
-        // Estilo para subtítulos
-        if (row.getCell(1).value && row.getCell(1).value.toString().includes(':')) {
-          row.font = { bold: true };
-          row.fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FFF3E5F5' }
-          };
-        }
-        
-        // Estilo para elementos de lista
-        if (row.getCell(1).value && row.getCell(1).value.toString().startsWith('  •')) {
-          row.getCell(1).font = { italic: true };
-        }
-      });
-      
-      // Estilo para filas importantes
-      [2, 3, 4].forEach(rowNum => {
-        const row = analysisSheet.getRow(rowNum);
-        row.font = { bold: true };
-        if (rowNum === 4) { // Utilidad neta
-          row.getCell(2).font = { 
-            bold: true,
-            color: { argb: netProfit >= 0 ? 'FF4CAF50' : 'FFF44336' }
-          };
-          row.getCell(3).font = { 
-            bold: true,
-            color: { argb: netProfit >= 0 ? 'FF4CAF50' : 'FFF44336' }
-          };
-        }
-      });
       
       // Configurar nombre del archivo
-      const fileName = `Cierre_${closing.month}_${closing.year}_Detallado_${new Date().toISOString().split('T')[0]}.xlsx`;
+      const fileName = `Cierre_${closing.month}_${closing.year}_Nuevo_Formato_${new Date().toISOString().split('T')[0]}.xlsx`;
       
       // Configurar respuesta
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -1206,7 +1345,7 @@ const exportController = {
     }
   },
 
-  // Exportar cierre diario a Excel con formato vertical
+  // Exportar cierre diario a Excel con NUEVO FORMATO
   exportDailyToExcelDetailed: async (req, res) => {
     try {
       const { closingId } = req.params;
@@ -1244,6 +1383,23 @@ const exportController = {
       
       if (relationsError) throw relationsError;
       
+      // Separar procedimientos por tipo
+      const generalProcedures = [];
+      const orthoProcedures = [];
+      
+      if (procedureRelations) {
+        procedureRelations.forEach(relation => {
+          const proc = relation.procedures;
+          if (!proc) return;
+          
+          if (proc.is_orthodontics) {
+            orthoProcedures.push(proc);
+          } else {
+            generalProcedures.push(proc);
+          }
+        });
+      }
+      
       // Obtener gastos del día
       const { data: bills, error: billsError } = await supabaseAdmin
         .from('bills')
@@ -1257,315 +1413,324 @@ const exportController = {
       const fixedBills = bills ? bills.filter(bill => bill.is_recurrent) : [];
       const variableBills = bills ? bills.filter(bill => !bill.is_recurrent) : [];
       
+      // Calcular totales
+      const totalGeneralCordobas = generalProcedures.reduce((sum, p) => sum + (p.total_procedure || 0), 0);
+      const totalGeneralDollars = generalProcedures.reduce((sum, p) => sum + (p.total_procedure_usd || 0), 0);
+      const totalOrthoCordobas = orthoProcedures.reduce((sum, p) => sum + (p.total_procedure || 0), 0);
+      const totalOrthoDollars = orthoProcedures.reduce((sum, p) => sum + (p.total_procedure_usd || 0), 0);
+      const totalProceduresCordobas = totalGeneralCordobas + totalOrthoCordobas;
+      const totalProceduresDollars = totalGeneralDollars + totalOrthoDollars;
+      
+      // Calcular totales de gastos
+      const totalFixedCordobas = fixedBills.reduce((sum, b) => sum + (b.amount_cordobas || b.amount || 0), 0);
+      const totalFixedDollars = fixedBills.reduce((sum, b) => sum + (b.amount_usd || b.amount_dollars || 0), 0);
+      const totalVariableCordobas = variableBills.reduce((sum, b) => sum + (b.amount_cordobas || b.amount || 0), 0);
+      const totalVariableDollars = variableBills.reduce((sum, b) => sum + (b.amount_usd || b.amount_dollars || 0), 0);
+      const totalExpensesCordobas = totalFixedCordobas + totalVariableCordobas;
+      const totalExpensesDollars = totalFixedDollars + totalVariableDollars;
+      
+      const netProfitCordobas = totalProceduresCordobas - totalExpensesCordobas;
+      const netProfitDollars = totalProceduresDollars - totalExpensesDollars;
+      
       // Crear workbook de Excel
       const workbook = new ExcelJS.Workbook();
       workbook.creator = 'Care U Smile';
       workbook.created = new Date();
       
-      // Hoja 1: Resumen Ejecutivo
-      const summarySheet = workbook.addWorksheet('RESUMEN EJECUTIVO');
+      // Hoja 1: RESUMEN DIARIO (NUEVO FORMATO)
+      const summarySheet = workbook.addWorksheet('RESUMEN DIARIO');
       
+      // Configurar anchos de columna
       summarySheet.columns = [
-        { header: 'DESCRIPCIÓN', key: 'description', width: 40 },
-        { header: 'VALOR', key: 'value', width: 25 }
+        { header: 'CONSULTAS', key: 'description', width: 40 },
+        { header: 'TOTAL CÓRDOBAS', key: 'cordobas', width: 20 },
+        { header: 'TOTAL DÓLARES', key: 'dollars', width: 20 }
       ];
       
-      // Título - CAMBIO: Clínica Odontológica por Care U Smile
-      const titleRow = summarySheet.addRow(['CARE U SMILE', '']);
+      // Título
+      const titleRow = summarySheet.addRow(['CARE U SMILE', '', '']);
       titleRow.font = { bold: true, size: 16 };
       titleRow.alignment = { horizontal: 'center' };
-      summarySheet.mergeCells('A1:B1');
+      summarySheet.mergeCells('A1:C1');
       
-      summarySheet.addRow(['Reporte de Cierre Diario', '']);
-      summarySheet.mergeCells('A2:B2');
+      summarySheet.addRow(['Reporte de Cierre Diario', '', '']);
+      summarySheet.mergeCells('A2:C2');
       
-      summarySheet.addRow([`Fecha: ${formatNicaraguaDate(closing.closing_date)}`, '']);
-      summarySheet.mergeCells('A3:B3');
+      summarySheet.addRow([`Fecha: ${formatNicaraguaDate(closing.closing_date)}`, '', '']);
+      summarySheet.mergeCells('A3:C3');
       
       if (closing.closing_type === 'orthodontics') {
-        summarySheet.addRow(['(Cierre de Ortodoncia)', '']);
-        summarySheet.mergeCells('A4:B4');
+        summarySheet.addRow(['(Cierre de Ortodoncia)', '', '']);
+        summarySheet.mergeCells('A4:C4');
       }
       
-      summarySheet.addRow([`Fecha de generación: ${formatNicaraguaDate(new Date().toISOString())}`, '']);
-      summarySheet.mergeCells(`A${summarySheet.rowCount}:B${summarySheet.rowCount}`);
+      summarySheet.addRow([`Fecha de generación: ${formatNicaraguaDate(new Date().toISOString())}`, '', '']);
+      summarySheet.mergeCells(`A${summarySheet.rowCount}:C${summarySheet.rowCount}`);
       
-      summarySheet.addRow(['', '']); // Espacio
+      summarySheet.addRow(['', '', '']); // Espacio
       
-      // Encabezado de sección
-      const headerRow = summarySheet.addRow(['RESUMEN DEL DÍA', '']);
-      headerRow.font = { bold: true, size: 14 };
-      headerRow.fill = {
+      // *INGRESOS
+      const incomeHeader = summarySheet.addRow(['*INGRESOS', '', '']);
+      incomeHeader.font = { bold: true, size: 14 };
+      incomeHeader.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE8F5E9' }
+      };
+      summarySheet.mergeCells(`A${summarySheet.rowCount}:C${summarySheet.rowCount}`);
+      
+      // Encabezado de tabla
+      const tableHeader = summarySheet.addRow(['Consultas', 'Total Córdobas', 'Total Dólares']);
+      tableHeader.font = { bold: true };
+      tableHeader.fill = {
         type: 'pattern',
         pattern: 'solid',
         fgColor: { argb: 'FF2196F3' }
       };
-      headerRow.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-      summarySheet.mergeCells(`A${summarySheet.rowCount}:B${summarySheet.rowCount}`);
+      tableHeader.font = { color: { argb: 'FFFFFFFF' }, bold: true };
       
-      summarySheet.addRow(['', '']); // Espacio
+      summarySheet.addRow(['', '', '']);
       
-      // Datos del resumen
-      const summaryData = [
-        ['Ingresos Totales', closing.total_income],
-        ['Ingresos Clínica', closing.total_clinic_income],
-        closing.closing_type === 'orthodontics' ? 
-          ['Pago Doctora Ortodoncia (60%)', closing.total_doctor_income] : null,
-        closing.total_external_doctor_payments > 0 ? 
-          ['Pagos Doctores Externos', closing.total_external_doctor_payments] : null,
-        ['Gastos del Día', closing.total_expenses || 0],
-        ['', ''], // Separador
-        ['UTILIDAD NETA', closing.net_profit]
-      ].filter(Boolean);
+      // -Consultas Generales
+      const generalHeader = summarySheet.addRow(['-Consultas Generales', '', '']);
+      generalHeader.font = { bold: true };
       
-      summaryData.forEach(([desc, value]) => {
-        summarySheet.addRow([desc, value]);
-      });
+      // Lista de consultas generales
+      if (generalProcedures.length > 0) {
+        generalProcedures.forEach(proc => {
+          const patientName = proc.patients ? 
+            `${proc.patients.first_name || ''} ${proc.patients.first_last_name || ''}`.trim() : 
+            'Sin paciente';
+          const procDesc = proc.procedure_description || 'Consulta';
+          
+          summarySheet.addRow([
+            `${procDesc} - ${patientName}`,
+            proc.total_procedure || 0,
+            proc.total_procedure_usd || 0
+          ]);
+        });
+      } else {
+        summarySheet.addRow(['No hay consultas generales', '', '']);
+      }
       
-      // Porcentaje de utilidad si hay ingresos
-      if (closing.total_clinic_income > 0) {
-        const profitMargin = ((closing.net_profit / closing.total_clinic_income) * 100).toFixed(2);
-        summarySheet.addRow(['Margen de Utilidad', `${profitMargin}%`]);
+      summarySheet.addRow(['', '', '']);
+      
+      // -Subtotal General
+      const subtotalGeneral = summarySheet.addRow(['-Subtotal General', totalGeneralCordobas, totalGeneralDollars]);
+      subtotalGeneral.font = { bold: true };
+      subtotalGeneral.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFF1F8E9' }
+      };
+      
+      summarySheet.addRow(['', '', '']);
+      
+      // -Consultas de Ortodoncia
+      const orthoHeader = summarySheet.addRow(['-Consultas de Ortodoncia', '', '']);
+      orthoHeader.font = { bold: true };
+      
+      // Lista de consultas de ortodoncia
+      if (orthoProcedures.length > 0) {
+        orthoProcedures.forEach(proc => {
+          const patientName = proc.patients ? 
+            `${proc.patients.first_name || ''} ${proc.patients.first_last_name || ''}`.trim() : 
+            'Sin paciente';
+          const procDesc = proc.procedure_description || 'Ortodoncia';
+          
+          summarySheet.addRow([
+            `${procDesc} - ${patientName}`,
+            proc.total_procedure || 0,
+            proc.total_procedure_usd || 0
+          ]);
+        });
+      } else {
+        summarySheet.addRow(['No hay consultas de ortodoncia', '', '']);
+      }
+      
+      summarySheet.addRow(['', '', '']);
+      
+      // -Subtotal Ortodoncia
+      const subtotalOrtho = summarySheet.addRow(['-Subtotal Ortodoncia', totalOrthoCordobas, totalOrthoDollars]);
+      subtotalOrtho.font = { bold: true };
+      subtotalOrtho.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFF1F8E9' }
+      };
+      
+      summarySheet.addRow(['', '', '']);
+      
+      // -Total Procedimientos
+      const totalProceduresRow = summarySheet.addRow(['-Total Procedimientos', totalProceduresCordobas, totalProceduresDollars]);
+      totalProceduresRow.font = { bold: true, size: 12 };
+      totalProceduresRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFC8E6C9' }
+      };
+      
+      summarySheet.addRow(['', '', '']);
+      summarySheet.addRow(['', '', '']);
+      
+      // *GASTOS
+      const expensesHeader = summarySheet.addRow(['*GASTOS', '', '']);
+      expensesHeader.font = { bold: true, size: 14 };
+      expensesHeader.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFFFF3E0' }
+      };
+      summarySheet.mergeCells(`A${summarySheet.rowCount}:C${summarySheet.rowCount}`);
+      
+      // -Gastos Fijos
+      const fixedHeader = summarySheet.addRow(['-Gastos Fijos', '', '']);
+      fixedHeader.font = { bold: true };
+      
+      // Lista de gastos fijos
+      if (fixedBills.length > 0) {
+        fixedBills.forEach(bill => {
+          const desc = bill.description || 'Gasto fijo';
+          summarySheet.addRow([
+            desc,
+            bill.amount_cordobas || bill.amount || 0,
+            bill.amount_usd || bill.amount_dollars || 0
+          ]);
+        });
+      } else {
+        summarySheet.addRow(['No hay gastos fijos', '', '']);
+      }
+      
+      summarySheet.addRow(['', '', '']);
+      
+      // -Subtotal Gastos Fijos
+      const subtotalFixed = summarySheet.addRow(['-Subtotal Gastos Fijos', totalFixedCordobas, totalFixedDollars]);
+      subtotalFixed.font = { bold: true };
+      subtotalFixed.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFF3F3F3' }
+      };
+      
+      summarySheet.addRow(['', '', '']);
+      
+      // -Gastos Variables
+      const variableHeader = summarySheet.addRow(['-Gastos Variables', '', '']);
+      variableHeader.font = { bold: true };
+      
+      // Lista de gastos variables
+      if (variableBills.length > 0) {
+        variableBills.forEach(bill => {
+          const desc = bill.description || 'Gasto variable';
+          summarySheet.addRow([
+            desc,
+            bill.amount_cordobas || bill.amount || 0,
+            bill.amount_usd || bill.amount_dollars || 0
+          ]);
+        });
+      } else {
+        summarySheet.addRow(['No hay gastos variables', '', '']);
+      }
+      
+      summarySheet.addRow(['', '', '']);
+      
+      // -Subtotal Gastos Variables
+      const subtotalVariable = summarySheet.addRow(['-Subtotal Gastos Variables', totalVariableCordobas, totalVariableDollars]);
+      subtotalVariable.font = { bold: true };
+      subtotalVariable.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFF3F3F3' }
+      };
+      
+      summarySheet.addRow(['', '', '']);
+      
+      // -Total Gastos
+      const totalExpensesRow = summarySheet.addRow(['-Total Gastos', totalExpensesCordobas, totalExpensesDollars]);
+      totalExpensesRow.font = { bold: true, size: 12 };
+      totalExpensesRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFFFCC80' }
+      };
+      
+      summarySheet.addRow(['', '', '']);
+      summarySheet.addRow(['', '', '']);
+      
+      // *RESULTADO FINAL
+      const resultHeader = summarySheet.addRow(['*RESULTADO FINAL', '', '']);
+      resultHeader.font = { bold: true, size: 14 };
+      resultHeader.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFF3E5F5' }
+      };
+      summarySheet.mergeCells(`A${summarySheet.rowCount}:C${summarySheet.rowCount}`);
+      
+      summarySheet.addRow(['', '', '']);
+      
+      // Ingresos Totales
+      const totalIncomeRow = summarySheet.addRow(['Ingresos Totales', totalProceduresCordobas, totalProceduresDollars]);
+      totalIncomeRow.font = { bold: true };
+      
+      summarySheet.addRow(['', '', '']);
+      
+      // Gastos Totales
+      const totalExpensesFinalRow = summarySheet.addRow(['Gastos Totales', totalExpensesCordobas, totalExpensesDollars]);
+      totalExpensesFinalRow.font = { bold: true };
+      
+      summarySheet.addRow(['', '', '']);
+      
+      // Utilidad Neta
+      const netProfitRow = summarySheet.addRow(['Utilidad Neta', netProfitCordobas, netProfitDollars]);
+      netProfitRow.font = { bold: true, size: 12 };
+      netProfitRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFF3E5F5' }
+      };
+      netProfitRow.getCell(2).font = { 
+        bold: true, 
+        size: 12,
+        color: { argb: netProfitCordobas >= 0 ? 'FF4CAF50' : 'FFF44336' }
+      };
+      netProfitRow.getCell(3).font = { 
+        bold: true, 
+        size: 12,
+        color: { argb: netProfitDollars >= 0 ? 'FF4CAF50' : 'FFF44336' }
+      };
+      
+      summarySheet.addRow(['', '', '']);
+      
+      // Margen de Utilidad
+      if (totalProceduresCordobas > 0) {
+        const profitMargin = ((netProfitCordobas / totalProceduresCordobas) * 100).toFixed(2);
+        const marginRow = summarySheet.addRow(['Margen de Utilidad', `${profitMargin}%`, '']);
+        marginRow.font = { bold: true };
+        summarySheet.mergeCells(`B${summarySheet.rowCount}:C${summarySheet.rowCount}`);
       }
       
       // Comentarios
       if (closing.comentary) {
-        summarySheet.addRow(['', '']); // Espacio
-        summarySheet.addRow(['OBSERVACIONES:', '']);
-        summarySheet.mergeCells(`A${summarySheet.rowCount}:B${summarySheet.rowCount}`);
-        summarySheet.addRow([closing.comentary, '']);
-        summarySheet.mergeCells(`A${summarySheet.rowCount}:B${summarySheet.rowCount}`);
+        summarySheet.addRow(['', '', '']);
+        summarySheet.addRow(['COMENTARIOS:', '', '']);
+        summarySheet.mergeCells(`A${summarySheet.rowCount}:C${summarySheet.rowCount}`);
+        summarySheet.addRow([closing.comentary, '', '']);
+        summarySheet.mergeCells(`A${summarySheet.rowCount}:C${summarySheet.rowCount}`);
       }
       
-      // Aplicar formato de moneda
+      // Aplicar formato de moneda a las columnas
       summarySheet.eachRow((row, rowNumber) => {
-        const valueCell = row.getCell(2);
-        if (rowNumber > 8 && valueCell.value && typeof valueCell.value === 'number') {
-          valueCell.numFmt = '"C$"#,##0.00';
-          
-          // Destacar utilidad neta
-          if (row.getCell(1).value === 'UTILIDAD NETA') {
-            row.font = { bold: true, size: 14 };
-            valueCell.font = { 
-              bold: true, 
-              size: 14,
-              color: { argb: closing.net_profit >= 0 ? 'FF4CAF50' : 'FFF44336' }
-            };
-          }
+        if (rowNumber > 8 && row.getCell(2).value && typeof row.getCell(2).value === 'number') {
+          row.getCell(2).numFmt = '"C$"#,##0.00';
+        }
+        if (rowNumber > 8 && row.getCell(3).value && typeof row.getCell(3).value === 'number') {
+          row.getCell(3).numFmt = '"$"#,##0.00';
         }
       });
       
-      // Hoja 2: Detalle de Procedimientos (si hay)
-      if (procedureRelations && procedureRelations.length > 0) {
-        const proceduresSheet = workbook.addWorksheet('DETALLE PROCEDIMIENTOS');
-        
-        proceduresSheet.columns = [
-          { header: 'FECHA', key: 'date', width: 15 },
-          { header: 'PACIENTE', key: 'patient', width: 30 },
-          { header: 'PROCEDIMIENTO', key: 'procedure', width: 40 },
-          { header: 'MONTO TOTAL', key: 'total_amount', width: 20 },
-          { header: 'CLÍNICA', key: 'clinic_portion', width: 20 },
-          { header: 'DOCTORA', key: 'doctor_portion', width: 20 },
-          { header: 'EXTERNO', key: 'external_payment', width: 20 }
-        ];
-        
-        // Encabezado
-        const procHeaderRow = proceduresSheet.getRow(1);
-        procHeaderRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-        procHeaderRow.fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'FF4CAF50' }
-        };
-        procHeaderRow.alignment = { horizontal: 'center' };
-        
-        // Agregar procedimientos
-        let totalClinic = 0;
-        let totalDoctor = 0;
-        let totalExternal = 0;
-        
-        procedureRelations.forEach(relation => {
-          const proc = relation.procedures;
-          if (!proc) return;
-          
-          const patientName = proc.patients ? 
-            `${proc.patients.first_name || ''} ${proc.patients.first_last_name || ''}`.trim() : 
-            'Sin paciente';
-          
-          proceduresSheet.addRow({
-            date: formatNicaraguaDate(proc.procedure_date),
-            patient: patientName,
-            procedure: proc.procedure_description || 'Sin descripción',
-            total_amount: proc.total_procedure || proc.total_cost || 0,
-            clinic_portion: relation.clinic_income_portion || 0,
-            doctor_portion: relation.doctor_income_portion || 0,
-            external_payment: relation.external_doctor_payment || 0
-          });
-          
-          totalClinic += relation.clinic_income_portion || 0;
-          totalDoctor += relation.doctor_income_portion || 0;
-          totalExternal += relation.external_doctor_payment || 0;
-        });
-        
-        // Totales
-        proceduresSheet.addRow(['', '', '', '', '', '', '']);
-        proceduresSheet.addRow(['TOTAL CLÍNICA:', '', '', '', totalClinic, '', '']);
-        proceduresSheet.addRow(['TOTAL DOCTORA:', '', '', '', '', totalDoctor, '']);
-        proceduresSheet.addRow(['TOTAL EXTERNOS:', '', '', '', '', '', totalExternal]);
-        proceduresSheet.addRow(['TOTAL GENERAL:', '', '', totalClinic + totalDoctor + totalExternal, '', '', '']);
-        
-        // Aplicar formato de moneda
-        proceduresSheet.eachRow((row, rowNumber) => {
-          if (rowNumber > 1 && rowNumber <= procedureRelations.length + 1) {
-            [4, 5, 6, 7].forEach(col => {
-              if (row.getCell(col).value) {
-                row.getCell(col).numFmt = '"C$"#,##0.00';
-              }
-            });
-          }
-        });
-        
-        // Formato para totales
-        for (let i = proceduresSheet.rowCount - 4; i <= proceduresSheet.rowCount; i++) {
-          const row = proceduresSheet.getRow(i);
-          row.font = { bold: true };
-          [4, 5, 6, 7].forEach(col => {
-            if (row.getCell(col).value) {
-              row.getCell(col).numFmt = '"C$"#,##0.00';
-            }
-          });
-        }
-      }
-      
-      // Hoja 3: Detalle de Gastos con desglose completo
-      if (bills && bills.length > 0) {
-        const billsSheet = workbook.addWorksheet('DETALLE GASTOS');
-        
-        billsSheet.columns = [
-          { header: 'FECHA', key: 'date', width: 15 },
-          { header: 'DESCRIPCIÓN', key: 'description', width: 40 },
-          { header: 'CATEGORÍA', key: 'category', width: 25 },
-          { header: 'MONTO', key: 'amount', width: 20 },
-          { header: 'TIPO', key: 'type', width: 15 },
-          { header: 'PROCESADO', key: 'processed', width: 15 }
-        ];
-        
-        // Encabezado
-        const billsHeaderRow = billsSheet.getRow(1);
-        billsHeaderRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-        billsHeaderRow.fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'FFFF9800' }
-        };
-        billsHeaderRow.alignment = { horizontal: 'center' };
-        
-        // Agregar gastos con desglose
-        let currentRow = 2;
-        
-        // Sección de Gastos Fijos
-        if (fixedBills.length > 0) {
-          // Subtítulo Gastos Fijos
-          billsSheet.getCell(`A${currentRow}`).value = 'GASTOS FIJOS';
-          billsSheet.getCell(`A${currentRow}`).font = { bold: true, size: 12 };
-          billsSheet.getCell(`A${currentRow}`).fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FFE3F2FD' }
-          };
-          billsSheet.mergeCells(`A${currentRow}:F${currentRow}`);
-          currentRow++;
-          
-          // Datos de gastos fijos
-          fixedBills.forEach(bill => {
-            billsSheet.addRow({
-              date: formatNicaraguaDate(bill.bill_date),
-              description: bill.description || 'Sin descripción',
-              category: bill.category || 'No categorizado',
-              amount: bill.amount || 0,
-              type: 'Fijo',
-              processed: bill.is_processed_in_closing ? 'Sí' : 'No'
-            });
-            currentRow++;
-          });
-          
-          // Subtotal Gastos Fijos
-          const fixedTotal = fixedBills.reduce((sum, bill) => sum + (bill.amount || 0), 0);
-          billsSheet.getCell(`C${currentRow}`).value = 'SUBTOTAL GASTOS FIJOS:';
-          billsSheet.getCell(`C${currentRow}`).font = { bold: true };
-          billsSheet.getCell(`D${currentRow}`).value = fixedTotal;
-          billsSheet.getCell(`D${currentRow}`).font = { bold: true };
-          billsSheet.getCell(`D${currentRow}`).numFmt = '"C$"#,##0.00';
-          billsSheet.mergeCells(`C${currentRow}:D${currentRow}`);
-          currentRow += 2;
-        }
-        
-        // Sección de Gastos Variables
-        if (variableBills.length > 0) {
-          // Subtítulo Gastos Variables
-          billsSheet.getCell(`A${currentRow}`).value = 'GASTOS VARIABLES';
-          billsSheet.getCell(`A${currentRow}`).font = { bold: true, size: 12 };
-          billsSheet.getCell(`A${currentRow}`).fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FFFFF8E1' }
-          };
-          billsSheet.mergeCells(`A${currentRow}:F${currentRow}`);
-          currentRow++;
-          
-          // Datos de gastos variables
-          variableBills.forEach(bill => {
-            billsSheet.addRow({
-              date: formatNicaraguaDate(bill.bill_date),
-              description: bill.description || 'Sin descripción',
-              category: bill.category || 'No categorizado',
-              amount: bill.amount || 0,
-              type: 'Variable',
-              processed: bill.is_processed_in_closing ? 'Sí' : 'No'
-            });
-            currentRow++;
-          });
-          
-          // Subtotal Gastos Variables
-          const variableTotal = variableBills.reduce((sum, bill) => sum + (bill.amount || 0), 0);
-          billsSheet.getCell(`C${currentRow}`).value = 'SUBTOTAL GASTOS VARIABLES:';
-          billsSheet.getCell(`C${currentRow}`).font = { bold: true };
-          billsSheet.getCell(`D${currentRow}`).value = variableTotal;
-          billsSheet.getCell(`D${currentRow}`).font = { bold: true };
-          billsSheet.getCell(`D${currentRow}`).numFmt = '"C$"#,##0.00';
-          billsSheet.mergeCells(`C${currentRow}:D${currentRow}`);
-          currentRow++;
-        }
-        
-        // Total General de Gastos
-        const totalBillsAmount = bills.reduce((sum, bill) => sum + (bill.amount || 0), 0);
-        billsSheet.getCell(`C${currentRow}`).value = 'TOTAL GENERAL DE GASTOS:';
-        billsSheet.getCell(`C${currentRow}`).font = { bold: true, size: 12 };
-        billsSheet.getCell(`C${currentRow}`).fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'FFFCE4EC' }
-        };
-        billsSheet.getCell(`D${currentRow}`).value = totalBillsAmount;
-        billsSheet.getCell(`D${currentRow}`).font = { bold: true, size: 12 };
-        billsSheet.getCell(`D${currentRow}`).numFmt = '"C$"#,##0.00';
-        billsSheet.getCell(`D${currentRow}`).fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'FFFCE4EC' }
-        };
-        billsSheet.mergeCells(`C${currentRow}:D${currentRow}`);
-        
-        // Aplicar formato de moneda a todas las celdas de monto
-        billsSheet.eachRow((row, rowNumber) => {
-          if (row.getCell(4).value && typeof row.getCell(4).value === 'number') {
-            row.getCell(4).numFmt = '"C$"#,##0.00';
-          }
-        });
-      }
-      
       // Configurar nombre del archivo
-      const fileName = `Cierre_Diario_${formatNicaraguaDate(closing.closing_date).replace(/\//g, '-')}_${closing.closing_type}_${new Date().toISOString().split('T')[0]}.xlsx`;
+      const fileName = `Cierre_Diario_${formatNicaraguaDate(closing.closing_date).replace(/\//g, '-')}_${closing.closing_type}_Nuevo_Formato_${new Date().toISOString().split('T')[0]}.xlsx`;
       
       // Configurar respuesta
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -1584,7 +1749,7 @@ const exportController = {
     }
   },
 
-  // Función para exportación general (mantener compatibilidad)
+  // Exportar a Excel (general - mantener compatibilidad)
   exportToExcel: async (req, res) => {
     try {
       const { type, startDate, endDate } = req.query;
@@ -1597,7 +1762,7 @@ const exportController = {
       }
       
       const workbook = new ExcelJS.Workbook();
-      workbook.creator = 'Care U Smile'; // CAMBIO
+      workbook.creator = 'Care U Smile';
       workbook.created = new Date();
       
       let worksheet;
@@ -1615,7 +1780,7 @@ const exportController = {
         
         if (error) throw error;
         
-        // CAMBIO: Eliminar columna de pago doctora de cierres mensuales
+        // Formato simplificado para tabla general
         worksheet.columns = [
           { header: 'Mes', key: 'month', width: 15 },
           { header: 'Año', key: 'year', width: 10 },
@@ -1624,7 +1789,6 @@ const exportController = {
           { header: 'Ortodoncia (40%)', key: 'total_clinical_orthodontic_income', width: 20 },
           { header: 'Gastos Fijos', key: 'total_fixed_expenses', width: 15 },
           { header: 'Gastos Variables', key: 'total_variable_expenses', width: 15 },
-          // NOTA: Se elimina la columna de pago doctora para cierres mensuales
           { header: 'Utilidad Neta', key: 'net_profit', width: 15 }
         ];
         
@@ -1733,21 +1897,5 @@ const exportController = {
     }
   }
 };
-
-// Funciones auxiliares
-function getMonthNumber(month) {
-  const months = {
-    'ENERO': '01', 'FEBRERO': '02', 'MARZO': '03', 'ABRIL': '04',
-    'MAYO': '05', 'JUNIO': '06', 'JULIO': '07', 'AGOSTO': '08',
-    'SEPTIEMBRE': '09', 'OCTUBRE': '10', 'NOVIEMBRE': '11', 'DICIEMBRE': '12'
-  };
-  return months[month.toUpperCase()] || '01';
-}
-
-function getLastDayOfMonth(year, month) {
-  const monthNumber = getMonthNumber(month);
-  const lastDay = new Date(parseInt(year), parseInt(monthNumber), 0).getDate();
-  return `${year}-${monthNumber}-${lastDay}`;
-}
 
 export default exportController;

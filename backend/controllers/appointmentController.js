@@ -366,11 +366,16 @@ const appointmentController = {
     }
   },
 
-  // Convertir cita en procedimiento - MODIFICADO PARA MANEJAR DEDUCCIONES
+  // Convertir cita en procedimiento - VERSIÓN CORREGIDA CON total_procedure_USD
   convertToProcedure: async (req, res) => {
     try {
       const { id } = req.params;
       const procedureData = req.body;
+      
+      console.log('🔄 Iniciando conversión de cita a procedimiento:', {
+        appointmentId: id,
+        procedureData: JSON.stringify(procedureData, null, 2)
+      });
       
       // 1. Obtener la cita
       const { data: appointment, error: appointmentError } = await supabaseAdmin
@@ -380,11 +385,18 @@ const appointmentController = {
         .single();
       
       if (appointmentError || !appointment) {
+        console.error('❌ Cita no encontrada:', appointmentError);
         return res.status(404).json({ 
           success: false, 
           error: 'Cita no encontrada' 
         });
       }
+      
+      console.log('📅 Cita encontrada:', {
+        appointment_ID: appointment.appointment_ID,
+        is_registered: appointment.is_registered,
+        state: appointment.state
+      });
       
       // Verificar si ya está registrada
       if (appointment.is_registered) {
@@ -404,53 +416,73 @@ const appointmentController = {
       
       console.log('📅 Fecha del procedimiento:', appointment.appointment_date);
       
-      // Preparar datos para insertar - INCLUYENDO CAMPOS DE DEDUCCION
-      const procedureToInsert = {
-        appointment_ID: id,
-        Patient_ID: appointment.Patient_ID,
-        procedure_date: appointment.appointment_date,
-        procedure_description: procedureData.procedure_description,
-        total_cost: procedureData.total_cost || 0, // Bruto en córdobas
-        total_cost_USD: procedureData.total_cost_USD || 0, // Bruto en dólares
-        total_procedure: procedureData.total_procedure || 0, // Neto después de deducciones
-        payment_method: procedureData.payment_method || 'Mixto',
-        is_orthodontics: appointment.is_orthodontics,
-        observations: procedureData.observations || appointment.observations,
-        creation_date: new Date().toISOString().replace('Z', ''),
-        
-        // Campos de pagos múltiples
-        amount_cordobas: procedureData.amount_cordobas || 0,
-        amount_dollars: procedureData.amount_dollars || 0,
-        payment_method_cordobas: procedureData.payment_method_cordobas || null,
-        payment_method_dollars: procedureData.payment_method_dollars || null,
-        
-        // CAMPOS DE DEDUCCIÓN POS (NUEVOS)
-        pos_deduction_cordobas: procedureData.pos_deduction_cordobas || 0,
-        pos_deduction_dollars: procedureData.pos_deduction_dollars || 0,
-        total_pos_deduction: procedureData.total_pos_deduction || 0,
-        net_amount_cordobas: procedureData.net_amount_cordobas || procedureData.amount_cordobas || 0,
-        net_amount_dollars: procedureData.net_amount_dollars || procedureData.amount_dollars || 0,
-        gross_amount_cordobas: procedureData.gross_amount_cordobas || procedureData.amount_cordobas || 0,
-        gross_amount_dollars: procedureData.gross_amount_dollars || procedureData.amount_dollars || 0,
-        
-        // Campos de doctor externo
-        external_doctor: procedureData.external_doctor || null,
-        external_doctor_payment: procedureData.external_doctor_payment || null,
-        theres_external_doctor: procedureData.theres_external_doctor || false,
-        external_doctor_name: procedureData.external_doctor_name || null,
-        external_doctor_specialty: procedureData.external_doctor_specialty || null,
-        external_doctor_payment_type: procedureData.external_doctor_payment_type || 'fixed',
-        external_doctor_payment_value: procedureData.external_doctor_payment_value || null,
-        external_doctor_payment_currency: procedureData.external_doctor_payment_currency || 'C$',
-        
-        // Campos de porcentajes
-        clinic_payment_percentage: procedureData.clinic_payment_percentage || 
-          (appointment.is_orthodontics ? 40 : 100),
-        doctor_payment_percentage: procedureData.doctor_payment_percentage || 
-          (appointment.is_orthodontics ? 60 : 0)
-      };
+      // IMPORTANTE: Tomar total_procedure_USD del frontend
+      // El frontend ya calcula el valor correcto después de deducciones
+      const total_procedure_USD = procedureData.total_procedure_USD;
+      const exchange_rate = procedureData.exchange_rate || 36.5;
       
-      console.log('📊 Insertando procedimiento con deducciones:', procedureToInsert);
+      console.log('💰 Valores recibidos del frontend:', {
+        total_procedure_USD_from_frontend: total_procedure_USD,
+        total_procedure: procedureData.total_procedure,
+        exchange_rate: exchange_rate,
+        amount_dollars: procedureData.amount_dollars
+      });
+      
+      // Preparar datos para insertar - ¡INCLUYENDO total_procedure_USD!
+      const procedureToInsert = {
+  appointment_ID: id,
+  Patient_ID: appointment.Patient_ID,
+  procedure_date: appointment.appointment_date,
+  procedure_description: procedureData.procedure_description,
+  total_cost: procedureData.total_cost || 0, // Bruto en córdobas
+  total_cost_USD: procedureData.total_cost_USD || 0, // Bruto en dólares
+  total_procedure: procedureData.total_procedure || 0, // Neto después de deducciones en C$
+  total_procedure_usd: total_procedure_USD || 0, // ¡CAMPO CORREGIDO! Neto después de deducciones en US$
+  payment_method: procedureData.payment_method || 'Mixto',
+  is_orthodontics: appointment.is_orthodontics,
+  observations: procedureData.observations || appointment.observations,
+  creation_date: new Date().toISOString().replace('Z', ''),
+  
+  // Campos de pagos múltiples
+  amount_cordobas: procedureData.amount_cordobas || 0,
+  amount_dollars: procedureData.amount_dollars || 0,
+  payment_method_cordobas: procedureData.payment_method_cordobas || null,
+  payment_method_dollars: procedureData.payment_method_dollars || null,
+  
+  // CAMPOS DE DEDUCCIÓN POS
+  pos_deduction_cordobas: procedureData.pos_deduction_cordobas || 0,
+  pos_deduction_dollars: procedureData.pos_deduction_dollars || 0,
+  total_pos_deduction: procedureData.total_pos_deduction || 0,
+  net_amount_cordobas: procedureData.net_amount_cordobas || procedureData.amount_cordobas || 0,
+  net_amount_dollars: procedureData.net_amount_dollars || procedureData.amount_dollars || 0,
+  gross_amount_cordobas: procedureData.gross_amount_cordobas || procedureData.amount_cordobas || 0,
+  gross_amount_dollars: procedureData.gross_amount_dollars || procedureData.amount_dollars || 0,
+  
+  // Campos de doctor externo
+  external_doctor: procedureData.external_doctor || null,
+  external_doctor_payment: procedureData.external_doctor_payment || null,
+  theres_external_doctor: procedureData.theres_external_doctor || false,
+  external_doctor_name: procedureData.external_doctor_name || null,
+  external_doctor_specialty: procedureData.external_doctor_specialty || null,
+  external_doctor_payment_type: procedureData.external_doctor_payment_type || 'fixed',
+  external_doctor_payment_value: procedureData.external_doctor_payment_value || null,
+  external_doctor_payment_currency: procedureData.external_doctor_payment_currency || 'C$',
+  
+  // Campos de porcentajes
+  clinic_payment_percentage: procedureData.clinic_payment_percentage || 
+    (appointment.is_orthodontics ? 40 : 100),
+  doctor_payment_percentage: procedureData.doctor_payment_percentage || 
+    (appointment.is_orthodontics ? 60 : 0),
+  
+  // ELIMINAR ESTA LÍNEA: No existe en la tabla procedures
+  // exchange_rate: exchange_rate ❌
+};
+      
+      console.log('📊 Insertando procedimiento con total_procedure_usd:', {
+        total_procedure_usd: procedureToInsert.total_procedure_usd,
+        total_procedure: procedureToInsert.total_procedure,
+        amount_dollars: procedureToInsert.amount_dollars
+      });
       
       // 2. Crear el procedimiento
       const { data: procedure, error: procedureError } = await supabaseAdmin
@@ -460,9 +492,15 @@ const appointmentController = {
         .single();
       
       if (procedureError) {
-        console.error('Error detallado al crear procedimiento:', procedureError);
+        console.error('❌ Error detallado al crear procedimiento:', procedureError);
         throw new Error(`Error al crear procedimiento: ${procedureError.message}`);
       }
+      
+      console.log('✅ Procedimiento creado:', {
+        procedure_ID: procedure.procedure_ID,
+        total_procedure: procedure.total_procedure,
+        total_procedure_usd: procedure.total_procedure_usd
+      });
       
       // 3. Actualizar estado de la cita a "completed" y marcar como registrada
       const { data: updatedAppointment, error: updateError } = await supabaseAdmin
@@ -476,6 +514,8 @@ const appointmentController = {
         .single();
       
       if (updateError) {
+        console.error('❌ Error al actualizar cita:', updateError);
+        // Revertir la creación del procedimiento
         await supabaseAdmin
           .from('procedures')
           .delete()
@@ -483,6 +523,12 @@ const appointmentController = {
         
         throw new Error(`Error al actualizar cita: ${updateError.message}`);
       }
+      
+      console.log('✅ Cita actualizada:', {
+        appointment_ID: updatedAppointment.appointment_ID,
+        state: updatedAppointment.state,
+        is_registered: updatedAppointment.is_registered
+      });
       
       // Formatear fechas para respuesta
       const updatedDate = new Date(updatedAppointment.appointment_date);
@@ -529,7 +575,7 @@ const appointmentController = {
         }
       });
     } catch (error) {
-      console.error('Error al convertir cita en procedimiento:', error);
+      console.error('❌ Error completo al convertir cita en procedimiento:', error);
       res.status(500).json({ 
         success: false, 
         error: error.message || 'Error al registrar procedimiento' 

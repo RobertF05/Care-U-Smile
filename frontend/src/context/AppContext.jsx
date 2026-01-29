@@ -5,7 +5,7 @@ import {
   utcToNicaragua,
   formatNicaraguaDateTime,
   formatNicaraguaDate,
-  createDateTimeInputFromUTC,  // ¡ESTA DEBE ESTAR!
+  createDateTimeInputFromUTC,
   parseDateTimeInputToUTC,
   getCurrentNicaraguaDateString,
   getCurrentNicaraguaDateTime,
@@ -26,6 +26,11 @@ export const AppProvider = ({ children }) => {
   const [dailyClosings, setDailyClosings] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [systemSettings, setSystemSettings] = useState({
+    exchange_rate: 36.5,
+    clinic_payment: 40,
+    doctor_payment: 60
+  });
   
   const [stats, setStats] = useState({
     totalPatients: 0,
@@ -81,6 +86,25 @@ export const AppProvider = ({ children }) => {
       throw error;
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Obtener configuración del sistema
+  const getSystemSettings = async () => {
+    try {
+      const data = await apiFetch('/settings/current');
+      return data.data || {
+        exchange_rate: 36.5,
+        clinic_payment: 40,
+        doctor_payment: 60
+      };
+    } catch (error) {
+      console.error('Error obteniendo configuración:', error);
+      return {
+        exchange_rate: 36.5,
+        clinic_payment: 40,
+        doctor_payment: 60
+      };
     }
   };
 
@@ -498,15 +522,33 @@ export const AppProvider = ({ children }) => {
     try {
       console.log('📝 Datos del gasto a crear:', billData);
       
+      // Obtener tipo de cambio actual
+      const settings = await getSystemSettings();
+      const defaultExchangeRate = settings.exchange_rate || 36.5;
+      
       // Para bill_date (que es DATE, no TIMESTAMP), solo necesitamos YYYY-MM-DD
       const billWithFormattedDate = {
         ...billData,
         bill_date: adjustDateForQuery(billData.bill_date)
       };
       
+      // Usar los nombres de columna correctos y tipo de cambio dinámico
+      const payload = {
+        description: billData.description,
+        amount: billData.amount || 0,
+        amount_usd: billData.amount_USD || 0,
+        bill_date: adjustDateForQuery(billData.bill_date),
+        category: billData.category,
+        currency_used: billData.currency_used || 'NIO',
+        exchange_rate_bill: billData.exchange_rate_bill || defaultExchangeRate,
+        is_recurrent: billData.is_recurrent || false
+      };
+      
+      console.log('📤 Enviando al backend:', payload);
+      
       const data = await apiFetch('/bills', {
         method: 'POST',
-        body: JSON.stringify(billWithFormattedDate),
+        body: JSON.stringify(payload),
       });
       
       console.log('✅ Gasto creado exitosamente:', data);
@@ -537,6 +579,12 @@ export const AppProvider = ({ children }) => {
       const updateData = { ...billData };
       if (updateData.bill_date) {
         updateData.bill_date = adjustDateForQuery(updateData.bill_date);
+      }
+      
+      // Convertir amount_USD a amount_usd (minúsculas para la BD)
+      if (updateData.amount_USD !== undefined) {
+        updateData.amount_usd = updateData.amount_USD;
+        delete updateData.amount_USD;
       }
       
       const data = await apiFetch(`/bills/${id}`, {
@@ -732,64 +780,62 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  // En AppContext.jsx - createDailyClosing
-  // En AppContext.jsx - createDailyClosing mejorada
-const createDailyClosing = async (closingData) => {
-  try {
-    console.log('📝 createDailyClosing - Datos originales:', closingData);
-    
-    // Validar que la fecha no esté vacía
-    if (!closingData.date) {
-      throw new Error('La fecha es requerida');
+  const createDailyClosing = async (closingData) => {
+    try {
+      console.log('📝 createDailyClosing - Datos originales:', closingData);
+      
+      // Validar que la fecha no esté vacía
+      if (!closingData.date) {
+        throw new Error('La fecha es requerida');
+      }
+      
+      // Formatear la fecha correctamente
+      const formattedDate = adjustDateForQuery(closingData.date);
+      console.log('📅 Fecha formateada:', formattedDate);
+      
+      // Crear objeto con el nombre de campo CORRECTO para el backend
+      const payload = {
+        closing_date: formattedDate,
+        closing_type: closingData.closing_type,
+        comentary: closingData.comentary || ''
+      };
+      
+      console.log('📤 Payload para backend:', payload);
+      
+      const data = await apiFetch('/daily-closings', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      
+      console.log('✅ Respuesta del backend:', data);
+      
+      if (!data.success) {
+        // Mostrar error específico si existe
+        const errorMsg = data.error || data.message || 'Error desconocido del backend';
+        throw new Error(errorMsg);
+      }
+      
+      // Formatear fechas para mostrar
+      const closingWithFormattedDates = {
+        ...data.data,
+        closing_date_display: formatNicaraguaDate(data.data.closing_date),
+        created_at_display: formatNicaraguaDateTime(data.data.created_at)
+      };
+      
+      setDailyClosings(prev => [closingWithFormattedDates, ...prev]);
+      
+      return data;
+    } catch (error) {
+      console.error('❌ Error completo en createDailyClosing:', {
+        error: error.message,
+        stack: error.stack,
+        closingData,
+        timestamp: new Date().toISOString()
+      });
+      setError('Error al crear cierre diario: ' + error.message);
+      return { success: false, error: error.message };
     }
-    
-    // Formatear la fecha correctamente
-    const formattedDate = adjustDateForQuery(closingData.date);
-    console.log('📅 Fecha formateada:', formattedDate);
-    
-    // Crear objeto con el nombre de campo CORRECTO para el backend
-    const payload = {
-      closing_date: formattedDate, // ← ¡IMPORTANTE! Usar closing_date
-      closing_type: closingData.closing_type,
-      comentary: closingData.comentary || ''
-    };
-    
-    console.log('📤 Payload para backend:', payload);
-    
-    const data = await apiFetch('/daily-closings', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
-    
-    console.log('✅ Respuesta del backend:', data);
-    
-    if (!data.success) {
-      // Mostrar error específico si existe
-      const errorMsg = data.error || data.message || 'Error desconocido del backend';
-      throw new Error(errorMsg);
-    }
-    
-    // Formatear fechas para mostrar
-    const closingWithFormattedDates = {
-      ...data.data,
-      closing_date_display: formatNicaraguaDate(data.data.closing_date),
-      created_at_display: formatNicaraguaDateTime(data.data.created_at)
-    };
-    
-    setDailyClosings(prev => [closingWithFormattedDates, ...prev]);
-    
-    return data;
-  } catch (error) {
-    console.error('❌ Error completo en createDailyClosing:', {
-      error: error.message,
-      stack: error.stack,
-      closingData,
-      timestamp: new Date().toISOString()
-    });
-    setError('Error al crear cierre diario: ' + error.message);
-    return { success: false, error: error.message };
-  }
-};
+  };
 
   const getDailySummary = async (date, closingType = 'general') => {
     try {
@@ -839,12 +885,6 @@ const createDailyClosing = async (closingData) => {
 
   // ========== FUNCIONES DE UTILIDAD PARA FECHAS ==========
   
-  /**
-   * Prepara una fecha para usar en formularios
-   * @param {string} dateString - Fecha en UTC o Nicaragua
-   * @param {boolean} includeTime - Si incluye hora o solo fecha
-   * @returns {string} - Fecha formateada para input
-   */
   const prepareDateForForm = (dateString, includeTime = true) => {
     if (!dateString) {
       if (includeTime) {
@@ -861,12 +901,6 @@ const createDailyClosing = async (closingData) => {
     }
   };
 
-  /**
-   * Formatea una fecha para mostrar
-   * @param {string} dateString - Fecha en UTC
-   * @param {boolean} includeTime - Si incluye hora o solo fecha
-   * @returns {string} - Fecha formateada
-   */
   const formatDateForDisplay = (dateString, includeTime = true) => {
     if (!dateString) return '';
     return includeTime ? 
@@ -874,11 +908,6 @@ const createDailyClosing = async (closingData) => {
       formatNicaraguaDate(dateString);
   };
 
-  /**
-   * Obtiene la fecha actual en Nicaragua
-   * @param {boolean} includeTime - Si incluye hora
-   * @returns {string} - Fecha actual formateada
-   */
   const getCurrentDate = (includeTime = false) => {
     if (includeTime) {
       return formatNicaraguaDateTime(new Date().toISOString());
@@ -892,6 +921,10 @@ const createDailyClosing = async (closingData) => {
     if (user) {
       // Cargar datos iniciales
       const loadInitialData = async () => {
+        // Cargar configuración primero
+        const settings = await getSystemSettings();
+        setSystemSettings(settings);
+        
         await Promise.all([
           fetchPatients(),
           fetchAppointments(),
@@ -922,6 +955,7 @@ const createDailyClosing = async (closingData) => {
     loading,
     error,
     stats,
+    systemSettings,
     
     // Pacientes
     fetchPatients,

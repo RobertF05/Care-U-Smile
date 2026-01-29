@@ -19,7 +19,8 @@ import {
   faChevronDown,
   faChevronUp,
   faRepeat,
-  faCircleExclamation
+  faCircleExclamation,
+  faDollarSign
 } from '@fortawesome/free-solid-svg-icons';
 import { AppContext } from '../../context/AppContext';
 import { AuthContext } from '../../context/AuthContext';
@@ -58,7 +59,8 @@ const BillsPage = () => {
     createBill,
     updateBill,
     deleteBill,
-    apiFetch
+    apiFetch,
+    systemSettings
   } = useContext(AppContext);
 
   // Estados
@@ -76,20 +78,26 @@ const BillsPage = () => {
     endDate: new Date().toISOString().split('T')[0]
   });
 
-  // Formularios
+  // Formularios CON SOPORTE PARA DÓLARES Y TIPO DE CAMBIO DINÁMICO
   const [newBill, setNewBill] = useState({
     description: '',
     amount: '',
+    amount_USD: '',
     bill_date: new Date().toISOString().split('T')[0],
     category: 'Materiales Odontológicos',
+    currency_used: 'NIO',
+    exchange_rate_bill: systemSettings.exchange_rate || 36.5, // Usar tipo de cambio dinámico
     is_recurrent: false
   });
 
   const [editBill, setEditBill] = useState({
     description: '',
     amount: '',
+    amount_USD: '',
     bill_date: '',
     category: '',
+    currency_used: 'NIO',
+    exchange_rate_bill: systemSettings.exchange_rate || 36.5, // Usar tipo de cambio dinámico
     is_recurrent: false
   });
 
@@ -99,6 +107,99 @@ const BillsPage = () => {
       fetchBills();
     }
   }, [user]);
+
+  // Actualizar el tipo de cambio en los formularios cuando cambien los settings
+  useEffect(() => {
+    const exchangeRate = systemSettings.exchange_rate || 36.5;
+    
+    // Actualizar el formulario nuevo si el usuario no ha modificado el tipo de cambio
+    setNewBill(prev => {
+      // Solo actualizar si el usuario no ha tocado el campo
+      if (prev.exchange_rate_bill === (systemSettings.exchange_rate || 36.5)) {
+        return {
+          ...prev,
+          exchange_rate_bill: exchangeRate
+        };
+      }
+      return prev;
+    });
+    
+    // Actualizar el formulario de edición
+    setEditBill(prev => ({
+      ...prev,
+      exchange_rate_bill: exchangeRate
+    }));
+  }, [systemSettings]);
+
+  // Formateadores
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('es-NI', {
+      style: 'currency',
+      currency: 'NIO'
+    }).format(amount || 0);
+  };
+
+  const formatCurrencyUSD = (amount) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD'
+    }).format(amount || 0);
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('es-ES', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+  };
+
+  // Función para manejar cambios en moneda CON TIPO DE CAMBIO DINÁMICO
+  const handleCurrencyChange = (field, value, isNewBill = true) => {
+    const setter = isNewBill ? setNewBill : setEditBill;
+    const current = isNewBill ? newBill : editBill;
+    const exchangeRate = systemSettings.exchange_rate || 36.5;
+    
+    setter(prev => {
+      const updated = { ...prev, [field]: value };
+      
+      // Si cambia el tipo de cambio, recalcular
+      if (field === 'exchange_rate_bill') {
+        const rate = parseFloat(value) || exchangeRate;
+        if (updated.currency_used === 'USD' && updated.amount_USD) {
+          updated.amount = (parseFloat(updated.amount_USD) || 0) * rate;
+        } else if (updated.currency_used === 'NIO' && updated.amount) {
+          updated.amount_USD = (parseFloat(updated.amount) || 0) / rate;
+        }
+      }
+      
+      // Si cambia la cantidad en dólares
+      if (field === 'amount_USD' && updated.currency_used === 'USD') {
+        const rate = parseFloat(updated.exchange_rate_bill) || exchangeRate;
+        updated.amount = (parseFloat(value) || 0) * rate;
+      }
+      
+      // Si cambia la cantidad en córdobas
+      if (field === 'amount' && updated.currency_used === 'NIO') {
+        const rate = parseFloat(updated.exchange_rate_bill) || exchangeRate;
+        updated.amount_USD = (parseFloat(value) || 0) / rate;
+      }
+      
+      // Si cambia la moneda, recalcular
+      if (field === 'currency_used') {
+        const rate = parseFloat(updated.exchange_rate_bill) || exchangeRate;
+        if (value === 'USD' && updated.amount_USD) {
+          updated.amount = (parseFloat(updated.amount_USD) || 0) * rate;
+        } else if (value === 'NIO' && updated.amount) {
+          updated.amount_USD = (parseFloat(updated.amount) || 0) / rate;
+        }
+      }
+      
+      return updated;
+    });
+  };
 
   // Filtrar gastos
   const filteredBills = useMemo(() => {
@@ -129,24 +230,28 @@ const BillsPage = () => {
     return filtered.sort((a, b) => new Date(b.bill_date) - new Date(a.bill_date));
   }, [bills, categoryFilter, typeFilter, searchTerm]);
 
-  // Estadísticas
+  // Estadísticas (actualizadas para incluir dólares)
   const stats = useMemo(() => {
     const total = bills.length;
     const fixedBills = bills.filter(bill => bill.is_recurrent);
     const variableBills = bills.filter(bill => !bill.is_recurrent);
     
     const totalAmount = bills.reduce((sum, bill) => sum + (bill.amount || 0), 0);
+    const totalAmountUSD = bills.reduce((sum, bill) => sum + (bill.amount_usd || 0), 0);
     const fixedAmount = fixedBills.reduce((sum, bill) => sum + (bill.amount || 0), 0);
+    const fixedAmountUSD = fixedBills.reduce((sum, bill) => sum + (bill.amount_usd || 0), 0);
     const variableAmount = variableBills.reduce((sum, bill) => sum + (bill.amount || 0), 0);
+    const variableAmountUSD = variableBills.reduce((sum, bill) => sum + (bill.amount_usd || 0), 0);
     
     // Estadísticas por categoría
     const categoryStats = {};
     bills.forEach(bill => {
       if (!categoryStats[bill.category]) {
-        categoryStats[bill.category] = { count: 0, amount: 0 };
+        categoryStats[bill.category] = { count: 0, amount: 0, amount_USD: 0 };
       }
       categoryStats[bill.category].count++;
       categoryStats[bill.category].amount += bill.amount || 0;
+      categoryStats[bill.category].amount_USD += bill.amount_usd || 0;
     });
 
     return {
@@ -154,8 +259,11 @@ const BillsPage = () => {
       fixed: fixedBills.length,
       variable: variableBills.length,
       totalAmount,
+      totalAmountUSD,
       fixedAmount,
+      fixedAmountUSD,
       variableAmount,
+      variableAmountUSD,
       categoryStats
     };
   }, [bills]);
@@ -171,24 +279,6 @@ const BillsPage = () => {
     }
   };
 
-  // Formateadores
-  const formatCurrency = (amount) => {
-  return new Intl.NumberFormat('es-NI', {
-    style: 'currency',
-    currency: 'NIO'
-  }).format(amount || 0);
-};
-
-  const formatDate = (dateString) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('es-ES', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
-  };
-
   // Funciones para expandir/contraer
   const toggleExpandBill = (billId) => {
     setExpandedBills(prev => ({
@@ -197,27 +287,33 @@ const BillsPage = () => {
     }));
   };
 
-  // Crear nuevo gasto
+  // Crear nuevo gasto CON SOPORTE PARA DÓLARES
   const handleCreateBill = async (e) => {
     e.preventDefault();
     
     try {
       const billData = {
         description: newBill.description,
-        amount: parseFloat(newBill.amount),
+        amount: parseFloat(newBill.amount) || 0,
+        amount_USD: parseFloat(newBill.amount_USD) || 0,
         bill_date: newBill.bill_date,
         category: newBill.category,
+        currency_used: newBill.currency_used,
+        exchange_rate_bill: parseFloat(newBill.exchange_rate_bill) || systemSettings.exchange_rate || 36.5,
         is_recurrent: newBill.is_recurrent
       };
 
       await createBill(billData);
       
-      // Resetear formulario
+      // Resetear formulario (mantener tipo de cambio dinámico)
       setNewBill({
         description: '',
         amount: '',
+        amount_USD: '',
         bill_date: new Date().toISOString().split('T')[0],
         category: 'Materiales Odontológicos',
+        currency_used: 'NIO',
+        exchange_rate_bill: systemSettings.exchange_rate || 36.5, // Mantener tipo de cambio dinámico
         is_recurrent: false
       });
       
@@ -231,29 +327,35 @@ const BillsPage = () => {
     }
   };
 
-  // Preparar edición
+  // Preparar edición CON SOPORTE PARA DÓLARES
   const handleEditBill = (bill) => {
     setSelectedBill(bill);
     setEditBill({
       description: bill.description,
-      amount: bill.amount,
+      amount: bill.amount || '',
+      amount_USD: bill.amount_usd || '', // Usar amount_usd de la BD
       bill_date: bill.bill_date.split('T')[0],
       category: bill.category,
+      currency_used: bill.currency_used || 'NIO',
+      exchange_rate_bill: bill.exchange_rate_bill || systemSettings.exchange_rate || 36.5,
       is_recurrent: bill.is_recurrent
     });
     setShowEditModal(true);
   };
 
-  // Actualizar gasto
+  // Actualizar gasto CON SOPORTE PARA DÓLARES
   const handleUpdateBill = async (e) => {
     e.preventDefault();
     
     try {
       const billData = {
         description: editBill.description,
-        amount: parseFloat(editBill.amount),
+        amount: parseFloat(editBill.amount) || 0,
+        amount_USD: parseFloat(editBill.amount_USD) || 0,
         bill_date: editBill.bill_date,
         category: editBill.category,
+        currency_used: editBill.currency_used,
+        exchange_rate_bill: parseFloat(editBill.exchange_rate_bill) || systemSettings.exchange_rate || 36.5,
         is_recurrent: editBill.is_recurrent
       };
 
@@ -328,6 +430,12 @@ const BillsPage = () => {
             Control de Gastos
           </h2>
           <p className="subtitle">Gestión de gastos fijos y variables de la clínica</p>
+          <div className="exchange-rate-info">
+            <small>
+              <FontAwesomeIcon icon={faExchangeAlt} /> Tipo de cambio actual: 
+              <strong> C$ {systemSettings.exchange_rate || 36.5} por US$ 1</strong>
+            </small>
+          </div>
         </div>
         <div className="header-right">
           <button 
@@ -403,7 +511,6 @@ const BillsPage = () => {
                 </div>
               </div>
             </div>
-
           </div>
         </div>
       )}
@@ -418,6 +525,11 @@ const BillsPage = () => {
             <div className="stat-value">{stats.fixed}</div>
             <div className="stat-label">Gastos Fijos</div>
             <div className="stat-amount">{formatCurrency(stats.fixedAmount)}</div>
+            {stats.fixedAmountUSD > 0 && (
+              <div className="stat-amount-usd">
+                {formatCurrencyUSD(stats.fixedAmountUSD)}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -481,6 +593,15 @@ const BillsPage = () => {
                 <div className="bill-right">
                   <div className="bill-amount">
                     <span className="amount-value">{formatCurrency(bill.amount)}</span>
+                    {bill.amount_usd > 0 && (
+                      <span className="amount-usd"> / {formatCurrencyUSD(bill.amount_usd)}</span>
+                    )}
+                    {bill.currency_used === 'USD' && (
+                      <span className="currency-indicator">
+                        <FontAwesomeIcon icon={faDollarSign} />
+                        {bill.exchange_rate_bill ? ` (T/C: ${bill.exchange_rate_bill})` : ''}
+                      </span>
+                    )}
                     <span className="amount-label">Monto</span>
                   </div>
                   
@@ -558,6 +679,25 @@ const BillsPage = () => {
                           )}
                         </span>
                       </div>
+                      <div className="detail-item">
+                        <span className="detail-label">Moneda:</span>
+                        <span className="detail-value">
+                          {bill.currency_used === 'USD' ? (
+                            <>
+                              <FontAwesomeIcon icon={faDollarSign} />
+                              <span> Dólares (US$)</span>
+                              {bill.exchange_rate_bill && (
+                                <span className="exchange-rate"> - T/C: {bill.exchange_rate_bill}</span>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <FontAwesomeIcon icon={faMoneyBillWave} />
+                              <span> Córdobas (C$)</span>
+                            </>
+                          )}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -567,7 +707,7 @@ const BillsPage = () => {
         </div>
       )}
 
-      {/* Modal para agregar gasto */}
+      {/* Modal para agregar gasto CON SOPORTE PARA DÓLARES Y TIPO DE CAMBIO DINÁMICO */}
       {showAddModal && (
         <div className="modal-overlay">
           <div className="modal-content">
@@ -599,19 +739,55 @@ const BillsPage = () => {
 
               <div className="form-row">
                 <div className="form-group">
-                  <label className="form-label">Monto (NIO):</label>
+                  <label className="form-label">Moneda:</label>
+                  <select
+                    value={newBill.currency_used}
+                    onChange={(e) => handleCurrencyChange('currency_used', e.target.value, true)}
+                    className="form-select"
+                  >
+                    <option value="NIO">Córdobas (C$)</option>
+                    <option value="USD">Dólares (US$)</option>
+                  </select>
+                </div>
+                
+                <div className="form-group">
+                  <label className="form-label">
+                    {newBill.currency_used === 'NIO' ? 'Monto (C$):' : 'Monto (US$):'}
+                  </label>
                   <input
                     type="number"
                     required
                     min="0"
                     step="0.01"
-                    value={newBill.amount}
-                    onChange={(e) => setNewBill({...newBill, amount: e.target.value})}
+                    value={newBill.currency_used === 'NIO' ? newBill.amount : newBill.amount_USD}
+                    onChange={(e) => handleCurrencyChange(
+                      newBill.currency_used === 'NIO' ? 'amount' : 'amount_USD', 
+                      e.target.value, 
+                      true
+                    )}
                     className="form-input"
                     placeholder="0.00"
                   />
                 </div>
+                
+                <div className="form-group">
+                  <label className="form-label">Tipo de Cambio (C$/US$):</label>
+                  <input
+                    type="number"
+                    min="0.0001"
+                    step="0.0001"
+                    value={newBill.exchange_rate_bill}
+                    onChange={(e) => handleCurrencyChange('exchange_rate_bill', e.target.value, true)}
+                    className="form-input"
+                    placeholder={systemSettings.exchange_rate?.toString() || "36.5000"}
+                  />
+                  <small className="form-help-text">
+                    Tipo de cambio actual: C$ {systemSettings.exchange_rate || 36.5} por US$ 1
+                  </small>
+                </div>
+              </div>
 
+              <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">Fecha:</label>
                   <input
@@ -622,20 +798,37 @@ const BillsPage = () => {
                     className="form-input"
                   />
                 </div>
+
+                <div className="form-group">
+                  <label className="form-label">Categoría:</label>
+                  <select
+                    required
+                    value={newBill.category}
+                    onChange={(e) => setNewBill({...newBill, category: e.target.value})}
+                    className="form-select"
+                  >
+                    {BILL_CATEGORIES.map(category => (
+                      <option key={category} value={category}>{category}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Categoría:</label>
-                <select
-                  required
-                  value={newBill.category}
-                  onChange={(e) => setNewBill({...newBill, category: e.target.value})}
-                  className="form-select"
-                >
-                  {BILL_CATEGORIES.map(category => (
-                    <option key={category} value={category}>{category}</option>
-                  ))}
-                </select>
+              {/* Mostrar conversión */}
+              <div className="conversion-info">
+                <small>
+                  {newBill.currency_used === 'NIO' && newBill.amount ? (
+                    <>
+                      <FontAwesomeIcon icon={faExchangeAlt} />
+                      Equivalente en US$: {formatCurrencyUSD(parseFloat(newBill.amount) / parseFloat(newBill.exchange_rate_bill || systemSettings.exchange_rate || 36.5))}
+                    </>
+                  ) : newBill.currency_used === 'USD' && newBill.amount_USD ? (
+                    <>
+                      <FontAwesomeIcon icon={faExchangeAlt} />
+                      Equivalente en C$: {formatCurrency(parseFloat(newBill.amount_USD) * parseFloat(newBill.exchange_rate_bill || systemSettings.exchange_rate || 36.5))}
+                    </>
+                  ) : null}
+                </small>
               </div>
 
               <div className="form-group">
@@ -685,7 +878,7 @@ const BillsPage = () => {
         </div>
       )}
 
-      {/* Modal para editar gasto */}
+      {/* Modal para editar gasto CON SOPORTE PARA DÓLARES Y TIPO DE CAMBIO DINÁMICO */}
       {showEditModal && selectedBill && (
         <div className="modal-overlay">
           <div className="modal-content">
@@ -719,18 +912,53 @@ const BillsPage = () => {
 
               <div className="form-row">
                 <div className="form-group">
-                  <label className="form-label">Monto (NIO):</label>
+                  <label className="form-label">Moneda:</label>
+                  <select
+                    value={editBill.currency_used}
+                    onChange={(e) => handleCurrencyChange('currency_used', e.target.value, false)}
+                    className="form-select"
+                  >
+                    <option value="NIO">Córdobas (C$)</option>
+                    <option value="USD">Dólares (US$)</option>
+                  </select>
+                </div>
+                
+                <div className="form-group">
+                  <label className="form-label">
+                    {editBill.currency_used === 'NIO' ? 'Monto (C$):' : 'Monto (US$):'}
+                  </label>
                   <input
                     type="number"
                     required
                     min="0"
                     step="0.01"
-                    value={editBill.amount}
-                    onChange={(e) => setEditBill({...editBill, amount: e.target.value})}
+                    value={editBill.currency_used === 'NIO' ? editBill.amount : editBill.amount_USD}
+                    onChange={(e) => handleCurrencyChange(
+                      editBill.currency_used === 'NIO' ? 'amount' : 'amount_USD', 
+                      e.target.value, 
+                      false
+                    )}
                     className="form-input"
                   />
                 </div>
+                
+                <div className="form-group">
+                  <label className="form-label">Tipo de Cambio (C$/US$):</label>
+                  <input
+                    type="number"
+                    min="0.0001"
+                    step="0.0001"
+                    value={editBill.exchange_rate_bill}
+                    onChange={(e) => handleCurrencyChange('exchange_rate_bill', e.target.value, false)}
+                    className="form-input"
+                  />
+                  <small className="form-help-text">
+                    Tipo de cambio actual: C$ {systemSettings.exchange_rate || 36.5} por US$ 1
+                  </small>
+                </div>
+              </div>
 
+              <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">Fecha:</label>
                   <input
@@ -741,20 +969,37 @@ const BillsPage = () => {
                     className="form-input"
                   />
                 </div>
+
+                <div className="form-group">
+                  <label className="form-label">Categoría:</label>
+                  <select
+                    required
+                    value={editBill.category}
+                    onChange={(e) => setEditBill({...editBill, category: e.target.value})}
+                    className="form-select"
+                  >
+                    {BILL_CATEGORIES.map(category => (
+                      <option key={category} value={category}>{category}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Categoría:</label>
-                <select
-                  required
-                  value={editBill.category}
-                  onChange={(e) => setEditBill({...editBill, category: e.target.value})}
-                  className="form-select"
-                >
-                  {BILL_CATEGORIES.map(category => (
-                    <option key={category} value={category}>{category}</option>
-                  ))}
-                </select>
+              {/* Mostrar conversión */}
+              <div className="conversion-info">
+                <small>
+                  {editBill.currency_used === 'NIO' && editBill.amount ? (
+                    <>
+                      <FontAwesomeIcon icon={faExchangeAlt} />
+                      Equivalente en US$: {formatCurrencyUSD(parseFloat(editBill.amount) / parseFloat(editBill.exchange_rate_bill || systemSettings.exchange_rate || 36.5))}
+                    </>
+                  ) : editBill.currency_used === 'USD' && editBill.amount_USD ? (
+                    <>
+                      <FontAwesomeIcon icon={faExchangeAlt} />
+                      Equivalente en C$: {formatCurrency(parseFloat(editBill.amount_USD) * parseFloat(editBill.exchange_rate_bill || systemSettings.exchange_rate || 36.5))}
+                    </>
+                  ) : null}
+                </small>
               </div>
 
               <div className="form-group">
@@ -825,7 +1070,7 @@ const BillsPage = () => {
             </div>
             
             <div className="stats-content">
-              {/* Resumen general */}
+              {/* Resumen general CON DÓLARES */}
               <div className="stats-section">
                 <h4>Resumen General</h4>
                 <div className="stats-grid">
@@ -837,20 +1082,29 @@ const BillsPage = () => {
                     <div className="stat-title">Gastos Fijos</div>
                     <div className="stat-value">{stats.fixed}</div>
                     <div className="stat-amount">{formatCurrency(stats.fixedAmount)}</div>
+                    {stats.fixedAmountUSD > 0 && (
+                      <div className="stat-amount-usd">{formatCurrencyUSD(stats.fixedAmountUSD)}</div>
+                    )}
                   </div>
                   <div className="stat-item">
                     <div className="stat-title">Gastos Variables</div>
                     <div className="stat-value">{stats.variable}</div>
                     <div className="stat-amount">{formatCurrency(stats.variableAmount)}</div>
+                    {stats.variableAmountUSD > 0 && (
+                      <div className="stat-amount-usd">{formatCurrencyUSD(stats.variableAmountUSD)}</div>
+                    )}
                   </div>
                   <div className="stat-item">
                     <div className="stat-title">Total Monto</div>
                     <div className="stat-value">{formatCurrency(stats.totalAmount)}</div>
+                    {stats.totalAmountUSD > 0 && (
+                      <div className="stat-amount-usd">{formatCurrencyUSD(stats.totalAmountUSD)}</div>
+                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Por categoría */}
+              {/* Por categoría CON DÓLARES */}
               <div className="stats-section">
                 <h4>Gastos por Categoría</h4>
                 <div className="category-stats">
@@ -863,7 +1117,12 @@ const BillsPage = () => {
                           <span className="category-count">{data.count} gastos</span>
                         </div>
                         <div className="category-amount">
-                          {formatCurrency(data.amount)}
+                          <div>{formatCurrency(data.amount)}</div>
+                          {data.amount_USD > 0 && (
+                            <div className="category-amount-usd">
+                              {formatCurrencyUSD(data.amount_USD)}
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))
@@ -898,8 +1157,11 @@ const BillsPage = () => {
                       if (periodStats) {
                         alert(`Estadísticas del período:\n\n` +
                               `Gastos totales: ${formatCurrency(periodStats.total_expenses)}\n` +
+                              `Gastos totales en USD: ${formatCurrencyUSD(periodStats.total_expenses_usd || 0)}\n` +
                               `Gastos fijos: ${formatCurrency(periodStats.fixed_expenses)}\n` +
+                              `Gastos fijos en USD: ${formatCurrencyUSD(periodStats.fixed_expenses_usd || 0)}\n` +
                               `Gastos variables: ${formatCurrency(periodStats.variable_expenses)}\n` +
+                              `Gastos variables en USD: ${formatCurrencyUSD(periodStats.variable_expenses_usd || 0)}\n` +
                               `Número de gastos: ${periodStats.total_bills}`);
                       }
                     }}

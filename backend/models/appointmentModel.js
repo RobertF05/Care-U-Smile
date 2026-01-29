@@ -1,4 +1,3 @@
-// models/appointmentModel.js
 import { supabaseAdmin } from '../config/supabase.js';
 import { 
   toUTCFromNicaragua, 
@@ -195,8 +194,13 @@ const Appointment = {
     return data;
   },
 
-  // Convertir cita en procedimiento (mantiene misma fecha UTC)
+  // Convertir cita en procedimiento - VERSIÓN CORREGIDA
   async convertToProcedure(appointmentId, procedureData) {
+    console.log('📝 Iniciando conversión de cita a procedimiento:', {
+      appointmentId,
+      procedureData: JSON.stringify(procedureData, null, 2)
+    });
+    
     // 1. Obtener la cita
     const { data: appointment, error: appointmentError } = await supabaseAdmin
       .from('clinical_appointments')
@@ -206,46 +210,115 @@ const Appointment = {
     
     if (appointmentError) throw appointmentError;
     
+    console.log('📅 Cita encontrada:', {
+      appointment_ID: appointment.appointment_ID,
+      is_registered: appointment.is_registered,
+      state: appointment.state
+    });
+    
     // Verificar si ya está registrada
     if (appointment.is_registered) {
       throw new Error('Esta cita ya ha sido registrada como procedimiento');
     }
     
+    // IMPORTANTE: Dar prioridad al total_procedure_USD que viene del frontend
+    // El frontend ya calcula el valor correcto después de deducciones
+    let total_procedure_USD = procedureData.total_procedure_USD;
+    
+    // Si no viene del frontend, calcularlo basado en el total_procedure y tipo de cambio
+    const exchange_rate = procedureData.exchange_rate || 36.5;
+    
+    console.log('💰 Valores recibidos:', {
+      total_procedure_USD_from_frontend: total_procedure_USD,
+      total_procedure: procedureData.total_procedure,
+      exchange_rate: exchange_rate,
+      amount_dollars: procedureData.amount_dollars
+    });
+    
+    // Solo calcular si no viene del frontend
+    if (total_procedure_USD === undefined || total_procedure_USD === null) {
+      console.log('⚠️ total_procedure_USD no viene del frontend, calculando...');
+      if (procedureData.total_procedure) {
+        total_procedure_USD = procedureData.total_procedure / exchange_rate;
+        console.log('🔄 Calculado total_procedure_USD:', total_procedure_USD);
+      } else {
+        // Fallback: usar amount_dollars si está disponible
+        total_procedure_USD = procedureData.amount_dollars || 0;
+        console.log('🔄 Usando amount_dollars como total_procedure_USD:', total_procedure_USD);
+      }
+    }
+    
+    // También calcular amount_dollars si no viene
+    let amount_dollars = procedureData.amount_dollars || 0;
+    if (!amount_dollars && procedureData.amount_cordobas) {
+      amount_dollars = procedureData.amount_cordobas / exchange_rate;
+    }
+    
+    console.log('✅ Valores finales a guardar:', {
+      total_procedure_USD: total_procedure_USD,
+      amount_dollars: amount_dollars,
+      exchange_rate: exchange_rate
+    });
+    
     // 2. Crear el procedimiento (usar misma fecha UTC de la cita)
+    const procedureToInsert = {
+  appointment_ID: appointmentId,
+  Patient_ID: appointment.Patient_ID,
+  procedure_date: appointment.appointment_date, // Mantener UTC
+  procedure_description: procedureData.procedure_description,
+  total_cost: procedureData.total_cost || 0,
+  total_cost_USD: procedureData.total_cost_USD || 0,
+  payment_method: procedureData.payment_method,
+  is_orthodontics: appointment.is_orthodontics,
+  observations: procedureData.observations || appointment.observations,
+  creation_date: new Date().toISOString(),
+  // Campos adicionales - ¡CORREGIDOS!
+  total_procedure: procedureData.total_procedure || 0,
+  total_procedure_usd: total_procedure_USD, // ¡CAMPO CORREGIDO!
+  amount_cordobas: procedureData.amount_cordobas || 0,
+  amount_dollars: amount_dollars,
+  payment_method_cordobas: procedureData.payment_method_cordobas,
+  payment_method_dollars: procedureData.payment_method_dollars,
+  external_doctor: procedureData.external_doctor,
+  external_doctor_payment: procedureData.external_doctor_payment,
+  theres_external_doctor: procedureData.theres_external_doctor || false,
+  external_doctor_name: procedureData.external_doctor_name,
+  external_doctor_specialty: procedureData.external_doctor_specialty,
+  external_doctor_payment_type: procedureData.external_doctor_payment_type,
+  external_doctor_payment_value: procedureData.external_doctor_payment_value,
+  external_doctor_payment_currency: procedureData.external_doctor_payment_currency,
+  clinic_payment_percentage: procedureData.clinic_payment_percentage,
+  doctor_payment_percentage: procedureData.doctor_payment_percentage,
+  // Campos de deducción POS
+  pos_deduction_cordobas: procedureData.pos_deduction_cordobas || 0,
+  pos_deduction_dollars: procedureData.pos_deduction_dollars || 0,
+  total_pos_deduction: procedureData.total_pos_deduction || 0,
+  net_amount_cordobas: procedureData.net_amount_cordobas || procedureData.amount_cordobas || 0,
+  net_amount_dollars: procedureData.net_amount_dollars || procedureData.amount_dollars || 0,
+  gross_amount_cordobas: procedureData.gross_amount_cordobas || procedureData.amount_cordobas || 0,
+  gross_amount_dollars: procedureData.gross_amount_dollars || procedureData.amount_dollars || 0,
+  // ELIMINAR ESTA LÍNEA: exchange_rate: exchange_rate ❌
+  // No existe en la tabla procedures
+};
+    
+    console.log('📊 Insertando procedimiento con datos:', JSON.stringify(procedureToInsert, null, 2));
+    
     const { data: procedure, error: procedureError } = await supabaseAdmin
       .from('procedures')
-      .insert([{
-        appointment_ID: appointmentId,
-        Patient_ID: appointment.Patient_ID,
-        procedure_date: appointment.appointment_date, // Mantener UTC
-        procedure_description: procedureData.procedure_description,
-        total_cost: procedureData.total_cost,
-        payment_method: procedureData.payment_method,
-        is_orthodontics: appointment.is_orthodontics,
-        observations: procedureData.observations || appointment.observations,
-        creation_date: new Date().toISOString(),
-        // Campos adicionales
-        total_cost_USD: procedureData.total_cost_USD || 0,
-        total_procedure: procedureData.total_procedure || 0,
-        amount_cordobas: procedureData.amount_cordobas || 0,
-        amount_dollars: procedureData.amount_dollars || 0,
-        payment_method_cordobas: procedureData.payment_method_cordobas,
-        payment_method_dollars: procedureData.payment_method_dollars,
-        external_doctor: procedureData.external_doctor,
-        external_doctor_payment: procedureData.external_doctor_payment,
-        theres_external_doctor: procedureData.theres_external_doctor || false,
-        external_doctor_name: procedureData.external_doctor_name,
-        external_doctor_specialty: procedureData.external_doctor_specialty,
-        external_doctor_payment_type: procedureData.external_doctor_payment_type,
-        external_doctor_payment_value: procedureData.external_doctor_payment_value,
-        external_doctor_payment_currency: procedureData.external_doctor_payment_currency,
-        clinic_payment_percentage: procedureData.clinic_payment_percentage,
-        doctor_payment_percentage: procedureData.doctor_payment_percentage
-      }])
+      .insert([procedureToInsert])
       .select()
       .single();
     
-    if (procedureError) throw procedureError;
+    if (procedureError) {
+      console.error('❌ Error al crear procedimiento:', procedureError);
+      throw procedureError;
+    }
+    
+    console.log('✅ Procedimiento creado:', {
+      procedure_ID: procedure.procedure_ID,
+      total_procedure: procedure.total_procedure,
+      total_procedure_usd: procedure.total_procedure_usd
+    });
     
     // 3. Actualizar estado de la cita a "completed" y marcar como registrada
     const { data: updatedAppointment, error: updateError } = await supabaseAdmin
@@ -258,7 +331,21 @@ const Appointment = {
       .select()
       .single();
     
-    if (updateError) throw updateError;
+    if (updateError) {
+      console.error('❌ Error al actualizar cita:', updateError);
+      // Revertir la creación del procedimiento si falla la actualización
+      await supabaseAdmin
+        .from('procedures')
+        .delete()
+        .eq('procedure_ID', procedure.procedure_ID);
+      throw updateError;
+    }
+    
+    console.log('✅ Cita actualizada:', {
+      appointment_ID: updatedAppointment.appointment_ID,
+      state: updatedAppointment.state,
+      is_registered: updatedAppointment.is_registered
+    });
     
     return {
       appointment: {

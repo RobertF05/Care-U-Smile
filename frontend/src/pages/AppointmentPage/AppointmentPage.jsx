@@ -52,12 +52,11 @@ const APPOINTMENT_STATUS = {
   CANCELLED: 'cancelled'
 };
 
-// FUNCIONES FORMATADORAS CORREGIDAS
+// FUNCIONES FORMATADORAS
 const formatDateTime = (dateString) => {
   if (!dateString) return '';
   
   try {
-    // Si ya viene formateado del backend con AM/PM, devolverlo tal cual
     if (typeof dateString === 'string' && dateString.includes(', ') && 
         (dateString.includes('p. m.') || dateString.includes('a. m.'))) {
       return dateString;
@@ -66,7 +65,6 @@ const formatDateTime = (dateString) => {
     const date = new Date(dateString);
     
     if (isNaN(date.getTime())) {
-      // Intentar extraer fecha del formato Nicaragua
       const parts = dateString.split(' ');
       if (parts.length >= 6) {
         return dateString;
@@ -74,7 +72,6 @@ const formatDateTime = (dateString) => {
       return 'Fecha inválida';
     }
     
-    // Formatear en hora Nicaragua (UTC-6)
     return date.toLocaleString('es-NI', {
       weekday: 'short',
       year: 'numeric',
@@ -83,7 +80,7 @@ const formatDateTime = (dateString) => {
       hour: '2-digit',
       minute: '2-digit',
       hour12: true,
-      timeZone: 'America/Managua' // Especificar zona horaria de Nicaragua
+      timeZone: 'America/Managua'
     });
   } catch (error) {
     console.error('Error formateando fecha:', error);
@@ -94,16 +91,10 @@ const formatDateTime = (dateString) => {
 const formatTime = (dateString) => {
   if (!dateString) return '';
   
-  console.log('🕒 DEBUG formatTime - Input raw:', JSON.stringify(dateString));
-  
   try {
-    // Normalizar espacios: reemplazar espacios no-breaking (\xa0) con espacios normales
     const normalizedString = dateString.replace(/\xa0/g, ' ');
-    console.log('🕒 DEBUG - Normalized:', normalizedString);
     
-    // CASO 1: Si ya viene formateado del backend (con "p. m." o "a. m.")
     if (typeof normalizedString === 'string') {
-      // Usar expresión regular más flexible que maneje diferentes espacios
       const timeMatch = normalizedString.match(/(\d{1,2}):(\d{2}):(\d{2})\s+([ap])\.\s*m\./i);
       
       if (timeMatch) {
@@ -112,27 +103,21 @@ const formatTime = (dateString) => {
         const ampm = timeMatch[4].toLowerCase() === 'p' ? 'p. m.' : 'a. m.';
         const hour12 = hour % 12 || 12;
         
-        console.log('🕒 DEBUG - Extraído con regex:', { hour, minute, ampm, hour12 });
         return `${hour12}:${minute} ${ampm}`;
       }
       
-      // Intentar con otra variante del formato
       const alternativeMatch = normalizedString.match(/(\d{1,2}):(\d{2}):(\d{2})/);
       if (alternativeMatch) {
         const hour = parseInt(alternativeMatch[1]);
         const minute = alternativeMatch[2];
-        
-        // Determinar AM/PM basado en el string completo
         const isPM = normalizedString.toLowerCase().includes('p.');
         const ampm = isPM ? 'p. m.' : 'a. m.';
         const hour12 = hour % 12 || 12;
         
-        console.log('🕒 DEBUG - Extraído alternativa:', { hour, minute, ampm, hour12 });
         return `${hour12}:${minute} ${ampm}`;
       }
     }
     
-    // CASO 2: Si es una fecha ISO (2026-01-28T18:00:00)
     if (dateString.includes('T') && dateString.includes(':')) {
       const date = new Date(dateString);
       
@@ -140,26 +125,21 @@ const formatTime = (dateString) => {
         return '--:--';
       }
       
-      // Convertir UTC a hora Nicaragua (UTC-6)
       const utcHours = date.getUTCHours();
       const utcMinutes = date.getUTCMinutes();
       
-      // Ajustar a Nicaragua (restar 6 horas)
       let nicaraguaHours = utcHours - 6;
       if (nicaraguaHours < 0) nicaraguaHours += 24;
       
-      // Convertir a formato 12h con AM/PM
       const ampm = nicaraguaHours >= 12 ? 'p. m.' : 'a. m.';
       const hour12 = nicaraguaHours % 12 || 12;
       
       return `${hour12}:${utcMinutes.toString().padStart(2, '0')} ${ampm}`;
     }
     
-    // CASO 3: Intentar parsear como Date object
     const date = new Date(dateString);
     
     if (isNaN(date.getTime())) {
-      // Último intento: extraer manualmente del formato
       const manualMatch = dateString.match(/(\d{1,2}):(\d{2})/);
       if (manualMatch) {
         const hour = parseInt(manualMatch[1]);
@@ -174,7 +154,6 @@ const formatTime = (dateString) => {
       return '--:--';
     }
     
-    // Usar formato local con zona horaria específica
     return date.toLocaleTimeString('es-NI', {
       hour: '2-digit',
       minute: '2-digit',
@@ -195,7 +174,6 @@ const formatDateShort = (dateString) => {
     const date = new Date(dateString);
     
     if (isNaN(date.getTime())) {
-      // Intentar extraer fecha del formato Nicaragua
       const dateMatch = dateString.match(/(\d{2}\/\d{2}\/\d{4})/);
       if (dateMatch) {
         return dateMatch[1];
@@ -241,67 +219,51 @@ const getCurrentDateTimeForInput = () => {
   return `${year}-${month}-${day}T${hours}:${minutes}`;
 };
 
-// Función para preparar fecha para input datetime-local CORREGIDA
 const prepareForDateTimeInput = (dateString) => {
   if (!dateString) return getCurrentDateTimeForInput();
   
-  console.log('📅 DEBUG prepareForDateTimeInput - Input:', dateString);
-  
   try {
-    // CASO 1: Si viene del backend en formato Nicaragua (con AM/PM)
     if (dateString.includes(', ') && (dateString.includes('p. m.') || dateString.includes('a. m.'))) {
       const parts = dateString.split(', ');
       if (parts.length === 2) {
         const [datePart, timePart] = parts;
         const [day, month, year] = datePart.split('/');
         
-        // Extraer hora, minuto y AM/PM
         const timeMatch = timePart.match(/(\d{1,2}):(\d{2}):(\d{2}) ([ap])\. m\./i);
         if (timeMatch) {
           const hour = parseInt(timeMatch[1]);
           const minute = timeMatch[2];
           const ampm = timeMatch[4].toLowerCase();
           
-          // Convertir a formato 24h
           let hour24 = hour;
           if (ampm === 'p') {
-            // PM: sumar 12 excepto para las 12 PM
             if (hour24 < 12) {
               hour24 += 12;
             }
-            // Si es 12 PM, mantener como 12
           } else {
-            // AM: si es 12 AM, convertir a 0
             if (hour24 === 12) {
               hour24 = 0;
             }
           }
           
-          const formattedDate = `${year}-${month}-${day}T${String(hour24).padStart(2, '0')}:${minute}`;
-          console.log('📅 DEBUG - Caso 1 convertido:', { dateString, hour, ampm, hour24, formattedDate });
-          return formattedDate;
+          return `${year}-${month}-${day}T${String(hour24).padStart(2, '0')}:${minute}`;
         }
       }
     }
     
-    // CASO 2: Si es una fecha ISO
     if (dateString.includes('T')) {
       const date = new Date(dateString);
       if (!isNaN(date.getTime())) {
-        // Usar componentes UTC para evitar problemas de zona horaria
         const year = date.getUTCFullYear();
         const month = String(date.getUTCMonth() + 1).padStart(2, '0');
         const day = String(date.getUTCDate()).padStart(2, '0');
         const hours = String(date.getUTCHours()).padStart(2, '0');
         const minutes = String(date.getUTCMinutes()).padStart(2, '0');
         
-        const formattedDate = `${year}-${month}-${day}T${hours}:${minutes}`;
-        console.log('📅 DEBUG - Caso 2 convertido (UTC):', { dateString, formattedDate });
-        return formattedDate;
+        return `${year}-${month}-${day}T${hours}:${minutes}`;
       }
     }
     
-    // CASO 3: Intentar parsear como fecha general
     const date = new Date(dateString);
     if (!isNaN(date.getTime())) {
       const year = date.getFullYear();
@@ -310,44 +272,14 @@ const prepareForDateTimeInput = (dateString) => {
       const hours = String(date.getHours()).padStart(2, '0');
       const minutes = String(date.getMinutes()).padStart(2, '0');
       
-      const formattedDate = `${year}-${month}-${day}T${hours}:${minutes}`;
-      console.log('📅 DEBUG - Caso 3 convertido (local):', { dateString, formattedDate });
-      return formattedDate;
+      return `${year}-${month}-${day}T${hours}:${minutes}`;
     }
     
-    console.warn('📅 DEBUG - No se pudo parsear la fecha, usando fecha actual:', dateString);
     return getCurrentDateTimeForInput();
     
   } catch (error) {
     console.error('Error preparando fecha para input:', error, dateString);
     return getCurrentDateTimeForInput();
-  }
-};
-
-// Función auxiliar para ajustar fecha a Nicaragua
-const adjustToNicaraguaTime = (dateString) => {
-  if (!dateString) return dateString;
-  
-  try {
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return dateString;
-    
-    // Nicaragua es UTC-6
-    const nicaraguaOffset = -6 * 60 * 60 * 1000;
-    const nicaraguaDate = new Date(date.getTime() + nicaraguaOffset);
-    
-    return nicaraguaDate.toLocaleString('es-NI', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: true
-    });
-  } catch (error) {
-    console.error('Error ajustando a hora Nicaragua:', error);
-    return dateString;
   }
 };
 
@@ -410,7 +342,7 @@ const AppointmentPage = () => {
     is_orthodontics: false
   });
 
-  // Formulario de procedimiento CON CAMPOS DE DEDUCCIÓN
+  // Formulario de procedimiento CON CAMPOS DE DEDUCCIÓN Y DÓLARES
   const [procedureForm, setProcedureForm] = useState({
     procedure_description: '',
     amount_cordobas: '',
@@ -464,17 +396,15 @@ const AppointmentPage = () => {
   };
 
   // FUNCIONES DE CÁLCULO DE DEDUCCIÓN POS (5.5%)
-  // Calcular deducción POS (5.5% = 4% comisión + 1.5% impuesto)
   const calculatePOSDeduction = (amount) => {
     return amount * 0.055; // 5.5%
   };
 
-  // Calcular neto después de deducción POS
   const calculateNetAfterPOS = (amount) => {
     return amount - calculatePOSDeduction(amount);
   };
 
-  // Calcular totales incluyendo deducciones
+  // Calcular totales incluyendo deducciones Y CONVERSIONES A DÓLARES
   const calculateTotalsWithDeductions = () => {
     const cordobas = parseFloat(procedureForm.amount_cordobas) || 0;
     const dollars = parseFloat(procedureForm.amount_dollars) || 0;
@@ -501,11 +431,16 @@ const AppointmentPage = () => {
     const totalDeductions = posDeductionCordobas + (posDeductionDollars * exchangeRate);
     const netTotalCordobas = grossTotalCordobas - totalDeductions;
     
+    // Calcular totales en dólares
+    const grossTotalDollars = grossDollars + (grossCordobas / exchangeRate);
+    const netTotalDollars = grossTotalDollars - (totalDeductions / exchangeRate);
+    
     return {
       // Bruto
       grossCordobas,
       grossDollars,
       grossTotalCordobas,
+      grossTotalDollars,
       
       // Deducciones
       posDeductionCordobas,
@@ -516,6 +451,7 @@ const AppointmentPage = () => {
       netCordobas,
       netDollars,
       netTotalCordobas,
+      netTotalDollars,
       
       // Información de método de pago
       isCordobasPOS,
@@ -532,17 +468,20 @@ const AppointmentPage = () => {
 
   // Calcular total en dólares (bruto)
   const calculateTotalDollars = () => {
-    const cordobas = parseFloat(procedureForm.amount_cordobas) || 0;
-    const dollars = parseFloat(procedureForm.amount_dollars) || 0;
-    const exchangeRate = parseFloat(procedureForm.exchange_rate) || 1;
-    
-    return dollars + (cordobas / exchangeRate);
+    const totals = calculateTotalsWithDeductions();
+    return totals.grossTotalDollars;
   };
 
-  // Calcular total del procedimiento (neto después de deducciones)
+  // Calcular total del procedimiento (neto después de deducciones) en córdobas
   const calculateTotalProcedure = () => {
     const totals = calculateTotalsWithDeductions();
     return totals.netTotalCordobas;
+  };
+
+  // Calcular total del procedimiento (neto después de deducciones) en dólares
+  const calculateTotalProcedureUSD = () => {
+    const totals = calculateTotalsWithDeductions();
+    return totals.netTotalDollars;
   };
 
   // Manejar cambios en los pagos
@@ -550,7 +489,7 @@ const AppointmentPage = () => {
     const updatedForm = { ...procedureForm };
     updatedForm[field] = value;
     
-    // Si cambia el tipo de cambio, recalcular dólares
+    // Si cambia el tipo de cambio, recalcular
     if (field === 'exchange_rate') {
       const newRate = parseFloat(value) || 1;
       updatedForm.exchange_rate = newRate;
@@ -1026,7 +965,7 @@ const AppointmentPage = () => {
     }
   };
 
-  // Convertir cita en procedimiento CON DEDUCCIONES POS
+  // Convertir cita en procedimiento CON DEDUCCIONES POS Y MANEJO DE DÓLARES
   const handleConvertToProcedure = async (e) => {
     e.preventDefault();
     
@@ -1043,6 +982,9 @@ const AppointmentPage = () => {
       // Calcular valores con deducciones POS
       const totals = calculateTotalsWithDeductions();
       
+      // Calcular total_procedure_USD (neto en dólares después de deducciones)
+      const total_procedure_USD = totals.netTotalDollars;
+      
       // Calcular pago de doctor externo
       let externalDoctorPayment = null;
       if (procedureForm.external_doctor && procedureForm.external_doctor_payment_value) {
@@ -1057,40 +999,42 @@ const AppointmentPage = () => {
         }
       }
       
-      // Preparar datos para enviar CON DEDUCCIONES
+      // Preparar datos para enviar CON DEDUCCIONES Y DÓLARES
       const procedureData = {
-        procedure_description: procedureForm.procedure_description,
-        total_cost: totals.grossCordobas, // cantidad bruta en córdobas
-        total_cost_USD: totals.grossDollars, // cantidad bruta en dólares
-        total_procedure: totals.netTotalCordobas, // cantidad neta después de deducciones
-        payment_method: procedureForm.payment_method_cordobas || procedureForm.payment_method_dollars,
-        
-        // Campos de pagos múltiples
-        amount_cordobas: totals.grossCordobas,
-        amount_dollars: totals.grossDollars,
-        payment_method_cordobas: procedureForm.payment_method_cordobas,
-        payment_method_dollars: procedureForm.payment_method_dollars,
-        
-        // NUEVOS CAMPOS PARA DEDUCCIONES POS
-        pos_deduction_cordobas: totals.posDeductionCordobas,
-        pos_deduction_dollars: totals.posDeductionDollars,
-        total_pos_deduction: totals.totalDeductions,
-        net_amount_cordobas: totals.netCordobas,
-        net_amount_dollars: totals.netDollars,
-        gross_amount_cordobas: totals.grossCordobas,
-        gross_amount_dollars: totals.grossDollars,
-        
-        // Resto de campos
-        observations: procedureForm.observations,
-        external_doctor: procedureForm.external_doctor_name,
-        external_doctor_payment: externalDoctorPayment,
-        theres_external_doctor: procedureForm.external_doctor,
-        external_doctor_name: procedureForm.external_doctor_name,
-        external_doctor_specialty: procedureForm.external_doctor_specialty,
-        external_doctor_payment_type: procedureForm.external_doctor_payment_type,
-        external_doctor_payment_value: procedureForm.external_doctor_payment_value,
-        external_doctor_payment_currency: procedureForm.external_doctor_payment_currency
-      };
+      procedure_description: procedureForm.procedure_description,
+      total_cost: totals.grossCordobas, // cantidad bruta en córdobas
+      total_cost_USD: totals.grossDollars, // cantidad bruta en dólares
+      total_procedure: totals.netTotalCordobas, // cantidad neta después de deducciones en C$
+      total_procedure_USD: total_procedure_USD, // cantidad neta después de deducciones en US$
+      payment_method: procedureForm.payment_method_cordobas || procedureForm.payment_method_dollars,
+      
+      // Campos de pagos múltiples
+      amount_cordobas: totals.grossCordobas,
+      amount_dollars: totals.grossDollars,
+      payment_method_cordobas: procedureForm.payment_method_cordobas,
+      payment_method_dollars: procedureForm.payment_method_dollars,
+      
+      // Campos para deducciones POS
+      pos_deduction_cordobas: totals.posDeductionCordobas,
+      pos_deduction_dollars: totals.posDeductionDollars,
+      total_pos_deduction: totals.totalDeductions,
+      net_amount_cordobas: totals.netCordobas,
+      net_amount_dollars: totals.netDollars,
+      gross_amount_cordobas: totals.grossCordobas,
+      gross_amount_dollars: totals.grossDollars,
+      
+      // Resto de campos
+      observations: procedureForm.observations,
+      external_doctor: procedureForm.external_doctor_name,
+      external_doctor_payment: externalDoctorPayment,
+      theres_external_doctor: procedureForm.external_doctor,
+      external_doctor_name: procedureForm.external_doctor_name,
+      external_doctor_specialty: procedureForm.external_doctor_specialty,
+      external_doctor_payment_type: procedureForm.external_doctor_payment_type,
+      external_doctor_payment_value: procedureForm.external_doctor_payment_value,
+      external_doctor_payment_currency: procedureForm.external_doctor_payment_currency,
+      exchange_rate: procedureForm.exchange_rate // Asegurar que se envíe el tipo de cambio
+    };
       
       // Solo añadir porcentajes si es ortodoncia
       if (selectedAppointment.is_orthodontics) {
@@ -1101,7 +1045,7 @@ const AppointmentPage = () => {
         procedureData.doctor_payment_percentage = 0;
       }
       
-      console.log('Datos del procedimiento con deducciones:', procedureData);
+      console.log('Datos del procedimiento con total en dólares:', procedureData);
       
       await convertAppointmentToProcedure(
         selectedAppointment.appointment_ID,
@@ -1551,13 +1495,7 @@ const AppointmentPage = () => {
                     </div>
                     <div className="appointment-time compact">
                       {(() => {
-                        console.log('🕒 Llamando formatTime para cita:', {
-                          id: appointment.appointment_ID,
-                          date: appointment.appointment_date,
-                          type: typeof appointment.appointment_date
-                        });
                         const result = formatTime(appointment.appointment_date);
-                        console.log('🕒 Resultado:', result);
                         return result;
                       })()}
                     </div>
@@ -2169,7 +2107,7 @@ const AppointmentPage = () => {
         </div>
       )}
 
-      {/* Modal para convertir cita en procedimiento CON DEDUCCIONES POS */}
+      {/* Modal para convertir cita en procedimiento CON DEDUCCIONES POS Y MANEJO DE DÓLARES */}
       {showConvertModal && selectedAppointment && (
         <div className="modal-overlay">
           <div className="modal-content large-modal">
@@ -2232,7 +2170,7 @@ const AppointmentPage = () => {
                   />
                 </div>
                 
-                {/* Sección de pagos mixtos CON DEDUCCIONES POS */}
+                {/* Sección de pagos mixtos CON DEDUCCIONES POS Y MANEJO DE DÓLARES */}
                 <div className="mixed-payment-section">
                   <h5>Pagos Mixtos (Córdobas y Dólares)</h5>
                   <p className="section-note">
@@ -2355,7 +2293,7 @@ const AppointmentPage = () => {
                     />
                   </div>
                   
-                  {/* Totales calculados CON DEDUCCIONES */}
+                  {/* Totales calculados CON DEDUCCIONES Y CONVERSIONES A DÓLARES */}
                   <div className="totals-section">
                     <div className="total-row">
                       <span className="total-label">Bruto en Córdobas (C$):</span>
@@ -2396,6 +2334,13 @@ const AppointmentPage = () => {
                       </span>
                     </div>
                     
+                    <div className="total-row total-gross-usd">
+                      <span className="total-label">Total Bruto (US$):</span>
+                      <span className="total-value">
+                        {formatCurrencyUSD(calculateTotalsWithDeductions().grossTotalDollars)}
+                      </span>
+                    </div>
+                    
                     {(procedureForm.payment_method_cordobas === 'POS' || procedureForm.payment_method_dollars === 'POS') && (
                       <div className="total-row total-deduction">
                         <span className="total-label">Total Deducciones POS (C$):</span>
@@ -2411,6 +2356,16 @@ const AppointmentPage = () => {
                       </span>
                       <span className="total-value">
                         <strong>{formatCurrency(calculateTotalProcedure())}</strong>
+                      </span>
+                    </div>
+                    
+                    {/* NUEVO: Mostrar total en dólares */}
+                    <div className="total-row total-procedure-usd">
+                      <span className="total-label">
+                        <strong>Total Neto del Procedimiento (US$):</strong>
+                      </span>
+                      <span className="total-value">
+                        <strong>{formatCurrencyUSD(calculateTotalProcedureUSD())}</strong>
                       </span>
                     </div>
                     

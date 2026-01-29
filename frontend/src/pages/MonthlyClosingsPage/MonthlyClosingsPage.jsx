@@ -22,7 +22,10 @@ import {
   faUserMd,
   faTooth,
   faHospital,
-  faCalendarCheck
+  faCalendarCheck,
+  faFileExcel,
+  faFilePdf,
+  faListAlt
 } from '@fortawesome/free-solid-svg-icons';
 import { AppContext } from '../../context/AppContext';
 import { AuthContext } from '../../context/AuthContext';
@@ -53,8 +56,8 @@ const MonthlyClosingsPage = () => {
   // Estados
   const [showFilters, setShowFilters] = useState(true);
   const [yearFilter, setYearFilter] = useState(new Date().getFullYear().toString());
-  const [closingTypeFilter, setClosingTypeFilter] = useState('all'); // 'all', 'monthly', 'daily'
-  const [closingSubTypeFilter, setClosingSubTypeFilter] = useState('all'); // 'all', 'general', 'orthodontics'
+  const [closingTypeFilter, setClosingTypeFilter] = useState('all');
+  const [closingSubTypeFilter, setClosingSubTypeFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showCreateDailyModal, setShowCreateDailyModal] = useState(false);
@@ -64,6 +67,7 @@ const MonthlyClosingsPage = () => {
   const [creating, setCreating] = useState(false);
   const [creatingDaily, setCreatingDaily] = useState(false);
   const [dailySummary, setDailySummary] = useState(null);
+  const [deleteVariableExpenses, setDeleteVariableExpenses] = useState(true);
   
   // Formulario para crear cierre mensual
   const [newClosing, setNewClosing] = useState({
@@ -81,13 +85,12 @@ const MonthlyClosingsPage = () => {
     comentary: ''
   });
 
-  // Generar años para filtro (últimos 5 años)
+  // Generar años para filtro
   const years = useMemo(() => {
     const currentYear = new Date().getFullYear();
     return Array.from({ length: 5 }, (_, i) => (currentYear - i).toString());
   }, []);
 
-  // Cargar datos iniciales
   useEffect(() => {
     if (user) {
       fetchMonthlyClosings();
@@ -126,6 +129,14 @@ const MonthlyClosingsPage = () => {
     });
   };
 
+  // Funciones para expandir/contraer - AGREGADA
+  const toggleExpandClosing = (closingId) => {
+    setExpandedClosings(prev => ({
+      ...prev,
+      [closingId]: !prev[closingId]
+    }));
+  };
+
   // Combinar y filtrar todos los cierres
   const allClosings = useMemo(() => {
     const monthly = monthlyClosings.map(closing => ({
@@ -134,9 +145,11 @@ const MonthlyClosingsPage = () => {
       closing_id: closing.closing_ID,
       type: 'monthly',
       sub_type: 'monthly',
-      display_date: `${closing.month} ${closing.year}`,
+      display_date: `Cierre de ${closing.month} ${closing.year}`,
+      date_exact: closing.closing_date_display || formatDate(closing.closing_date),
       date_sort: `${closing.year}-${getMonthNumber(closing.month).padStart(2, '0')}-01`,
       total_clinic_income: (closing.total_general_income || 0) + (closing.total_clinical_orthodontic_income || 0),
+      // CAMBIO: No incluir pago doctora en gastos mensuales
       total_expenses: (closing.total_fixed_expenses || 0) + (closing.total_variable_expenses || 0)
     }));
 
@@ -146,10 +159,11 @@ const MonthlyClosingsPage = () => {
       closing_id: closing.daily_closing_id,
       type: 'daily',
       sub_type: closing.closing_type,
-      display_date: formatDate(closing.closing_date),
+      display_date: `Cierre Diario - ${closing.closing_date_formatted || formatDate(closing.closing_date)}`,
+      date_exact: closing.closing_date_formatted || formatDate(closing.closing_date),
       date_sort: closing.closing_date,
       total_clinic_income: closing.total_clinic_income || 0,
-      total_expenses: 0, // Los gastos se manejan diferente en diarios
+      total_expenses: 0,
       net_profit: closing.net_profit || 0
     }));
 
@@ -160,23 +174,19 @@ const MonthlyClosingsPage = () => {
   const filteredClosings = useMemo(() => {
     let filtered = [...allClosings];
 
-    // Filtrar por tipo de cierre
     if (closingTypeFilter !== 'all') {
       filtered = filtered.filter(closing => closing.type === closingTypeFilter);
     }
 
-    // Filtrar por subtipo (solo para diarios)
     if (closingSubTypeFilter !== 'all' && closingTypeFilter === 'daily') {
       filtered = filtered.filter(closing => closing.sub_type === closingSubTypeFilter);
     }
 
-    // Filtrar por año (solo para mensuales)
     if (yearFilter !== 'all') {
       filtered = filtered.filter(closing => {
         if (closing.type === 'monthly') {
           return closing.year.toString() === yearFilter;
         }
-        // Para diarios, verificar si el año coincide
         if (closing.type === 'daily') {
           const closingYear = new Date(closing.closing_date).getFullYear().toString();
           return closingYear === yearFilter;
@@ -185,7 +195,6 @@ const MonthlyClosingsPage = () => {
       });
     }
 
-    // Filtrar por búsqueda
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(closing => 
@@ -198,7 +207,6 @@ const MonthlyClosingsPage = () => {
       );
     }
 
-    // Ordenar por fecha descendente
     return filtered.sort((a, b) => {
       if (b.date_sort < a.date_sort) return -1;
       if (b.date_sort > a.date_sort) return 1;
@@ -206,182 +214,124 @@ const MonthlyClosingsPage = () => {
     });
   }, [allClosings, closingTypeFilter, closingSubTypeFilter, yearFilter, searchTerm]);
 
-  // Estadísticas generales
-  const stats = useMemo(() => {
-    const monthly = allClosings.filter(c => c.type === 'monthly');
-    const daily = allClosings.filter(c => c.type === 'daily');
-    const dailyOrthodontics = daily.filter(c => c.sub_type === 'orthodontics');
-    const dailyGeneral = daily.filter(c => c.sub_type === 'general');
-
-    const totalMonthlyIncome = monthly.reduce((sum, closing) => 
-      sum + (closing.total_clinic_income || 0), 0
-    );
-    
-    const totalMonthlyExpenses = monthly.reduce((sum, closing) => 
-      sum + (closing.total_expenses || 0), 0
-    );
-    
-    const totalMonthlyProfit = monthly.reduce((sum, closing) => 
-      sum + (closing.net_profit || 0), 0
-    );
-
-    const totalDailyIncome = daily.reduce((sum, closing) => 
-      sum + (closing.total_clinic_income || 0), 0
-    );
-    
-    const totalDailyProfit = daily.reduce((sum, closing) => 
-      sum + (closing.net_profit || 0), 0
-    );
-
-    return {
-      total: allClosings.length,
-      monthlyCount: monthly.length,
-      dailyCount: daily.length,
-      dailyOrthodonticsCount: dailyOrthodontics.length,
-      dailyGeneralCount: dailyGeneral.length,
-      totalMonthlyIncome,
-      totalMonthlyExpenses,
-      totalMonthlyProfit,
-      totalDailyIncome,
-      totalDailyProfit,
-      bestMonth: monthly.length > 0 ? 
-        monthly.reduce((best, current) => 
-          (current.net_profit > best.net_profit) ? current : best
-        ) : null,
-      worstMonth: monthly.length > 0 ? 
-        monthly.reduce((worst, current) => 
-          (current.net_profit < worst.net_profit) ? current : worst
-        ) : null
-    };
-  }, [allClosings]);
-
-  // Funciones para expandir/contraer
-  const toggleExpandClosing = (closingId) => {
-    setExpandedClosings(prev => ({
-      ...prev,
-      [closingId]: !prev[closingId]
-    }));
-  };
-
   // Crear cierre mensual
-  // Crear cierre mensual - VERSIÓN CON LOGS MEJORADOS
-const handleCreateClosing = async (e) => {
-  e.preventDefault();
-  setCreating(true);
-  
-  try {
-    // Validar que no exista ya un cierre para ese mes/año
-    const exists = monthlyClosings.some(
-      closing => closing.month === newClosing.month && 
-                 closing.year.toString() === newClosing.year
-    );
+  const handleCreateClosing = async (e) => {
+    e.preventDefault();
+    setCreating(true);
     
-    if (exists) {
-      alert(`⚠️ Ya existe un cierre para ${newClosing.month} ${newClosing.year}`);
-      setCreating(false);
-      return;
-    }
-
-    // Calcular fechas del período
-    const startDate = newClosing.startDate || `${newClosing.year}-${getMonthNumber(newClosing.month)}-01`;
-    const endDate = newClosing.endDate || getLastDayOfMonth(newClosing.year, newClosing.month);
-    
-    console.log('📅 Período a calcular:', { startDate, endDate });
-    
-    // Obtener resumen financiero desde el backend
-    console.log('🔍 Llamando a getIncomeStats...');
-    const summaryResponse = await getIncomeStats(startDate, endDate);
-    
-    console.log('📊 Respuesta completa de getIncomeStats:', summaryResponse);
-    console.log('📈 Datos del summary:', summaryResponse.data);
-    
-    if (!summaryResponse.success) {
-      console.error('❌ Error en getIncomeStats:', summaryResponse.error);
-      throw new Error('Error al obtener el resumen financiero: ' + summaryResponse.error);
-    }
-
-    const summary = summaryResponse.data;
-    
-    // Mostrar estructura completa para debug
-    console.log('🔍 Estructura completa del summary:');
-    Object.keys(summary).forEach(key => {
-      console.log(`  ${key}:`, summary[key]);
-    });
-    
-    // Usar valores por defecto si no existen
-    const totalGeneralIncome = summary.general_income || summary.total_general_income || 0;
-    const totalClinicOrthodonticIncome = summary.clinic_orthodontic_income || summary.total_clinical_orthodontic_income || 0;
-    const totalDoctorOrthodonticIncome = summary.doctor_orthodontic_income || summary.total_orthodontic_doctor_income || 0;
-    const totalFixedExpenses = summary.fixed_expenses || summary.total_fixed_expenses || 0;
-    const totalVariableExpenses = summary.variable_expenses || summary.total_variable_expenses || 0;
-    
-    console.log('🧮 Valores calculados:', {
-      totalGeneralIncome,
-      totalClinicOrthodonticIncome,
-      totalDoctorOrthodonticIncome,
-      totalFixedExpenses,
-      totalVariableExpenses
-    });
-    
-    // Calcular valores correctamente
-    const totalClinicIncome = totalGeneralIncome + totalClinicOrthodonticIncome;
-    const totalExpenses = totalFixedExpenses + totalVariableExpenses;
-    const netProfit = totalClinicIncome - totalExpenses - totalDoctorOrthodonticIncome;
-    
-    console.log('💰 Resultados finales:', {
-      totalClinicIncome,
-      totalExpenses,
-      netProfit
-    });
-    
-    // Crear cierre
-    const closingData = {
-      month: newClosing.month,
-      year: parseInt(newClosing.year),
-      total_general_income: totalGeneralIncome,
-      total_clinical_orthodontic_income: totalClinicOrthodonticIncome,
-      total_orthodontic_doctor_income: totalDoctorOrthodonticIncome,
-      total_fixed_expenses: totalFixedExpenses,
-      total_variable_expenses: totalVariableExpenses,
-      net_profit: netProfit,
-      comentary: newClosing.comentary || ''
-    };
-    
-    console.log('📤 Datos para crear cierre mensual:', closingData);
-
-    const response = await createMonthlyClosing(closingData);
-    
-    if (response.success) {
-      alert(`✅ Cierre de ${newClosing.month} ${newClosing.year} creado exitosamente\n\n` +
-            `Ingresos Generales: ${formatCurrency(closingData.total_general_income)}\n` +
-            `Ortodoncia Clínica (40%): ${formatCurrency(closingData.total_clinical_orthodontic_income)}\n` +
-            `Pago Doctora Ortodoncia (60%): ${formatCurrency(closingData.total_orthodontic_doctor_income)}\n` +
-            `Gastos Fijos: ${formatCurrency(closingData.total_fixed_expenses)}\n` +
-            `Gastos Variables: ${formatCurrency(closingData.total_variable_expenses)}\n` +
-            `Utilidad Neta: ${formatCurrency(closingData.net_profit)}`);
+    try {
+      // Validar que no exista ya un cierre para ese mes/año
+      const exists = monthlyClosings.some(
+        closing => closing.month === newClosing.month && 
+                   closing.year.toString() === newClosing.year
+      );
       
-      setShowCreateModal(false);
-      setNewClosing({
-        month: MONTHS[new Date().getMonth()],
-        year: new Date().getFullYear().toString(),
-        startDate: '',
-        endDate: '',
-        comentary: ''
+      if (exists) {
+        alert(`⚠️ Ya existe un cierre para ${newClosing.month} ${newClosing.year}`);
+        setCreating(false);
+        return;
+      }
+
+      // Calcular fechas del período
+      const startDate = newClosing.startDate || `${newClosing.year}-${getMonthNumber(newClosing.month)}-01`;
+      const endDate = newClosing.endDate || getLastDayOfMonth(newClosing.year, newClosing.month);
+      
+      console.log('📅 Período a calcular:', { startDate, endDate });
+      
+      // Obtener resumen financiero desde el backend
+      console.log('🔍 Llamando a getIncomeStats...');
+      const summaryResponse = await getIncomeStats(startDate, endDate);
+      
+      console.log('📊 Respuesta completa de getIncomeStats:', summaryResponse);
+      console.log('📈 Datos del summary:', summaryResponse.data);
+      
+      if (!summaryResponse.success) {
+        console.error('❌ Error en getIncomeStats:', summaryResponse.error);
+        throw new Error('Error al obtener el resumen financiero: ' + summaryResponse.error);
+      }
+
+      const summary = summaryResponse.data;
+      
+      // Usar valores por defecto si no existen
+      const totalGeneralIncome = summary.general_income || summary.total_general_income || 0;
+      const totalClinicOrthodonticIncome = summary.clinic_orthodontic_income || summary.total_clinical_orthodontic_income || 0;
+      const totalFixedExpenses = summary.fixed_expenses || summary.total_fixed_expenses || 0;
+      const totalVariableExpenses = summary.variable_expenses || summary.total_variable_expenses || 0;
+      
+      console.log('🧮 Valores calculados:', {
+        totalGeneralIncome,
+        totalClinicOrthodonticIncome,
+        totalFixedExpenses,
+        totalVariableExpenses
       });
       
-      // Recargar cierres
-      fetchMonthlyClosings();
-    } else {
-      throw new Error(response.error || 'Error al crear cierre');
+      // CAMBIO: No incluir pago doctora ortodoncia en cálculo mensual
+      const totalClinicIncome = totalGeneralIncome + totalClinicOrthodonticIncome;
+      const totalExpenses = totalFixedExpenses + totalVariableExpenses;
+      const netProfit = totalClinicIncome - totalExpenses; // Eliminado el pago doctora
+      
+      console.log('💰 Resultados finales:', {
+        totalClinicIncome,
+        totalExpenses,
+        netProfit
+      });
+      
+      // Crear cierre con opción de eliminar gastos variables
+      const closingData = {
+        month: newClosing.month,
+        year: parseInt(newClosing.year),
+        total_general_income: totalGeneralIncome,
+        total_clinical_orthodontic_income: totalClinicOrthodonticIncome,
+        // CAMBIO: No incluir pago doctora en datos de cierre mensual
+        total_orthodontic_doctor_income: 0, // Se establece en 0
+        total_fixed_expenses: totalFixedExpenses,
+        total_variable_expenses: totalVariableExpenses,
+        net_profit: netProfit,
+        comentary: newClosing.comentary || '',
+        deleteVariableExpenses: deleteVariableExpenses
+      };
+      
+      console.log('📤 Datos para crear cierre mensual:', closingData);
+
+      const response = await apiFetch('/monthly-closings', {
+        method: 'POST',
+        body: JSON.stringify(closingData),
+      });
+      
+      if (response.success) {
+        const deleteMessage = deleteVariableExpenses ? 
+          '\n✅ Gastos variables eliminados automáticamente' : 
+          '\n⚠️ Gastos variables conservados en el sistema';
+        
+        alert(`✅ Cierre de ${newClosing.month} ${newClosing.year} creado exitosamente${deleteMessage}\n\n` +
+              `Ingresos Generales: ${formatCurrency(closingData.total_general_income)}\n` +
+              `Ortodoncia Clínica (40%): ${formatCurrency(closingData.total_clinical_orthodontic_income)}\n` +
+              `Gastos Fijos: ${formatCurrency(closingData.total_fixed_expenses)}\n` +
+              `Gastos Variables: ${formatCurrency(closingData.total_variable_expenses)}\n` +
+              `Utilidad Neta: ${formatCurrency(closingData.net_profit)}`);
+        
+        setShowCreateModal(false);
+        setNewClosing({
+          month: MONTHS[new Date().getMonth()],
+          year: new Date().getFullYear().toString(),
+          startDate: '',
+          endDate: '',
+          comentary: ''
+        });
+        
+        // Recargar cierres
+        fetchMonthlyClosings();
+      } else {
+        throw new Error(response.error || 'Error al crear cierre');
+      }
+      
+    } catch (error) {
+      console.error('❌ Error detallado al crear cierre:', error);
+      alert(`❌ Error: ${error.message}`);
+    } finally {
+      setCreating(false);
     }
-    
-  } catch (error) {
-    console.error('❌ Error detallado al crear cierre:', error);
-    alert(`❌ Error: ${error.message}`);
-  } finally {
-    setCreating(false);
-  }
-};
+  };
 
   // Obtener resumen diario previo
   const handleGetDailySummary = async () => {
@@ -392,7 +342,6 @@ const handleCreateClosing = async (e) => {
       if (summaryResponse.success) {
         setDailySummary(summaryResponse.data);
         
-        // Verificar si ya existe cierre
         if (summaryResponse.data.closing_exists) {
           alert(`⚠️ Ya existe un cierre ${newDailyClosing.closing_type === 'orthodontics' ? 'de ortodoncia' : 'general'} para esta fecha`);
         }
@@ -468,11 +417,6 @@ const handleCreateClosing = async (e) => {
     setShowDetailModal(true);
   };
 
-  // Exportar a PDF
-  const handleExportPDF = (closing) => {
-    alert(`📄 Exportando cierre de ${closing.display_date} a PDF...`);
-  };
-
   // Obtener color según utilidad
   const getProfitColor = (profit) => {
     if (profit > 0) return '#4CAF50';
@@ -508,6 +452,61 @@ const handleCreateClosing = async (e) => {
     return 'General Diario';
   };
 
+  // Exportar a PDF
+  const handleExportPDF = async (closing) => {
+    try {
+      let endpoint;
+      if (closing.type === 'monthly') {
+        endpoint = `/export/pdf/monthly/${closing.closing_id}`;
+      } else {
+        endpoint = `/export/pdf/daily/${closing.closing_id}`;
+      }
+      
+      window.open(`/api${endpoint}`, '_blank');
+      
+    } catch (error) {
+      console.error('Error al exportar PDF:', error);
+      alert('Error al exportar a PDF');
+    }
+  };
+
+  // Exportar a Excel DETALLADO
+  const handleExportExcelDetailed = async (closing) => {
+    try {
+      let endpoint;
+      if (closing.type === 'monthly') {
+        endpoint = `/export/excel/detailed/monthly/${closing.closing_id}`;
+      } else {
+        endpoint = `/export/excel/detailed/daily/${closing.closing_id}`;
+      }
+      
+      window.open(`/api${endpoint}`, '_blank');
+      
+    } catch (error) {
+      console.error('Error al exportar Excel detallado:', error);
+      alert('Error al exportar a Excel detallado');
+    }
+  };
+
+  // Exportar a Excel GENERAL
+  const handleExportExcelGeneral = async (type, filters = {}) => {
+    try {
+      const queryParams = new URLSearchParams({
+        type: type,
+        ...(filters.startDate && { startDate: filters.startDate }),
+        ...(filters.endDate && { endDate: filters.endDate })
+      }).toString();
+      
+      const endpoint = `/export/excel${queryParams ? `?${queryParams}` : ''}`;
+      
+      window.open(`/api${endpoint}`, '_blank');
+      
+    } catch (error) {
+      console.error('Error al exportar Excel general:', error);
+      alert('Error al exportar a Excel general');
+    }
+  };
+
   if (loading && allClosings.length === 0) {
     return (
       <div className="closings-container">
@@ -534,6 +533,22 @@ const handleCreateClosing = async (e) => {
         </div>
         <div className="header-right">
           <div className="btn-group">
+            <button 
+              className="secondary-btn"
+              onClick={() => handleExportExcelGeneral('monthly')}
+              title="Exportar cierres mensuales a Excel (formato tabla)"
+            >
+              <FontAwesomeIcon icon={faFileExcel} />
+              Excel Mensual
+            </button>
+            <button 
+              className="secondary-btn"
+              onClick={() => handleExportExcelGeneral('daily')}
+              title="Exportar cierres diarios a Excel (formato tabla)"
+            >
+              <FontAwesomeIcon icon={faFileExcel} />
+              Excel Diario
+            </button>
             <button 
               className="secondary-btn"
               onClick={() => setShowCreateDailyModal(true)}
@@ -579,9 +594,8 @@ const handleCreateClosing = async (e) => {
           
           <div className="filter-controls">
             <div className="filter-row">
-              {/* Filtro por tipo de cierre */}
               <div className="filter-group">
-                <label className="filter-label">Tipo de cierre:</label>
+                <label className="form-label">Tipo de cierre:</label>
                 <select
                   value={closingTypeFilter}
                   onChange={(e) => setClosingTypeFilter(e.target.value)}
@@ -593,10 +607,9 @@ const handleCreateClosing = async (e) => {
                 </select>
               </div>
 
-              {/* Filtro por subtipo (solo para diarios) */}
               {closingTypeFilter === 'daily' && (
                 <div className="filter-group">
-                  <label className="filter-label">Subtipo:</label>
+                  <label className="form-label">Subtipo:</label>
                   <select
                     value={closingSubTypeFilter}
                     onChange={(e) => setClosingSubTypeFilter(e.target.value)}
@@ -609,9 +622,8 @@ const handleCreateClosing = async (e) => {
                 </div>
               )}
 
-              {/* Filtro por año */}
               <div className="filter-group">
-                <label className="filter-label">Año:</label>
+                <label className="form-label">Año:</label>
                 <select
                   value={yearFilter}
                   onChange={(e) => setYearFilter(e.target.value)}
@@ -625,10 +637,9 @@ const handleCreateClosing = async (e) => {
               </div>
             </div>
 
-            {/* Búsqueda */}
             <div className="filter-row">
               <div className="filter-group full-width">
-                <label className="filter-label">
+                <label className="form-label">
                   <FontAwesomeIcon icon={faSearch} /> Buscar:
                 </label>
                 <div className="search-box">
@@ -637,7 +648,7 @@ const handleCreateClosing = async (e) => {
                     placeholder="Buscar por fecha, mes, año o comentario..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="search-input"
+                    className="form-input"
                   />
                   {searchTerm && (
                     <button 
@@ -653,42 +664,6 @@ const handleCreateClosing = async (e) => {
           </div>
         </div>
       )}
-
-      {/* Estadísticas */}
-      <div className="quick-stats">
-        <div className="stat-card total">
-          <div className="stat-icon">
-            <FontAwesomeIcon icon={faFileInvoice} />
-          </div>
-          <div className="stat-content">
-            <div className="stat-value">{stats.total}</div>
-            <div className="stat-label">Cierres Totales</div>
-          </div>
-        </div>
-        
-        <div className="stat-card monthly">
-          <div className="stat-icon">
-            <FontAwesomeIcon icon={faCalendarAlt} />
-          </div>
-          <div className="stat-content">
-            <div className="stat-value">{stats.monthlyCount}</div>
-            <div className="stat-label">Cierres Mensuales</div>
-          </div>
-        </div>
-        
-        <div className="stat-card daily">
-          <div className="stat-icon">
-            <FontAwesomeIcon icon={faCalendarDay} />
-          </div>
-          <div className="stat-content">
-            <div className="stat-value">{stats.dailyCount}</div>
-            <div className="stat-label">Cierres Diarios</div>
-            <div className="stat-subtext">
-              {stats.dailyGeneralCount} General / {stats.dailyOrthodonticsCount} Ortodoncia
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* Lista de cierres */}
       {filteredClosings.length === 0 ? (
@@ -741,23 +716,31 @@ const handleCreateClosing = async (e) => {
                   </div>
                   
                   <div className="closing-period-info">
-                    {closing.type === 'monthly' ? (
-                      <div className="closing-date">
-                        <FontAwesomeIcon icon={faCalendarAlt} />
-                        <span>Período: {closing.month} {closing.year}</span>
-                      </div>
-                    ) : (
-                      <div className="closing-date">
-                        <FontAwesomeIcon icon={faCalendarDay} />
-                        <span>Fecha: {formatDate(closing.closing_date)}</span>
-                        {closing.sub_type === 'orthodontics' && (
-                          <span className="ortho-tag">
-                            <FontAwesomeIcon icon={faTooth} />
-                            Ortodoncia
+                    <div className="closing-date-container">
+                      {closing.type === 'monthly' ? (
+                        <div className="closing-date">
+                          <FontAwesomeIcon icon={faCalendarAlt} />
+                          <span>Período: {closing.month} {closing.year}</span>
+                          <span className="date-badge" style={{ 
+                            backgroundColor: 'rgba(33, 150, 243, 0.1)',
+                            color: '#2196F3'
+                          }}>
+                            Fecha cierre: {formatDate(closing.closing_date)}
                           </span>
-                        )}
-                      </div>
-                    )}
+                        </div>
+                      ) : (
+                        <div className="closing-date">
+                          <FontAwesomeIcon icon={faCalendarDay} />
+                          <span>Fecha exacta: {closing.date_exact}</span>
+                          {closing.sub_type === 'orthodontics' && (
+                            <span className="ortho-tag">
+                              <FontAwesomeIcon icon={faTooth} />
+                              Ortodoncia
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
                     
                     {closing.comentary && (
                       <div className="closing-comment">
@@ -789,21 +772,29 @@ const handleCreateClosing = async (e) => {
                     <button 
                       className="action-btn view"
                       onClick={() => handleViewDetails(closing)}
-                      title="Ver detalles"
+                      title="Ver detalles completos"
                     >
                       <FontAwesomeIcon icon={faEye} />
                     </button>
                     <button 
                       className="action-btn print"
                       onClick={() => handleExportPDF(closing)}
-                      title="Exportar a PDF"
+                      title="Exportar a PDF (formato vertical)"
                     >
-                      <FontAwesomeIcon icon={faPrint} />
+                      <FontAwesomeIcon icon={faFilePdf} />
+                    </button>
+                    <button 
+                      className="action-btn download"
+                      onClick={() => handleExportExcelDetailed(closing)}
+                      title="Exportar a Excel con desglose completo"
+                    >
+                      <FontAwesomeIcon icon={faListAlt} />
+                      <span className="btn-tooltip">Excel Detallado</span>
                     </button>
                     <FontAwesomeIcon 
                       icon={expandedClosings[closing.id] ? faChevronUp : faChevronDown} 
                       className="expand-icon"
-                      onClick={() => toggleExpandClosing(closing.id)}
+                      onClick={() => toggleExpandClosing(closing.id)} // CORREGIDO
                     />
                   </div>
                 </div>
@@ -833,12 +824,7 @@ const handleCreateClosing = async (e) => {
                           <span className="summary-label">Gastos Variables:</span>
                           <span className="summary-value">{formatCurrency(closing.total_variable_expenses)}</span>
                         </div>
-                        <div className="summary-item doctor-payment highlight">
-                          <span className="summary-label">
-                            <FontAwesomeIcon icon={faUserMd} /> Pago Doctora (60%):
-                          </span>
-                          <span className="summary-value">{formatCurrency(closing.total_orthodontic_doctor_income)}</span>
-                        </div>
+                        {/* NOTA: Se elimina la fila de pago doctora ortodoncia para cierres mensuales */}
                       </div>
                     ) : (
                       <div className="summary-grid">
@@ -895,6 +881,33 @@ const handleCreateClosing = async (e) => {
                           {formatCurrency(closing.net_profit)}
                         </span>
                       </div>
+                    </div>
+                  </div>
+                  
+                  <div className="export-options">
+                    <h6>Opciones de Exportación:</h6>
+                    <div className="export-buttons">
+                      <button 
+                        className="secondary-btn small"
+                        onClick={() => handleExportPDF(closing)}
+                      >
+                        <FontAwesomeIcon icon={faFilePdf} />
+                        PDF (Formato Vertical)
+                      </button>
+                      <button 
+                        className="secondary-btn small"
+                        onClick={() => handleExportExcelDetailed(closing)}
+                      >
+                        <FontAwesomeIcon icon={faListAlt} />
+                        Excel con Desglose Completo
+                      </button>
+                      <button 
+                        className="secondary-btn small"
+                        onClick={() => handleExportExcelGeneral(closing.type === 'monthly' ? 'monthly' : 'daily')}
+                      >
+                        <FontAwesomeIcon icon={faFileExcel} />
+                        Excel (Formato Tabla)
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -979,6 +992,31 @@ const handleCreateClosing = async (e) => {
               </div>
 
               <div className="form-group">
+                <label className="form-label">
+                  <div className="switch-container">
+                    <span>Eliminar gastos variables después del cierre:</span>
+                    <label className="switch">
+                      <input
+                        type="checkbox"
+                        checked={deleteVariableExpenses}
+                        onChange={(e) => setDeleteVariableExpenses(e.target.checked)}
+                        disabled={creating}
+                      />
+                      <span className="slider round"></span>
+                    </label>
+                    <span className="switch-label">
+                      {deleteVariableExpenses ? 'Sí, eliminar automáticamente' : 'No, conservar en el sistema'}
+                    </span>
+                  </div>
+                </label>
+                <small className="form-help">
+                  {deleteVariableExpenses 
+                    ? '⚠️ Los gastos variables del período serán eliminados permanentemente para mantener la base de datos limpia'
+                    : 'Los gastos variables se conservarán para futuras consultas'}
+                </small>
+              </div>
+
+              <div className="form-group">
                 <label className="form-label">Comentarios (opcional):</label>
                 <textarea
                   value={newClosing.comentary}
@@ -997,8 +1035,8 @@ const handleCreateClosing = async (e) => {
                   <ul>
                     <li>✅ Todos los procedimientos del período</li>
                     <li>✅ Gastos fijos (se incluyen automáticamente)</li>
-                    <li>✅ Gastos variables del período</li>
-                    <li>✅ <strong>Pago a doctora ortodoncia (60%) como gasto</strong></li>
+                    <li>✅ Gastos variables del período {deleteVariableExpenses ? '(se eliminarán)' : ''}</li>
+                    <li>✅ <strong>NOTA: El pago a doctora ortodoncia NO se incluye en cierres mensuales</strong></li>
                   </ul>
                 </div>
               </div>
@@ -1100,7 +1138,6 @@ const handleCreateClosing = async (e) => {
                 />
               </div>
 
-              {/* Vista previa del resumen */}
               {dailySummary && (
                 <div className="daily-summary-preview">
                   <h5>
@@ -1241,8 +1278,8 @@ const handleCreateClosing = async (e) => {
                     </span>
                   </div>
                   <div className="detail-item">
-                    <span className="detail-label">Fecha/Período:</span>
-                    <span className="detail-value">{selectedClosing.display_date}</span>
+                    <span className="detail-label">Fecha exacta:</span>
+                    <span className="detail-value">{selectedClosing.date_exact}</span>
                   </div>
                   {selectedClosing.type === 'monthly' ? (
                     <>
@@ -1257,8 +1294,10 @@ const handleCreateClosing = async (e) => {
                     </>
                   ) : (
                     <div className="detail-item">
-                      <span className="detail-label">Fecha exacta:</span>
-                      <span className="detail-value">{formatDate(selectedClosing.closing_date)}</span>
+                      <span className="detail-label">Tipo específico:</span>
+                      <span className="detail-value">
+                        {selectedClosing.sub_type === 'orthodontics' ? 'Ortodoncia' : 'General'}
+                      </span>
                     </div>
                   )}
                   <div className="detail-item">
@@ -1309,20 +1348,20 @@ const handleCreateClosing = async (e) => {
                       </div>
 
                       <div className="breakdown-section expenses">
-                        <h5>Gastos (Incluye honorarios doctora)</h5>
+                        <h5>Gastos</h5>
                         <div className="breakdown-item">
                           <span>Gastos Fijos:</span>
                           <span className="amount">{formatCurrency(selectedClosing.total_fixed_expenses)}</span>
                         </div>
                         <div className="breakdown-item highlight">
                           <span>
-                            <FontAwesomeIcon icon={faUserMd} /> Gastos Variables (incl. doctora):
+                            Gastos Variables:
                           </span>
-                          <span className="amount doctor-payment">
+                          <span className="amount">
                             {formatCurrency(selectedClosing.total_variable_expenses)}
                           </span>
-                          <small className="doctor-note">Incluye pago a doctora ortodoncia</small>
                         </div>
+                        {/* NOTA: Se elimina la sección de pago doctora ortodoncia para cierres mensuales */}
                         <div className="breakdown-total">
                           <span>Total Gastos:</span>
                           <span className="total-amount">
@@ -1411,15 +1450,58 @@ const handleCreateClosing = async (e) => {
                 </div>
               </div>
 
-              {/* Acciones */}
-              <div className="detail-actions">
-                <button 
-                  className="secondary-btn"
-                  onClick={() => handleExportPDF(selectedClosing)}
-                >
-                  <FontAwesomeIcon icon={faPrint} />
-                  Exportar a PDF
-                </button>
+              {/* Opciones de Exportación */}
+              <div className="detail-section">
+                <h4>Opciones de Exportación</h4>
+                <div className="export-options-grid">
+                  <div className="export-option">
+                    <div className="export-icon">
+                      <FontAwesomeIcon icon={faFilePdf} />
+                    </div>
+                    <div className="export-info">
+                      <h5>PDF (Formato Vertical)</h5>
+                      <p>Documento profesional listo para imprimir o compartir</p>
+                    </div>
+                    <button 
+                      className="primary-btn small"
+                      onClick={() => handleExportPDF(selectedClosing)}
+                    >
+                      Descargar PDF
+                    </button>
+                  </div>
+                  
+                  <div className="export-option">
+                    <div className="export-icon">
+                      <FontAwesomeIcon icon={faListAlt} />
+                    </div>
+                    <div className="export-info">
+                      <h5>Excel con Desglose Completo</h5>
+                      <p>Incluye todas las hojas: resumen, procedimientos, gastos y análisis</p>
+                    </div>
+                    <button 
+                      className="primary-btn small"
+                      onClick={() => handleExportExcelDetailed(selectedClosing)}
+                    >
+                      Descargar Excel Detallado
+                    </button>
+                  </div>
+                  
+                  <div className="export-option">
+                    <div className="export-icon">
+                      <FontAwesomeIcon icon={faFileExcel} />
+                    </div>
+                    <div className="export-info">
+                      <h5>Excel (Formato Tabla)</h5>
+                      <p>Tabla simple para análisis rápido o importación a otros sistemas</p>
+                    </div>
+                    <button 
+                      className="secondary-btn small"
+                      onClick={() => handleExportExcelGeneral(selectedClosing.type === 'monthly' ? 'monthly' : 'daily')}
+                    >
+                      Descargar Excel Simple
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

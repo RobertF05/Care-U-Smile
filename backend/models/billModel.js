@@ -31,6 +31,59 @@ const Bill = {
     };
   },
 
+  // Eliminar gastos variables de un período
+  async deleteVariableExpensesFromPeriod(startDate, endDate) {
+    const start = adjustDateForQuery(startDate);
+    const end = adjustDateForQuery(endDate);
+    
+    console.log('🗑️ Eliminando gastos variables del período:', { start, end });
+    
+    // Primero obtener los IDs para registro
+    const { data: billsToDelete, error: selectError } = await supabaseAdmin
+      .from('bills')
+      .select('bill_ID, description, amount')
+      .eq('is_recurrent', false)
+      .eq('is_processed_in_closing', false)
+      .gte('bill_date', start)
+      .lte('bill_date', end);
+    
+    if (selectError) {
+      console.error('Error al seleccionar gastos para eliminar:', selectError);
+      throw selectError;
+    }
+    
+    if (!billsToDelete || billsToDelete.length === 0) {
+      console.log('ℹ️ No hay gastos variables para eliminar');
+      return { deletedCount: 0, totalAmount: 0 };
+    }
+    
+    const totalAmount = billsToDelete.reduce((sum, bill) => sum + (bill.amount || 0), 0);
+    
+    console.log(`📊 Gastos a eliminar: ${billsToDelete.length}, Monto total: ${totalAmount}`);
+    
+    // Eliminar los gastos
+    const { error: deleteError } = await supabaseAdmin
+      .from('bills')
+      .delete()
+      .eq('is_recurrent', false)
+      .eq('is_processed_in_closing', false)
+      .gte('bill_date', start)
+      .lte('bill_date', end);
+    
+    if (deleteError) {
+      console.error('Error al eliminar gastos variables:', deleteError);
+      throw deleteError;
+    }
+    
+    console.log(`✅ Eliminados ${billsToDelete.length} gastos variables exitosamente`);
+    
+    return {
+      deletedCount: billsToDelete.length,
+      totalAmount: totalAmount,
+      deletedBills: billsToDelete
+    };
+  },
+
   // Reiniciar estado de procesamiento de gastos
   async resetProcessingStatus(billIds) {
     if (!billIds || billIds.length === 0) return;
@@ -42,7 +95,7 @@ const Bill = {
         processed_in_daily_closing_ID: null,
         processed_in_closing_ID: null
       })
-      .in('bill_id', billIds);
+      .in('bill_ID', billIds);
     
     if (error) throw error;
   },
@@ -96,7 +149,7 @@ const Bill = {
     const { data, error } = await supabaseAdmin
       .from('bills')
       .select('*')
-      .eq('bill_id', id)
+      .eq('bill_ID', id)
       .single();
     
     if (error) throw error;
@@ -134,7 +187,7 @@ const Bill = {
     const { data, error } = await supabaseAdmin
       .from('bills')
       .update(updateData)
-      .eq('bill_id', id)
+      .eq('bill_ID', id)
       .select()
       .single();
     
@@ -143,17 +196,33 @@ const Bill = {
   },
 
   // Eliminar gasto
-  async delete(id) {
-    const { data, error } = await supabaseAdmin
-      .from('bills')
-      .delete()
-      .eq('bill_id', id)
-      .select()
-      .single();
-    
-    if (error) throw error;
-    return data;
-  },
+  // models/billModel.js - Función delete mejorada
+async delete(id) {
+  console.log('Eliminando gasto con ID:', id);
+  console.log('Tipo de ID:', typeof id);
+  
+  const { data, error } = await supabaseAdmin
+    .from('bills')
+    .delete()
+    .eq('bill_ID', id)
+    .select()
+    .single();
+  
+  if (error) {
+    console.error('Error detallado de Supabase al eliminar:', {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      table: 'bills',
+      column: 'bill_ID'
+    });
+    throw new Error(`Error al eliminar gasto: ${error.message}`);
+  }
+  
+  console.log('Gasto eliminado exitosamente:', data);
+  return data;
+},
 
   // Obtener gastos recurrentes
   async getRecurrentBills() {

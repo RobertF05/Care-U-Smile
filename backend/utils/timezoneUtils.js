@@ -1,4 +1,4 @@
-// timezoneUtils.js - VERSIÓN COMPLETA CON TODAS LAS EXPORTACIONES
+// timezoneUtils.js - VERSIÓN ACTUALIZADA CON formatCurrency
 /**
  * Utilidades para manejo de zona horaria de Nicaragua (UTC-6)
  */
@@ -72,6 +72,25 @@ export const formatNicaraguaDate = (utcDateTime) => {
     month: '2-digit',
     day: '2-digit'
   });
+};
+
+/**
+ * Formatea moneda en córdobas nicaragüenses
+ * @param {number} amount - Monto a formatear
+ * @param {boolean} includeSymbol - Si incluye el símbolo de moneda
+ * @returns {string} - Monto formateado
+ */
+export const formatCurrency = (amount, includeSymbol = true) => {
+  if (amount === null || amount === undefined || isNaN(amount)) {
+    amount = 0;
+  }
+  
+  return new Intl.NumberFormat('es-NI', {
+    style: includeSymbol ? 'currency' : 'decimal',
+    currency: 'NIO',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(amount);
 };
 
 /**
@@ -268,8 +287,9 @@ export default {
   toNicaraguaTime,
   formatNicaraguaDateTime,
   formatNicaraguaDate,
+  formatCurrency, // ¡AGREGADA!
   createNicaraguaDateRange,
-  createMonthlyDateRange, // ¡AÑADIDA!
+  createMonthlyDateRange,
   convertDateStringToUTCStart,
   convertDateStringToUTCEnd,
   getCurrentNicaraguaDateString,

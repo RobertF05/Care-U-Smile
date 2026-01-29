@@ -1,4 +1,7 @@
+// monthlyClosingController.js - Corrección completa
 import MonthlyClosing from '../models/monthlyClosingModel.js';
+import { supabaseAdmin } from '../config/supabase.js'; // ¡IMPORTAR supabaseAdmin!
+import Bill from '../models/billModel.js';
 
 const monthlyClosingController = {
   // Obtener todos los cierres
@@ -20,7 +23,7 @@ const monthlyClosingController = {
     }
   },
 
-  // Obtener cierre por ID - CORREGIDO
+  // Obtener cierre por ID
   getById: async (req, res) => {
     try {
       const { id } = req.params;
@@ -33,10 +36,9 @@ const monthlyClosingController = {
         });
       }
       
-      // Asegurar que el ID tenga el formato correcto
       const formattedClosing = {
         ...closing,
-        id: closing.closing_ID || closing.id  // Mantener compatibilidad
+        id: closing.closing_ID || closing.id
       };
       
       res.json({ 
@@ -52,10 +54,10 @@ const monthlyClosingController = {
     }
   },
 
-  // Crear cierre mensual
+  // Crear cierre mensual - VERSIÓN CORREGIDA
   create: async (req, res) => {
     try {
-      const { month, year, startDate, endDate, comentary = '' } = req.body;
+      const { month, year, startDate, endDate, comentary = '', deleteVariableExpenses = true } = req.body;
       
       if (!month || !year) {
         return res.status(400).json({ 
@@ -83,26 +85,99 @@ const monthlyClosingController = {
         periodEndDate
       );
       
+      // Obtener gastos variables del período para eliminarlos después
+      let variableBillsToDelete = [];
+      let variableExpensesAmount = 0;
+      
+      if (deleteVariableExpenses) {
+        try {
+          // Obtener gastos variables no procesados
+          const { data: variableBills, error } = await supabaseAdmin
+            .from('bills')
+            .select('bill_ID, description, amount')
+            .eq('is_recurrent', false) // Solo gastos variables
+            .eq('is_processed_in_closing', false) // No procesados anteriormente
+            .gte('bill_date', periodStartDate)
+            .lte('bill_date', periodEndDate);
+          
+          if (error) {
+            console.error('Error al obtener gastos variables:', error);
+          } else {
+            variableBillsToDelete = variableBills || [];
+            variableExpensesAmount = variableBillsToDelete.reduce((sum, bill) => sum + (bill.amount || 0), 0);
+            console.log(`📝 Encontrados ${variableBillsToDelete.length} gastos variables para eliminar, total: ${variableExpensesAmount}`);
+          }
+        } catch (billError) {
+          console.warn('⚠️ No se pudieron obtener gastos variables para eliminar:', billError.message);
+        }
+      }
+      
       // Crear cierre
       const closingData = {
         month,
         year,
         ...financialSummary,
-        comentary
+        comentary,
+        daily_closings_included: false,
+        orthodontics_daily_closings_included: false,
+        processed_variable_expenses: deleteVariableExpenses
       };
       
       const newClosing = await MonthlyClosing.create(closingData);
+      
+      // Eliminar gastos variables si está configurado
+      if (deleteVariableExpenses && variableBillsToDelete.length > 0) {
+        try {
+          const billIds = variableBillsToDelete.map(bill => bill.bill_ID);
+          
+          // Primero marcar gastos como procesados
+          const { error: updateError } = await supabaseAdmin
+            .from('bills')
+            .update({
+              is_processed_in_closing: true,
+              processed_in_closing_ID: newClosing.closing_ID
+            })
+            .in('bill_ID', billIds);
+          
+          if (updateError) {
+            console.error('Error al marcar gastos como procesados:', updateError);
+          } else {
+            console.log(`✅ Marcados ${billIds.length} gastos como procesados`);
+          }
+          
+          // Luego eliminar los gastos variables
+          const { data: deletedBills, error: deleteError } = await supabaseAdmin
+            .from('bills')
+            .delete()
+            .eq('is_recurrent', false)
+            .gte('bill_date', periodStartDate)
+            .lte('bill_date', periodEndDate)
+            .select();
+          
+          if (deleteError) {
+            console.error('Error al eliminar gastos variables:', deleteError);
+          } else {
+            console.log(`✅ Eliminados ${deletedBills?.length || 0} gastos variables del período`);
+          }
+        } catch (deleteError) {
+          console.error('❌ Error completo al eliminar gastos variables:', deleteError);
+        }
+      }
       
       // Formatear respuesta
       const formattedClosing = {
         ...newClosing,
         closing_ID: newClosing.closing_ID,
-        id: newClosing.closing_ID
+        id: newClosing.closing_ID,
+        variable_expenses_deleted: variableBillsToDelete.length,
+        variable_expenses_amount: variableExpensesAmount,
+        delete_operation: deleteVariableExpenses ? 'completed' : 'skipped'
       };
       
       res.status(201).json({ 
         success: true, 
-        message: 'Cierre mensual creado exitosamente',
+        message: 'Cierre mensual creado exitosamente' + 
+                (deleteVariableExpenses ? ' (gastos variables eliminados)' : ''),
         data: formattedClosing 
       });
     } catch (error) {
@@ -142,7 +217,7 @@ const monthlyClosingController = {
   }
 };
 
-// Funciones auxiliares (se mantienen igual)
+// Funciones auxiliares
 function getMonthNumber(month) {
   const months = {
     'ENERO': '01', 'FEBRERO': '02', 'MARZO': '03', 'ABRIL': '04',

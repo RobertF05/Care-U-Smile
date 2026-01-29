@@ -19,7 +19,7 @@ const DailyClosing = {
       .select('*', { count: 'exact' })
       .order('closing_date', { ascending: false });
     
-    // Aplicar filtros (closing_date es DATE)
+    // Aplicar filtros
     if (filters.closing_type) {
       query = query.eq('closing_type', filters.closing_type);
     }
@@ -40,10 +40,13 @@ const DailyClosing = {
     
     if (error) throw error;
     
-    // Convertir fechas para mostrar
+    // Convertir fechas para mostrar con fecha EXACTA
     const formattedData = data.map(closing => ({
       ...closing,
-      closing_date_display: formatNicaraguaDate(closing.closing_date),
+      // Fecha exacta en formato legible
+      closing_date_exact: closing.closing_date,
+      closing_date_formatted: formatNicaraguaDate(closing.closing_date),
+      closing_date_display: `${formatNicaraguaDate(closing.closing_date)} (${closing.closing_type === 'orthodontics' ? 'Ortodoncia' : 'General'})`,
       created_at_display: formatNicaraguaDateTime(closing.created_at)
     }));
     

@@ -6,16 +6,20 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
   faChevronDown,
   faChevronUp,
-  faChartBar,
   faFilter,
   faTimes,
   faSearch,
   faEye,
   faEyeSlash,
+  faUserDoctor,
+  faCommentMedical,
   faMoneyBillWave,
+  faCreditCard,
+  faExchangeAlt,
+  faClipboardList,
   faDollarSign,
-  faPercentage,
-  faUserDoctor
+  faMoneyBill,
+  faPercentage
 } from '@fortawesome/free-solid-svg-icons';
 import "./ProceduresPage.css";
 
@@ -35,11 +39,9 @@ export default function ProceduresPage() {
     endDate: ""
   });
   const [localError, setLocalError] = useState("");
-  const [expandedStats, setExpandedStats] = useState(false);
   const [expandedFilters, setExpandedFilters] = useState(false);
   const [expandedRows, setExpandedRows] = useState({});
 
-  // Cargar procedimientos al montar
   useEffect(() => {
     if (user) {
       loadProcedures();
@@ -57,7 +59,6 @@ export default function ProceduresPage() {
     }
   };
 
-  // Aplicar filtros
   const applyFilters = async () => {
     try {
       setLocalError("");
@@ -71,7 +72,6 @@ export default function ProceduresPage() {
     }
   };
 
-  // Limpiar filtros
   const clearFilters = async () => {
     try {
       setLocalError("");
@@ -84,7 +84,6 @@ export default function ProceduresPage() {
     }
   };
 
-  // Toggle para expandir/contraer fila
   const toggleRow = (id) => {
     setExpandedRows(prev => ({
       ...prev,
@@ -92,7 +91,6 @@ export default function ProceduresPage() {
     }));
   };
 
-  // Filtrar procedimientos por búsqueda
   const filteredProcedures = procedures
     .filter(procedure => {
       if (!search.trim()) return true;
@@ -106,61 +104,8 @@ export default function ProceduresPage() {
       );
     });
 
-  // Calcular estadísticas
-  const calculateStats = () => {
-    const totalCordobas = filteredProcedures.reduce((sum, proc) => sum + (proc.amount_cordobas || proc.total_cost || 0), 0);
-    const totalDollars = filteredProcedures.reduce((sum, proc) => sum + (proc.amount_dollars || proc.total_cost_USD || 0), 0);
-    const totalProcedureCordobas = filteredProcedures.reduce((sum, proc) => sum + (proc.total_procedure || 0), 0);
-    const totalProcedureDollars = filteredProcedures.reduce((sum, proc) => sum + (proc.total_procedure_usd || 0), 0);
-    
-    // Calcular ganancias de clínica (100% para procedimientos generales)
-    const totalClinicEarningsCordobas = filteredProcedures.reduce((sum, proc) => 
-      sum + (proc.clinic_payment_cordobas || proc.total_procedure || 0), 0);
-    const totalClinicEarningsDollars = filteredProcedures.reduce((sum, proc) => 
-      sum + (proc.clinic_payment_dollars || proc.total_procedure_usd || 0), 0);
-    
-    // Calcular pagos a doctores externos
-    const externalDoctorPaymentsCordobas = filteredProcedures.reduce((sum, proc) => 
-      sum + (proc.external_doctor_payment || 0), 0);
-    const externalDoctorPaymentsDollars = filteredProcedures.reduce((sum, proc) => 
-      sum + (proc.external_doctor_payment_usd || 0), 0);
-    const externalDoctorCount = filteredProcedures.filter(proc => 
-      proc.theres_external_doctor || proc.external_doctor
-    ).length;
-    
-    // Métodos de pago más utilizados
-    const paymentMethods = {};
-    filteredProcedures.forEach(proc => {
-      if (proc.payment_method_cordobas) {
-        paymentMethods[proc.payment_method_cordobas] = (paymentMethods[proc.payment_method_cordobas] || 0) + 1;
-      }
-      if (proc.payment_method_dollars) {
-        paymentMethods[proc.payment_method_dollars] = (paymentMethods[proc.payment_method_dollars] || 0) + 1;
-      }
-    });
-    
-    return {
-      totalCordobas,
-      totalDollars,
-      totalProcedureCordobas,
-      totalProcedureDollars,
-      totalClinicEarningsCordobas,
-      totalClinicEarningsDollars,
-      externalDoctorPaymentsCordobas,
-      externalDoctorPaymentsDollars,
-      externalDoctorCount,
-      averageProcedure: filteredProcedures.length > 0 ? totalProcedureCordobas / filteredProcedures.length : 0,
-      procedureCount: filteredProcedures.length,
-      paymentMethods
-    };
-  };
-
-  const statsData = calculateStats();
-  
-  // Manejar errores
   const error = localError || contextError;
 
-  // Formatear moneda en dólares
   const formatCurrencyUSD = (amount) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -168,7 +113,7 @@ export default function ProceduresPage() {
     }).format(amount || 0);
   };
 
-  // Obtener el método de pago principal
+  // Obtener método de pago principal
   const getMainPaymentMethod = (procedure) => {
     if (procedure.payment_method_cordobas && procedure.payment_method_dollars) {
       return 'Mixto';
@@ -176,36 +121,52 @@ export default function ProceduresPage() {
     return procedure.payment_method_cordobas || procedure.payment_method_dollars || procedure.payment_method || 'No especificado';
   };
 
-  // Calcular ganancias para procedimiento general (100% para clínica)
-  const calculateProcedureEarnings = (procedure) => {
-    const clinicEarningsCordobas = procedure.clinic_payment_cordobas || procedure.total_procedure || 0;
-    const clinicEarningsDollars = procedure.clinic_payment_dollars || procedure.total_procedure_usd || 0;
+  // Obtener icono según método de pago
+  const getPaymentMethodIcon = (method) => {
+    if (!method) return faMoneyBillWave;
     
-    return {
-      clinicEarningsCordobas,
-      clinicEarningsDollars,
-      totalProcedureCordobas: procedure.total_procedure || 0,
-      totalProcedureDollars: procedure.total_procedure_usd || 0,
-      clinicPercentage: 100,
-      doctorPercentage: 0
-    };
+    const methodLower = method.toLowerCase();
+    if (methodLower.includes('efectivo')) return faMoneyBillWave;
+    if (methodLower.includes('pos') || methodLower.includes('tarjeta')) return faCreditCard;
+    if (methodLower.includes('transferencia')) return faExchangeAlt;
+    if (methodLower.includes('mixto')) return faExchangeAlt;
+    if (methodLower.includes('cheque')) return faMoneyBillWave;
+    return faMoneyBillWave;
   };
 
-  // Obtener desglose de pagos
-  const getPaymentBreakdown = (procedure) => {
+  // Obtener color según método de pago
+  const getPaymentMethodColor = (method) => {
+    if (!method) return '#78909C';
+    
+    const methodLower = method.toLowerCase();
+    if (methodLower.includes('efectivo')) return '#4CAF50';
+    if (methodLower.includes('pos') || methodLower.includes('tarjeta')) return '#2196F3';
+    if (methodLower.includes('transferencia')) return '#9C27B0';
+    if (methodLower.includes('mixto')) return '#FF5722';
+    if (methodLower.includes('cheque')) return '#FF9800';
+    return '#78909C';
+  };
+
+  // Calcular totales separados
+  const calculateSeparateTotals = (procedure) => {
     const cordobas = procedure.amount_cordobas || procedure.total_cost || 0;
     const dollars = procedure.amount_dollars || procedure.total_cost_USD || 0;
-    const totalProcedureCordobas = procedure.total_procedure || 0;
-    const totalProcedureDollars = procedure.total_procedure_usd || 0;
+    const exchangeRate = procedure.exchange_rate_used || 36.5;
+    
+    // Si solo hay total_procedure (neto), estimamos los bruto
+    if (procedure.total_procedure && !cordobas && !dollars) {
+      // Asumimos que es todo en córdobas
+      return {
+        cordobas: procedure.total_procedure,
+        dollars: 0,
+        exchangeRate
+      };
+    }
     
     return {
       cordobas,
       dollars,
-      totalProcedureCordobas,
-      totalProcedureDollars,
-      hasCordobas: cordobas > 0,
-      hasDollars: dollars > 0,
-      isMixed: cordobas > 0 && dollars > 0
+      exchangeRate
     };
   };
 
@@ -241,89 +202,6 @@ export default function ProceduresPage() {
         <div className="procedures-tools">
           <div className="procedures-count">
             <span>{filteredProcedures.length}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Estadísticas desplegables */}
-      <div className={`appointments-stats ${expandedStats ? 'expanded' : ''}`}>
-        <div className="stats-header-mobile" onClick={() => setExpandedStats(!expandedStats)}>
-          <div className="stats-header-content">
-            <h3 className="stats-title">
-              <FontAwesomeIcon icon={faChartBar} />
-              Estadísticas de Procedimientos
-            </h3>
-            <div className="stats-summary-mobile">
-              <span className="stat-summary-item">Total: {statsData.procedureCount}</span>
-              <span className="stat-summary-item">C$ {formatCurrency(statsData.totalProcedureCordobas)}</span>
-              <span className="stat-summary-item">US$ {formatCurrencyUSD(statsData.totalProcedureDollars)}</span>
-            </div>
-          </div>
-          <FontAwesomeIcon 
-            icon={expandedStats ? faChevronUp : faChevronDown} 
-            className="stats-toggle-icon"
-          />
-        </div>
-        
-        <div className="stats-grid-container">
-          <div className="stat-card total-procedures">
-            <div className="stat-icon">
-              <FontAwesomeIcon icon={faChartBar} />
-            </div>
-            <div className="stat-content">
-              <div className="stat-value">{statsData.procedureCount}</div>
-              <div className="stat-label">Procedimientos</div>
-            </div>
-          </div>
-          
-          <div className="stat-card total-income-cordobas">
-            <div className="stat-icon">
-              <FontAwesomeIcon icon={faMoneyBillWave} />
-            </div>
-            <div className="stat-content">
-              <div className="stat-value">{formatCurrency(statsData.totalProcedureCordobas)}</div>
-              <div className="stat-label">Total C$</div>
-            </div>
-          </div>
-          
-          <div className="stat-card total-income-dollars">
-            <div className="stat-icon">
-              <FontAwesomeIcon icon={faDollarSign} />
-            </div>
-            <div className="stat-content">
-              <div className="stat-value">{formatCurrencyUSD(statsData.totalProcedureDollars)}</div>
-              <div className="stat-label">Total US$</div>
-            </div>
-          </div>
-          
-          <div className="stat-card clinic-earnings-cordobas">
-            <div className="stat-icon">
-              <FontAwesomeIcon icon={faPercentage} />
-            </div>
-            <div className="stat-content">
-              <div className="stat-value">{formatCurrency(statsData.totalClinicEarningsCordobas)}</div>
-              <div className="stat-label">Ganancia Clínica C$</div>
-            </div>
-          </div>
-          
-          <div className="stat-card clinic-earnings-dollars">
-            <div className="stat-icon">
-              <FontAwesomeIcon icon={faDollarSign} />
-            </div>
-            <div className="stat-content">
-              <div className="stat-value">{formatCurrencyUSD(statsData.totalClinicEarningsDollars)}</div>
-              <div className="stat-label">Ganancia Clínica US$</div>
-            </div>
-          </div>
-          
-          <div className="stat-card external-doctor">
-            <div className="stat-icon">
-              <FontAwesomeIcon icon={faUserDoctor} />
-            </div>
-            <div className="stat-content">
-              <div className="stat-value">{statsData.externalDoctorCount}</div>
-              <div className="stat-label">Doctores Externos</div>
-            </div>
           </div>
         </div>
       </div>
@@ -431,16 +309,20 @@ export default function ProceduresPage() {
                   <th>Descripción</th>
                   <th>Total C$</th>
                   <th>Total US$</th>
-                  <th>Ganancia Clínica C$</th>
-                  <th>Ganancia Clínica US$</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredProcedures.map((procedure) => {
-                  const earnings = calculateProcedureEarnings(procedure);
-                  const paymentBreakdown = getPaymentBreakdown(procedure);
                   const isExpanded = expandedRows[procedure.procedure_ID];
+                  const hasExternalDoctor = procedure.theres_external_doctor || procedure.external_doctor;
+                  const hasObservations = procedure.observations && procedure.observations.trim() !== "";
+                  const mainPaymentMethod = getMainPaymentMethod(procedure);
+                  const paymentIcon = getPaymentMethodIcon(mainPaymentMethod);
+                  const paymentColor = getPaymentMethodColor(mainPaymentMethod);
+                  
+                  // Calcular totales separados
+                  const separateTotals = calculateSeparateTotals(procedure);
                   
                   return (
                     <>
@@ -460,29 +342,51 @@ export default function ProceduresPage() {
                           </div>
                         </td>
                         
-                        {/* Totales en ambas monedas */}
+                        {/* Total Córdobas con desglose */}
                         <td className="total-cordobas-cell">
-                          <div className="total-amount cordobas">
-                            {formatCurrency(paymentBreakdown.totalProcedureCordobas)}
+                          <div className="total-amount-container">
+                            <div className="total-amount cordobas">
+                              {formatCurrency(procedure.total_procedure || procedure.total_cost || 0)}
+                            </div>
+                            {separateTotals.cordobas > 0 && (
+                              <div className="payment-breakdown">
+                                <div className="breakdown-row">
+                                  <span className="breakdown-label">Abono C$:</span>
+                                  <span className="breakdown-value">{formatCurrency(separateTotals.cordobas)}</span>
+                                </div>
+                                <div className="breakdown-row method">
+                                  <FontAwesomeIcon 
+                                    icon={getPaymentMethodIcon(procedure.payment_method_cordobas)}
+                                    style={{ color: getPaymentMethodColor(procedure.payment_method_cordobas) }}
+                                  />
+                                  <span>{procedure.payment_method_cordobas || 'No especificado'}</span>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </td>
                         
+                        {/* Total Dólares con desglose */}
                         <td className="total-dollars-cell">
-                          <div className="total-amount dollars">
-                            {formatCurrencyUSD(paymentBreakdown.totalProcedureDollars)}
-                          </div>
-                        </td>
-                        
-                        {/* Ganancias de clínica en ambas monedas */}
-                        <td className="clinic-earnings-cordobas-cell">
-                          <div className="earnings-amount clinic">
-                            {formatCurrency(earnings.clinicEarningsCordobas)}
-                          </div>
-                        </td>
-                        
-                        <td className="clinic-earnings-dollars-cell">
-                          <div className="earnings-amount clinic">
-                            {formatCurrencyUSD(earnings.clinicEarningsDollars)}
+                          <div className="total-amount-container">
+                            <div className="total-amount dollars">
+                              {formatCurrencyUSD(procedure.total_procedure_usd || procedure.total_cost_USD || 0)}
+                            </div>
+                            {separateTotals.dollars > 0 && (
+                              <div className="payment-breakdown">
+                                <div className="breakdown-row">
+                                  <span className="breakdown-label">Abono US$:</span>
+                                  <span className="breakdown-value">{formatCurrencyUSD(separateTotals.dollars)}</span>
+                                </div>
+                                <div className="breakdown-row method">
+                                  <FontAwesomeIcon 
+                                    icon={getPaymentMethodIcon(procedure.payment_method_dollars)}
+                                    style={{ color: getPaymentMethodColor(procedure.payment_method_dollars) }}
+                                  />
+                                  <span>{procedure.payment_method_dollars || 'No especificado'}</span>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </td>
                         
@@ -499,139 +403,226 @@ export default function ProceduresPage() {
                         </td>
                       </tr>
                       
-                      {/* Fila expandida con detalles */}
+                      {/* Fila expandida con LAYOUT HORIZONTAL */}
                       {isExpanded && (
                         <tr key={`${procedure.procedure_ID}-details`} className="details-row">
-                          <td colSpan="8">
+                          <td colSpan="6">
                             <div className="procedure-details">
                               <div className="details-header">
-                                <h4>📋 Detalles del Procedimiento</h4>
+                                <h4>📋 Información Adicional del Procedimiento</h4>
                               </div>
                               
-                              <div className="details-grid">
-                                
-                                {/* Información del procedimiento */}
-                                <div className="details-section procedure-info">
-                                  <h5>🦷 Detalles del Procedimiento</h5>
-                                  <div className="details-content">
-                                    <p><strong>Descripción:</strong> {procedure.procedure_description || "N/A"}</p>
-                                    <p><strong>Fecha:</strong> {procedure.procedure_date ? formatDate(procedure.procedure_date) : "N/A"}</p>
-                                    <p><strong>Observaciones:</strong> {procedure.observations || "Ninguna"}</p>
+                              <div className="horizontal-details-grid">
+                                {/* Información de pagos con tasa de cambio */}
+                                <div className="detail-card payment-details-card">
+                                  <div className="detail-card-header">
+                                    <FontAwesomeIcon icon={faMoneyBill} />
+                                    <h5>Detalles de Pagos</h5>
                                   </div>
-                                </div>
-                                
-                                {/* Pagos */}
-                                <div className="details-section payments-info">
-                                  <h5>💰 Pagos Recibidos</h5>
-                                  <div className="details-content">
-                                    <div className="payment-row">
-                                      <div className="payment-column">
-                                        <h6>En Córdobas (C$)</h6>
-                                        <p><strong>Cantidad:</strong> {formatCurrency(paymentBreakdown.cordobas)}</p>
-                                        <p><strong>Método:</strong> {procedure.payment_method_cordobas || "No especificado"}</p>
-                                        {procedure.payment_method_cordobas === 'POS' && (
-                                          <>
-                                            <p><strong>Deducción POS (5.5%):</strong> -{formatCurrency(procedure.pos_deduction_cordobas || 0)}</p>
-                                            <p><strong>Neto:</strong> {formatCurrency(procedure.net_amount_cordobas || paymentBreakdown.cordobas)}</p>
-                                          </>
-                                        )}
-                                      </div>
-                                      <div className="payment-column">
-                                        <h6>En Dólares (US$)</h6>
-                                        <p><strong>Cantidad:</strong> {formatCurrencyUSD(paymentBreakdown.dollars)}</p>
-                                        <p><strong>Método:</strong> {procedure.payment_method_dollars || "No especificado"}</p>
-                                        {procedure.payment_method_dollars === 'POS' && (
-                                          <>
-                                            <p><strong>Deducción POS (5.5%):</strong> -{formatCurrencyUSD(procedure.pos_deduction_dollars || 0)}</p>
-                                            <p><strong>Neto:</strong> {formatCurrencyUSD(procedure.net_amount_dollars || paymentBreakdown.dollars)}</p>
-                                          </>
-                                        )}
+                                  <div className="detail-card-content">
+                                    {/* Tasa de cambio */}
+                                    <div className="exchange-rate-info">
+                                      <div className="exchange-rate-row">
+                                        <span className="exchange-rate-label">Tasa de cambio:</span>
+                                        <span className="exchange-rate-value">
+                                          <FontAwesomeIcon icon={faExchangeAlt} />
+                                          C$ {separateTotals.exchangeRate} = US$ 1
+                                        </span>
                                       </div>
                                     </div>
                                     
-                                    {/* Totales */}
-                                    <div className="total-summary">
-                                      <div className="total-row">
-                                        <span>Total Bruto (C$):</span>
-                                        <span>{formatCurrency(procedure.gross_amount_cordobas || paymentBreakdown.cordobas)}</span>
-                                      </div>
-                                      <div className="total-row">
-                                        <span>Total Bruto (US$):</span>
-                                        <span>{formatCurrencyUSD(procedure.gross_amount_dollars || paymentBreakdown.dollars)}</span>
-                                      </div>
-                                      {procedure.total_pos_deduction > 0 && (
-                                        <div className="total-row deduction">
-                                          <span>Total Deducciones POS (C$):</span>
-                                          <span>-{formatCurrency(procedure.total_pos_deduction)}</span>
+                                    {/* Desglose de pagos en Córdobas */}
+                                    {separateTotals.cordobas > 0 && (
+                                      <div className="payment-currency-section cordobas-section">
+                                        <h6 className="currency-title">
+                                          <FontAwesomeIcon icon={faMoneyBillWave} />
+                                          Pagos en Córdobas (C$)
+                                        </h6>
+                                        <div className="payment-details">
+                                          <div className="payment-detail-row">
+                                            <span className="payment-detail-label">Monto bruto:</span>
+                                            <span className="payment-detail-value">
+                                              {formatCurrency(procedure.gross_amount_cordobas || separateTotals.cordobas)}
+                                            </span>
+                                          </div>
+                                          {procedure.pos_deduction_cordobas > 0 && (
+                                            <div className="payment-detail-row deduction">
+                                              <span className="payment-detail-label">Deducción POS:</span>
+                                              <span className="payment-detail-value">
+                                                -{formatCurrency(procedure.pos_deduction_cordobas)}
+                                              </span>
+                                            </div>
+                                          )}
+                                          <div className="payment-detail-row net">
+                                            <span className="payment-detail-label">Monto neto:</span>
+                                            <span className="payment-detail-value">
+                                              {formatCurrency(procedure.net_amount_cordobas || separateTotals.cordobas)}
+                                            </span>
+                                          </div>
+                                          <div className="payment-method-info">
+                                            <FontAwesomeIcon 
+                                              icon={getPaymentMethodIcon(procedure.payment_method_cordobas)}
+                                              style={{ color: getPaymentMethodColor(procedure.payment_method_cordobas) }}
+                                            />
+                                            <span>{procedure.payment_method_cordobas || 'No especificado'}</span>
+                                          </div>
                                         </div>
-                                      )}
-                                      <div className="total-row final">
-                                        <span><strong>Total Neto (C$):</strong></span>
-                                        <span><strong>{formatCurrency(paymentBreakdown.totalProcedureCordobas)}</strong></span>
                                       </div>
-                                      <div className="total-row final">
-                                        <span><strong>Total Neto (US$):</strong></span>
-                                        <span><strong>{formatCurrencyUSD(paymentBreakdown.totalProcedureDollars)}</strong></span>
+                                    )}
+                                    
+                                    {/* Desglose de pagos en Dólares */}
+                                    {separateTotals.dollars > 0 && (
+                                      <div className="payment-currency-section dollars-section">
+                                        <h6 className="currency-title">
+                                          <FontAwesomeIcon icon={faDollarSign} />
+                                          Pagos en Dólares (US$)
+                                        </h6>
+                                        <div className="payment-details">
+                                          <div className="payment-detail-row">
+                                            <span className="payment-detail-label">Monto bruto:</span>
+                                            <span className="payment-detail-value">
+                                              {formatCurrencyUSD(procedure.gross_amount_dollars || separateTotals.dollars)}
+                                            </span>
+                                          </div>
+                                          {procedure.pos_deduction_dollars > 0 && (
+                                            <div className="payment-detail-row deduction">
+                                              <span className="payment-detail-label">Deducción POS:</span>
+                                              <span className="payment-detail-value">
+                                                -{formatCurrencyUSD(procedure.pos_deduction_dollars)}
+                                              </span>
+                                            </div>
+                                          )}
+                                          <div className="payment-detail-row net">
+                                            <span className="payment-detail-label">Monto neto:</span>
+                                            <span className="payment-detail-value">
+                                              {formatCurrencyUSD(procedure.net_amount_dollars || separateTotals.dollars)}
+                                            </span>
+                                          </div>
+                                          <div className="payment-method-info">
+                                            <FontAwesomeIcon 
+                                              icon={getPaymentMethodIcon(procedure.payment_method_dollars)}
+                                              style={{ color: getPaymentMethodColor(procedure.payment_method_dollars) }}
+                                            />
+                                            <span>{procedure.payment_method_dollars || 'No especificado'}</span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
+                                    
+                                    {/* Totales generales */}
+                                    <div className="totals-summary">
+                                      <div className="total-summary-row">
+                                        <span className="total-summary-label">Total bruto (C$):</span>
+                                        <span className="total-summary-value">
+                                          {formatCurrency(procedure.total_cost || separateTotals.cordobas)}
+                                        </span>
+                                      </div>
+                                      <div className="total-summary-row">
+                                        <span className="total-summary-label">Total bruto (US$):</span>
+                                        <span className="total-summary-value">
+                                          {formatCurrencyUSD(procedure.total_cost_USD || separateTotals.dollars)}
+                                        </span>
+                                      </div>
+                                      <div className="total-summary-row net-total">
+                                        <span className="total-summary-label">Total neto (C$):</span>
+                                        <span className="total-summary-value">
+                                          {formatCurrency(procedure.total_procedure || separateTotals.cordobas)}
+                                        </span>
+                                      </div>
+                                      <div className="total-summary-row net-total">
+                                        <span className="total-summary-label">Total neto (US$):</span>
+                                        <span className="total-summary-value">
+                                          {formatCurrencyUSD(procedure.total_procedure_usd || separateTotals.dollars)}
+                                        </span>
                                       </div>
                                     </div>
                                   </div>
                                 </div>
                                 
-                                {/* Ganancias */}
-                                <div className="details-section earnings-info">
-                                  <h5>📈 Ganancias de la Clínica (100%)</h5>
-                                  <div className="details-content">
-                                    <div className="earnings-row">
-                                      <div className="earnings-column">
-                                        <h6>En Córdobas (C$)</h6>
-                                        <p><strong>Total del procedimiento:</strong> {formatCurrency(earnings.clinicEarningsCordobas)}</p>
-                                        {procedure.external_doctor_payment && (
-                                          <>
-                                            <p><strong>Pago a doctor externo:</strong> -{formatCurrency(procedure.external_doctor_payment)}</p>
-                                            <p><strong>Ganancia neta clínica:</strong> {formatCurrency(earnings.clinicEarningsCordobas - (procedure.external_doctor_payment || 0))}</p>
-                                          </>
-                                        )}
-                                      </div>
-                                      <div className="earnings-column">
-                                        <h6>En Dólares (US$)</h6>
-                                        <p><strong>Total del procedimiento:</strong> {formatCurrencyUSD(earnings.clinicEarningsDollars)}</p>
-                                        {procedure.external_doctor_payment_usd && (
-                                          <>
-                                            <p><strong>Pago a doctor externo:</strong> -{formatCurrencyUSD(procedure.external_doctor_payment_usd)}</p>
-                                            <p><strong>Ganancia neta clínica:</strong> {formatCurrencyUSD(earnings.clinicEarningsDollars - (procedure.external_doctor_payment_usd || 0))}</p>
-                                          </>
-                                        )}
-                                      </div>
+                                {/* Observaciones del procedimiento */}
+                                {hasObservations && (
+                                  <div className="detail-card observations-card">
+                                    <div className="detail-card-header">
+                                      <FontAwesomeIcon icon={faClipboardList} />
+                                      <h5>Observaciones del Procedimiento</h5>
                                     </div>
-                                  </div>
-                                </div>
-                                
-                                {/* Doctor Externo (si aplica) */}
-                                {(procedure.theres_external_doctor || procedure.external_doctor) && (
-                                  <div className="details-section external-doctor-info">
-                                    <h5>👨‍⚕️ Doctor Externo</h5>
-                                    <div className="details-content">
-                                      <p><strong>Nombre:</strong> {procedure.external_doctor_name || procedure.external_doctor || "N/A"}</p>
-                                      <p><strong>Especialidad:</strong> {procedure.external_doctor_specialty || "N/A"}</p>
-                                      <p><strong>Tipo de pago:</strong> {procedure.external_doctor_payment_type === 'percentage' ? 'Porcentaje' : 'Cantidad fija'}</p>
-                                      <p><strong>Valor:</strong> {procedure.external_doctor_payment_type === 'percentage' ? 
-                                        `${procedure.external_doctor_payment_value}%` : 
-                                        formatCurrency(procedure.external_doctor_payment)} ({procedure.external_doctor_payment_currency})</p>
-                                      {procedure.external_doctor_payment_usd && (
-                                        <p><strong>Equivalente en US$:</strong> {formatCurrencyUSD(procedure.external_doctor_payment_usd)}</p>
-                                      )}
+                                    <div className="detail-card-content">
+                                      <div className="observations-content">
+                                        <p>{procedure.observations}</p>
+                                      </div>
                                     </div>
                                   </div>
                                 )}
                                 
-                                {/* Información adicional */}
-                                <div className="details-section additional-info">
-                                  <h5>📝 Información Adicional</h5>
-                                  <div className="details-content">
-                                    <p><strong>Tipo de cambio usado:</strong> C$ {procedure.exchange_rate_used || "36.5"} por US$ 1</p>
-                                    <p><strong>Fecha de creación:</strong> {procedure.creation_date ? formatDate(procedure.creation_date) : "N/A"}</p>
+                                {/* Información de Doctor Externo */}
+                                {hasExternalDoctor ? (
+                                  <div className="detail-card doctor-card">
+                                    <div className="detail-card-header">
+                                      <FontAwesomeIcon icon={faUserDoctor} />
+                                      <h5>Doctor Externo</h5>
+                                    </div>
+                                    <div className="detail-card-content">
+                                      <div className="doctor-info-row">
+                                        <span className="doctor-info-label">Nombre:</span>
+                                        <span className="doctor-info-value">{procedure.external_doctor_name || procedure.external_doctor || "N/A"}</span>
+                                      </div>
+                                      {procedure.external_doctor_specialty && (
+                                        <div className="doctor-info-row">
+                                          <span className="doctor-info-label">Especialidad:</span>
+                                          <span className="doctor-info-value">{procedure.external_doctor_specialty}</span>
+                                        </div>
+                                      )}
+                                      <div className="doctor-info-row">
+                                        <span className="doctor-info-label">Tipo de pago:</span>
+                                        <span className="doctor-info-value">
+                                          {procedure.external_doctor_payment_type === 'percentage' ? 'Porcentaje' : 'Cantidad fija'}
+                                        </span>
+                                      </div>
+                                      
+                                      {procedure.external_doctor_payment_type === 'percentage' ? (
+                                        <div className="doctor-info-row">
+                                          <span className="doctor-info-label">Porcentaje:</span>
+                                          <span className="doctor-info-value">
+                                            {procedure.external_doctor_payment_value}%
+                                            <FontAwesomeIcon icon={faPercentage} className="percentage-icon" />
+                                          </span>
+                                        </div>
+                                      ) : (
+                                        <div className="doctor-info-row">
+                                          <span className="doctor-info-label">Monto fijo:</span>
+                                          <span className="doctor-info-value">{formatCurrency(procedure.external_doctor_payment || 0)}</span>
+                                        </div>
+                                      )}
+                                      
+                                      {/* Pagos en ambas monedas */}
+                                      <div className="doctor-payments-row">
+                                        <div className="payment-item">
+                                          <span className="payment-label">Pago C$:</span>
+                                          <span className="payment-value">{formatCurrency(procedure.external_doctor_payment || 0)}</span>
+                                        </div>
+                                        {procedure.external_doctor_payment_usd && (
+                                          <div className="payment-item">
+                                            <span className="payment-label">Pago US$:</span>
+                                            <span className="payment-value">{formatCurrencyUSD(procedure.external_doctor_payment_usd)}</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
                                   </div>
-                                </div>
+                                ) : (
+                                  <div className="detail-card no-doctor-card">
+                                    <div className="detail-card-header">
+                                      <FontAwesomeIcon icon={faUserDoctor} />
+                                      <h5>Doctor Externo</h5>
+                                    </div>
+                                    <div className="detail-card-content">
+                                      <p className="no-doctor-message">⚠️ No se registró ningún doctor externo para este procedimiento.</p>
+                                      <p className="additional-info">
+                                        Para procedimientos regulares, la clínica recibe el 100% de los ingresos.
+                                      </p>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </td>

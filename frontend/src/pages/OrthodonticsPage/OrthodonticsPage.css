@@ -1,4 +1,3 @@
-/* frontend/src/pages/OrthodonticsPage/OrthodonticsPage.css */
 .orthodontics-container {
   max-width: 100%;
   margin: 0 auto;
@@ -45,1134 +44,6 @@
   gap: 5px;
 }
 
-/* Barra de búsqueda */
-.search-wrapper {
-  position: relative;
-  min-width: 300px;
-}
-
-.search-box {
-  width: 100%;
-  padding: 10px 15px 10px 40px;
-  border: 1px solid #E0E0E0;
-  border-radius: 10px;
-  font-size: 14px;
-  background-color: white;
-  transition: all 0.3s ease;
-  color: #37474F;
-}
-
-.search-box:focus {
-  outline: none;
-  border-color: #AB47BC;
-  box-shadow: 0 0 0 3px rgba(171, 71, 188, 0.1);
-}
-
-.search-wrapper svg {
-  position: absolute;
-  left: 15px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 14px;
-  height: 14px;
-  fill: #78909C;
-}
-
-/* Sección de ganancias totales */
-.total-earnings-section {
-  background: linear-gradient(135deg, #E3F2FD, #F3E5F5);
-  border-radius: 16px;
-  padding: 25px;
-  margin-bottom: 25px;
-  border: 2px solid #CE93D8;
-}
-
-.total-earnings-section h3 {
-  margin-top: 0;
-  margin-bottom: 20px;
-  color: #37474F;
-  font-size: 20px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.earnings-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 20px;
-}
-
-.earnings-card {
-  background: white;
-  border-radius: 12px;
-  padding: 25px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  transition: all 0.3s ease;
-  border-top: 4px solid;
-}
-
-.earnings-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 8px 25px rgba(0,0,0,0.12);
-}
-
-.clinic-earnings {
-  border-top-color: #42A5F5;
-}
-
-.doctor-earnings {
-  border-top-color: #4DB6AC;
-}
-
-.total-earnings {
-  border-top-color: #AB47BC;
-}
-
-.earnings-icon {
-  font-size: 36px;
-  width: 70px;
-  height: 70px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.clinic-earnings .earnings-icon {
-  background: linear-gradient(135deg, #E3F2FD, #BBDEFB);
-  color: #42A5F5;
-}
-
-.doctor-earnings .earnings-icon {
-  background: linear-gradient(135deg, #E8F5E9, #C8E6C9);
-  color: #4DB6AC;
-}
-
-.total-earnings .earnings-icon {
-  background: linear-gradient(135deg, #F3E5F5, #E1BEE7);
-  color: #AB47BC;
-}
-
-.earnings-content {
-  flex: 1;
-}
-
-.earnings-content h4 {
-  margin: 0 0 8px 0;
-  font-size: 15px;
-  color: #78909C;
-  font-weight: 500;
-}
-
-.earnings-value {
-  margin: 0 0 5px 0;
-  font-size: 24px;
-  font-weight: 700;
-  color: #37474F;
-}
-
-.earnings-percentage, .earnings-count {
-  margin: 0;
-  font-size: 14px;
-  color: #78909C;
-  font-weight: 500;
-}
-
-/* Filtros (igual que en ProceduresPage) */
-.filters-section {
-  background-color: #E3F2FD;
-  border-radius: 12px;
-  padding: 20px;
-  margin-bottom: 25px;
-}
-
-.filters-section h3 {
-  margin-top: 0;
-  margin-bottom: 15px;
-  color: #37474F;
-  font-size: 16px;
-}
-
-.filters-row {
-  display: flex;
-  gap: 20px;
-  align-items: flex-end;
-  flex-wrap: wrap;
-}
-
-.filter-group {
-  flex: 1;
-  min-width: 200px;
-}
-
-.filter-group label {
-  display: block;
-  margin-bottom: 8px;
-  font-weight: 500;
-  color: #455A64;
-  font-size: 14px;
-}
-
-.filter-group input {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid #B0BEC5;
-  border-radius: 8px;
-  font-size: 14px;
-  transition: all 0.3s ease;
-}
-
-.filter-group input:focus {
-  outline: none;
-  border-color: #AB47BC;
-  box-shadow: 0 0 0 3px rgba(171, 71, 188, 0.1);
-}
-
-.filter-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 8px;
-}
-
-.btn-apply-filters {
-  background-color: #AB47BC;
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.btn-apply-filters:hover {
-  background-color: #8E24AA;
-  transform: translateY(-1px);
-}
-
-.btn-clear-filters {
-  background-color: #F5F5F5;
-  color: #78909C;
-  border: 1px solid #E0E0E0;
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.btn-clear-filters:hover {
-  background-color: #E0E0E0;
-  color: #37474F;
-}
-
-/* Sección de tabla */
-.orthodontics-section {
-  background-color: white;
-  border-radius: 16px;
-  padding: 25px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-}
-
-.orthodontics-section h3 {
-  font-size: 18px;
-  font-weight: 600;
-  color: #37474F;
-  margin-bottom: 20px;
-}
-
-/* Tabla */
-.table-responsive-container {
-  width: 100%;
-  overflow-x: auto;
-  border-radius: 10px;
-  border: 1px solid #E0E0E0;
-}
-
-.orthodontics-table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  font-size: 14px;
-  border-radius: 10px;
-  overflow: hidden;
-  min-width: 1400px;
-}
-
-.orthodontics-table thead {
-  background-color: #F3E5F5;
-}
-
-.orthodontics-table th {
-  padding: 15px 12px;
-  text-align: left;
-  border-bottom: 1px solid #E0E0E0;
-  color: #37474F;
-  font-weight: 500;
-  font-size: 14px;
-  white-space: nowrap;
-}
-
-/* Especificar anchos de columnas */
-.orthodontics-table th:nth-child(1) { min-width: 120px; } /* Fecha */
-.orthodontics-table th:nth-child(2) { min-width: 150px; } /* Paciente */
-.orthodontics-table th:nth-child(3) { min-width: 120px; } /* Cédula */
-.orthodontics-table th:nth-child(4) { min-width: 200px; } /* Descripción */
-.orthodontics-table th:nth-child(5) { min-width: 120px; } /* Costo Total */
-.orthodontics-table th:nth-child(6) { min-width: 140px; } /* Ganancia Clínica */
-.orthodontics-table th:nth-child(7) { min-width: 140px; } /* Ganancia Doctora */
-.orthodontics-table th:nth-child(8) { min-width: 120px; } /* Pago */
-.orthodontics-table th:nth-child(9) { min-width: 120px; } /* Estado */
-.orthodontics-table th:nth-child(10) { min-width: 200px; } /* Observaciones */
-
-.orthodontics-table td {
-  padding: 15px 12px;
-  text-align: left;
-  border-bottom: 1px solid #E0E0E0;
-  color: #455A64;
-  font-weight: 400;
-  font-size: 14px;
-  vertical-align: top;
-}
-
-/* Alternar colores de filas */
-.orthodontics-table tbody tr:nth-child(even) {
-  background-color: rgba(243, 229, 245, 0.3);
-}
-
-.orthodontics-table tbody tr:hover {
-  background-color: rgba(243, 229, 245, 0.6);
-}
-
-/* Estilos específicos para celdas */
-.patient-cell strong {
-  color: #37474F;
-  font-size: 15px;
-}
-
-.patient-id {
-  font-family: monospace;
-  font-weight: 500;
-  color: #37474F;
-}
-
-.description-cell {
-  line-height: 1.4;
-}
-
-.total-cost-cell strong {
-  color: #AB47BC;
-  font-size: 15px;
-  font-weight: 700;
-}
-
-/* Celdas de ganancias */
-.clinic-earnings-cell, .doctor-earnings-cell {
-  padding: 12px;
-}
-
-.earnings-amount {
-  font-weight: 700;
-  font-size: 15px;
-  margin-bottom: 4px;
-}
-
-.earnings-amount.clinic {
-  color: #42A5F5;
-}
-
-.earnings-amount.doctor {
-  color: #4DB6AC;
-}
-
-.earnings-percentage {
-  font-size: 12px;
-  color: #78909C;
-  background-color: rgba(158, 158, 158, 0.1);
-  padding: 2px 8px;
-  border-radius: 10px;
-  display: inline-block;
-}
-
-/* Badges de estado */
-.status-badge {
-  display: inline-block;
-  padding: 4px 12px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.status-completed {
-  background-color: rgba(102, 187, 106, 0.2);
-  color: #2E7D32;
-}
-
-.status-pending {
-  background-color: rgba(255, 167, 38, 0.2);
-  color: #EF6C00;
-}
-
-.status-cancelled {
-  background-color: rgba(239, 83, 80, 0.2);
-  color: #C62828;
-}
-
-/* Badges de forma de pago */
-.payment-badge {
-  display: inline-block;
-  padding: 4px 12px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.payment-cash {
-  background-color: rgba(139, 195, 74, 0.2);
-  color: #558B2F;
-}
-
-.payment-card {
-  background-color: rgba(33, 150, 243, 0.2);
-  color: #1565C0;
-}
-
-.payment-transfer {
-  background-color: rgba(156, 39, 176, 0.2);
-  color: #7B1FA2;
-}
-
-.payment-unknown {
-  background-color: rgba(158, 158, 158, 0.2);
-  color: #616161;
-}
-
-/* Celda de observaciones */
-.observations-cell {
-  font-size: 13px;
-  color: #78909C;
-  max-width: 200px;
-  overflow-wrap: break-word;
-}
-
-/* Mensaje sin resultados */
-.no-results {
-  text-align: center;
-  padding: 40px 20px;
-  background-color: #F8F9FA;
-  border-radius: 10px;
-  margin-top: 20px;
-  border: 1px dashed #E0E0E0;
-}
-
-.no-results p {
-  color: #78909C;
-  margin-bottom: 20px;
-  font-size: 1rem;
-}
-
-.btn-add-first {
-  background-color: #AB47BC;
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: 500;
-  transition: all 0.3s ease;
-}
-
-.btn-add-first:hover {
-  background-color: #8E24AA;
-}
-
-/* Estado de carga */
-.loading-message {
-  text-align: center;
-  padding: 60px 20px;
-  background-color: #F8F9FA;
-  border-radius: 10px;
-  margin-top: 20px;
-}
-
-.loading-message p {
-  color: #78909C;
-  font-size: 1.1rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-}
-
-.loading-spinner {
-  display: inline-block;
-  width: 20px;
-  height: 20px;
-  border: 2px solid #E0E0E0;
-  border-radius: 50%;
-  border-top-color: #AB47BC;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-/* Responsividad */
-@media (max-width: 768px) {
-  .orthodontics-container {
-    padding: 15px;
-  }
-  
-  .orthodontics-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
-  }
-  
-  .orthodontics-tools {
-    width: 100%;
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-  
-  .search-wrapper {
-    min-width: 100%;
-  }
-  
-  .earnings-cards {
-    grid-template-columns: 1fr;
-  }
-  
-  .filters-row {
-    flex-direction: column;
-    gap: 15px;
-  }
-  
-  .filter-group {
-    min-width: 100%;
-  }
-  
-  .filter-actions {
-    width: 100%;
-    justify-content: center;
-  }
-  
-  .orthodontics-section {
-    padding: 15px;
-  }
-  
-  .orthodontics-table {
-    min-width: 1200px;
-  }
-}
-
-@media (max-width: 480px) {
-  .earnings-card {
-    padding: 15px;
-  }
-  
-  .earnings-icon {
-    width: 50px;
-    height: 50px;
-    font-size: 24px;
-  }
-  
-  .earnings-value {
-    font-size: 20px;
-  }
-  
-  .orthodontics-table {
-    min-width: 1000px;
-  }
-}
-
-/* Nuevos estilos para OrthodonticsPage */
-
-/* Tarjeta de doctor externo en ganancias */
-.earnings-card.external-doctor {
-  border-top-color: #7E57C2;
-}
-
-.earnings-card.external-doctor .earnings-icon {
-  background: linear-gradient(135deg, #F3E5F5, #E1BEE7);
-  color: #7E57C2;
-}
-
-.earnings-subtitle {
-  margin: 0;
-  font-size: 0.85rem;
-  color: #78909C;
-  margin-top: 4px;
-}
-
-/* Estilos para porcentajes */
-.percentage-badge {
-  display: inline-block;
-  padding: 4px 10px;
-  border-radius: 12px;
-  font-weight: 600;
-  font-size: 0.85rem;
-}
-
-.percentage-badge.clinic {
-  background: rgba(76, 175, 80, 0.1);
-  color: #4CAF50;
-}
-
-.percentage-badge.doctor {
-  background: rgba(156, 39, 176, 0.1);
-  color: #9C27B0;
-}
-
-/* Celdas de porcentajes */
-.clinic-percentage-cell,
-.doctor-percentage-cell {
-  text-align: center;
-}
-
-/* Celdas de ganancias mejoradas */
-.clinic-earnings-cell,
-.doctor-earnings-cell {
-  padding: 12px !important;
-}
-
-.earnings-detail {
-  margin-top: 2px;
-}
-
-.earnings-detail small {
-  color: #78909C;
-  font-size: 0.8rem;
-}
-
-/* Estilos para costo USD en ortodoncia */
-.cost-usd-cell {
-  text-align: right;
-  padding-right: 15px !important;
-}
-
-.cost-usd {
-  font-weight: 600;
-  color: #FF9800;
-  font-size: 0.95rem;
-}
-
-.cost-na {
-  color: #78909C;
-  font-style: italic;
-  font-size: 0.9rem;
-}
-
-/* Estilos para doctor externo */
-.external-doctor-cell {
-  min-width: 150px;
-}
-
-.external-doctor-info {
-  padding: 4px 0;
-}
-
-.external-doctor-name {
-  font-weight: 500;
-  color: #37474F;
-  font-size: 0.9rem;
-  margin-bottom: 2px;
-}
-
-.external-doctor-specialty {
-  color: #78909C;
-  font-size: 0.8rem;
-  font-style: italic;
-}
-
-/* Estilos para pago de doctor externo */
-.external-doctor-payment-cell {
-  min-width: 120px;
-}
-
-.payment-percentage {
-  margin-top: 2px;
-}
-
-.payment-percentage small {
-  color: #78909C;
-  font-size: 0.75rem;
-}
-
-/* Ajustar anchos de columna para ortodoncia */
-.orthodontics-table th:nth-child(5) { min-width: 120px; } /* Costo USD */
-.orthodontics-table th:nth-child(6) { min-width: 120px; } /* Costo C$ */
-.orthodontics-table th:nth-child(7) { min-width: 100px; } /* % Clínica */
-.orthodontics-table th:nth-child(8) { min-width: 140px; } /* Ganancia Clínica */
-.orthodontics-table th:nth-child(9) { min-width: 100px; } /* % Doctora */
-.orthodontics-table th:nth-child(10) { min-width: 140px; } /* Ganancia Doctora */
-.orthodontics-table th:nth-child(11) { min-width: 150px; } /* Doctor Externo */
-.orthodontics-table th:nth-child(12) { min-width: 120px; } /* Pago Doctor */
-
-@media (max-width: 1400px) {
-  .orthodontics-table {
-    min-width: 1600px;
-  }
-}
-
-@media (max-width: 768px) {
-  .earnings-cards {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  
-  .earnings-card {
-    padding: 15px;
-  }
-  
-  .earnings-icon {
-    width: 50px;
-    height: 50px;
-    font-size: 24px;
-  }
-  
-  .earnings-value {
-    font-size: 18px;
-  }
-}
-
-/* Nuevos estilos para OrthodonticsPage */
-
-/* Celdas de pagos */
-.payment-cordobas-cell,
-.payment-dollars-cell {
-  text-align: right;
-  padding-right: 15px !important;
-  min-width: 120px;
-}
-
-.payment-amount-container {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-}
-
-.payment-amount.cordobas {
-  font-weight: 600;
-  color: #4CAF50;
-  font-size: 0.9rem;
-}
-
-.payment-amount.dollars {
-  font-weight: 600;
-  color: #FF9800;
-  font-size: 0.9rem;
-}
-
-.payment-method-badge {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.method-badge {
-  display: inline-block;
-  padding: 2px 6px;
-  border-radius: 8px;
-  font-size: 0.7rem;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-}
-
-.method-badge.efectivo {
-  background-color: rgba(76, 175, 80, 0.1);
-  color: #2E7D32;
-  border: 1px solid rgba(76, 175, 80, 0.2);
-}
-
-.method-badge.pos {
-  background-color: rgba(33, 150, 243, 0.1);
-  color: #1565C0;
-  border: 1px solid rgba(33, 150, 243, 0.2);
-}
-
-.method-badge.transferencia {
-  background-color: rgba(156, 39, 176, 0.1);
-  color: #7B1FA2;
-  border: 1px solid rgba(156, 39, 176, 0.2);
-}
-
-.method-badge.cheque {
-  background-color: rgba(255, 152, 0, 0.1);
-  color: #EF6C00;
-  border: 1px solid rgba(255, 152, 0, 0.2);
-}
-
-.method-badge.default {
-  background-color: rgba(158, 158, 158, 0.1);
-  color: #616161;
-  border: 1px solid rgba(158, 158, 158, 0.2);
-}
-
-/* Total del procedimiento */
-.total-procedure-cell {
-  text-align: right;
-  padding-right: 15px !important;
-  min-width: 110px;
-}
-
-.total-procedure-amount {
-  font-weight: 700;
-  color: #37474F;
-  font-size: 0.95rem;
-}
-
-.mixed-payment-indicator small {
-  color: #FF9800;
-  font-size: 0.7rem;
-  font-weight: 500;
-}
-
-/* Métodos de pago */
-.payment-methods-cell {
-  min-width: 110px;
-}
-
-.payment-methods-summary {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.main-method {
-  font-weight: 600;
-  font-size: 0.8rem;
-  padding: 3px 6px;
-  border-radius: 6px;
-  text-align: center;
-}
-
-.main-method.efectivo {
-  background-color: rgba(76, 175, 80, 0.1);
-  color: #2E7D32;
-}
-
-.main-method.pos {
-  background-color: rgba(33, 150, 243, 0.1);
-  color: #1565C0;
-}
-
-.main-method.transferencia {
-  background-color: rgba(156, 39, 176, 0.1);
-  color: #7B1FA2;
-}
-
-.main-method.cheque {
-  background-color: rgba(255, 152, 0, 0.1);
-  color: #EF6C00;
-}
-
-.main-method.mixto {
-  background-color: rgba(255, 87, 34, 0.1);
-  color: #D84315;
-  font-weight: 700;
-}
-
-.main-method.default {
-  background-color: rgba(158, 158, 158, 0.1);
-  color: #616161;
-}
-
-.mixed-details small {
-  color: #78909C;
-  font-size: 0.65rem;
-  text-align: center;
-  display: block;
-}
-
-/* Porcentajes y ganancias */
-.clinic-percentage-cell,
-.doctor-percentage-cell {
-  text-align: center;
-  min-width: 80px;
-}
-
-.percentage-badge {
-  display: inline-block;
-  padding: 4px 8px;
-  border-radius: 10px;
-  font-weight: 600;
-  font-size: 0.8rem;
-}
-
-.percentage-badge.clinic {
-  background: rgba(76, 175, 80, 0.1);
-  color: #4CAF50;
-}
-
-.percentage-badge.doctor {
-  background: rgba(156, 39, 176, 0.1);
-  color: #9C27B0;
-}
-
-.clinic-earnings-cell,
-.doctor-earnings-cell {
-  text-align: right;
-  padding-right: 15px !important;
-  min-width: 120px;
-}
-
-.earnings-amount {
-  font-weight: 700;
-  font-size: 0.9rem;
-}
-
-.earnings-amount.clinic {
-  color: #4CAF50;
-}
-
-.earnings-amount.doctor {
-  color: #9C27B0;
-}
-
-.earnings-detail small {
-  color: #78909C;
-  font-size: 0.7rem;
-}
-
-/* Doctor externo */
-.external-doctor-cell {
-  min-width: 140px;
-}
-
-.external-doctor-info {
-  padding: 4px 0;
-}
-
-.external-doctor-name {
-  font-weight: 500;
-  color: #37474F;
-  font-size: 0.85rem;
-  margin-bottom: 2px;
-}
-
-.external-doctor-specialty {
-  color: #78909C;
-  font-size: 0.75rem;
-  font-style: italic;
-}
-
-/* Pago doctor externo */
-.external-doctor-payment-cell {
-  min-width: 110px;
-  text-align: right;
-  padding-right: 15px !important;
-}
-
-.payment-info {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
-}
-
-.payment-type small {
-  color: #78909C;
-  font-size: 0.7rem;
-}
-
-/* Indicadores de no pago */
-.no-payment,
-.no-external-doctor {
-  color: #B0BEC5;
-  font-style: italic;
-  font-size: 0.85rem;
-}
-
-/* Ajustar anchos de columna */
-.orthodontics-table th:nth-child(5) { min-width: 120px; } /* Pago C$ */
-.orthodontics-table th:nth-child(6) { min-width: 120px; } /* Pago US$ */
-.orthodontics-table th:nth-child(7) { min-width: 110px; } /* Total (C$) */
-.orthodontics-table th:nth-child(8) { min-width: 110px; } /* Métodos de Pago */
-.orthodontics-table th:nth-child(9) { min-width: 80px; } /* % Clínica */
-.orthodontics-table th:nth-child(10) { min-width: 120px; } /* Ganancia Clínica */
-.orthodontics-table th:nth-child(11) { min-width: 80px; } /* % Doctora */
-.orthodontics-table th:nth-child(12) { min-width: 120px; } /* Ganancia Doctora */
-.orthodontics-table th:nth-child(13) { min-width: 140px; } /* Doctor Externo */
-.orthodontics-table th:nth-child(14) { min-width: 110px; } /* Pago Doctor */
-
-@media (max-width: 1600px) {
-  .orthodontics-table {
-    min-width: 1800px;
-  }
-}
-
-@media (max-width: 768px) {
-  .earnings-cards {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  
-  .earnings-card {
-    padding: 15px;
-  }
-  
-  .earnings-icon {
-    width: 50px;
-    height: 50px;
-    font-size: 24px;
-  }
-  
-  .earnings-value {
-    font-size: 18px;
-  }
-}
-
-/* Orthodontics Page - Estadísticas desplegables */
-.appointments-stats {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  margin-bottom: 2rem;
-  background: var(--bg-primary);
-  border-radius: 12px;
-  border: 2px solid #E0E0E0;
-  overflow: hidden;
-  transition: all 0.3s ease;
-}
-
-.appointments-stats.expanded {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-}
-
-.stats-header-mobile {
-  display: none;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem 1.25rem;
-  background: #F5F5F5;
-  cursor: pointer;
-  border-bottom: 2px solid #E0E0E0;
-}
-
-.stats-header-content {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  flex: 1;
-}
-
-.stats-title {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  color: #37474F;
-  font-size: 1.1rem;
-  margin: 0;
-  font-weight: 600;
-}
-
-.stats-summary-mobile {
-  display: flex;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
-.stat-summary-item {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: 0.85rem;
-  color: #78909C;
-  font-weight: 500;
-}
-
-.stat-summary-item:not(:last-child)::after {
-  content: "•";
-  margin-left: 0.5rem;
-  color: #E0E0E0;
-}
-
-.stats-toggle-icon {
-  color: #78909C;
-  font-size: 1rem;
-  transition: transform 0.3s ease;
-  min-width: 20px;
-}
-
-.stats-grid-container {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1.5rem;
-  padding: 1.5rem;
-  transition: all 0.3s ease;
-}
-
-/* Responsive para Orthodontics Page */
-@media (max-width: 768px) {
-  .appointments-stats {
-    padding: 0;
-    margin-bottom: 1.5rem;
-  }
-  
-  .stats-header-mobile {
-    display: flex;
-  }
-  
-  .stats-grid-container {
-    padding: 1rem;
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1rem;
-    max-height: 0;
-    opacity: 0;
-    overflow: hidden;
-    transition: all 0.3s ease;
-  }
-  
-  .appointments-stats.expanded .stats-grid-container {
-    max-height: 600px;
-    opacity: 1;
-    padding: 1.5rem;
-  }
-  
-  .earnings-card {
-    padding: 1rem;
-    flex-direction: column;
-    text-align: center;
-  }
-  
-  .earnings-icon {
-    width: 50px;
-    height: 50px;
-    font-size: 1.5rem;
-    margin: 0 auto;
-  }
-  
-  .earnings-value {
-    font-size: 1.5rem;
-  }
-  
-  .total-earnings-section {
-    display: none;
-  }
-}
-
-@media (max-width: 480px) {
-  .appointments-stats.expanded .stats-grid-container {
-    grid-template-columns: 1fr;
-  }
-  
-  .stats-summary-mobile {
-    gap: 0.5rem;
-  }
-  
-  .stat-summary-item {
-    font-size: 0.8rem;
-  }
-}
-
 /* BUSCADOR PRINCIPAL */
 .search-box-main-container {
   background: #F8F9FA;
@@ -1214,13 +85,6 @@
   color: #78909C;
   font-size: 0.85rem;
   font-style: italic;
-}
-
-.search-icon {
-  position: absolute;
-  left: 1rem;
-  color: #78909C;
-  font-size: 1rem;
 }
 
 .clear-search-btn {
@@ -1387,32 +251,540 @@
   transform: translateY(-2px);
 }
 
-/* Responsive para Orthodontics Page */
+/* Sección de tabla */
+.orthodontics-section {
+  background-color: white;
+  border-radius: 16px;
+  padding: 25px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.orthodontics-section h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #37474F;
+  margin-bottom: 20px;
+}
+
+/* Tabla */
+.table-responsive-container {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: 10px;
+  border: 1px solid #E0E0E0;
+}
+
+.orthodontics-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 14px;
+  border-radius: 10px;
+  overflow: hidden;
+  min-width: 1000px;
+}
+
+.orthodontics-table thead {
+  background-color: #F3E5F5;
+}
+
+.orthodontics-table th {
+  padding: 15px 12px;
+  text-align: left;
+  border-bottom: 1px solid #E0E0E0;
+  color: #37474F;
+  font-weight: 500;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+/* Especificar anchos de columnas */
+.orthodontics-table th:nth-child(1) { min-width: 120px; } /* Fecha */
+.orthodontics-table th:nth-child(2) { min-width: 150px; } /* Paciente */
+.orthodontics-table th:nth-child(3) { min-width: 200px; } /* Descripción */
+.orthodontics-table th:nth-child(4) { min-width: 120px; } /* Total C$ */
+.orthodontics-table th:nth-child(5) { min-width: 120px; } /* Total US$ */
+.orthodontics-table th:nth-child(6) { min-width: 140px; } /* Clínica C$ */
+.orthodontics-table th:nth-child(7) { min-width: 140px; } /* Doctora C$ */
+.orthodontics-table th:nth-child(8) { min-width: 100px; } /* Acciones */
+
+.orthodontics-table td {
+  padding: 15px 12px;
+  text-align: left;
+  border-bottom: 1px solid #E0E0E0;
+  color: #455A64;
+  font-weight: 400;
+  font-size: 14px;
+  vertical-align: top;
+}
+
+/* Alternar colores de filas */
+.orthodontics-table tbody tr:nth-child(even) {
+  background-color: rgba(243, 229, 245, 0.3);
+}
+
+.orthodontics-table tbody tr:hover {
+  background-color: rgba(243, 229, 245, 0.6);
+}
+
+/* Estilos específicos para celdas */
+.patient-cell strong {
+  color: #37474F;
+  font-size: 15px;
+}
+
+.patient-info-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.patient-info-compact small {
+  font-size: 0.8rem;
+  color: #78909C;
+}
+
+.description-cell {
+  line-height: 1.4;
+}
+
+.description-content strong {
+  color: #37474F;
+  font-size: 14px;
+}
+
+/* Celdas de montos */
+.total-cordobas-cell,
+.total-dollars-cell {
+  text-align: right;
+  padding-right: 15px !important;
+}
+
+.total-amount {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.total-amount.cordobas {
+  color: #AB47BC;
+}
+
+.total-amount.dollars {
+  color: #FF9800;
+}
+
+/* Celdas de ganancias */
+.clinic-earnings-cordobas-cell,
+.doctor-earnings-cordobas-cell {
+  text-align: right;
+  padding-right: 15px !important;
+}
+
+.earnings-amount {
+  font-weight: 700;
+  font-size: 0.95rem;
+  margin-bottom: 4px;
+}
+
+.earnings-amount.clinic {
+  color: #42A5F5;
+}
+
+.earnings-amount.doctor {
+  color: #4DB6AC;
+}
+
+.percentage-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.percentage-badge.clinic {
+  background: rgba(66, 165, 245, 0.1);
+  color: #42A5F5;
+}
+
+.percentage-badge.doctor {
+  background: rgba(77, 182, 172, 0.1);
+  color: #4DB6AC;
+}
+
+/* Botón Ver/Ocultar */
+.actions-cell {
+  text-align: center;
+}
+
+.btn-view-details {
+  background: #AB47BC;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.3s ease;
+}
+
+.btn-view-details:hover {
+  background: #8E24AA;
+  transform: translateY(-2px);
+}
+
+/* Estilos para filas expandidas */
+.expanded-row {
+  background-color: #F3E5F5 !important;
+}
+
+.details-row {
+  background-color: #F5F5F5;
+}
+
+.details-row td {
+  padding: 0 !important;
+  border-bottom: 2px solid #B0BEC5;
+}
+
+/* Contenedor de detalles */
+.orthodontic-details {
+  padding: 15px;
+  background: white;
+  border-radius: 8px;
+  margin: 5px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.details-header {
+  margin-bottom: 15px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #E0E0E0;
+}
+
+.details-header h4 {
+  color: #37474F;
+  margin: 0;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Grid horizontal de detalles */
+.horizontal-details-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.detail-card {
+  flex: 1;
+  min-width: 250px;
+  background: #F8F9FA;
+  border-radius: 8px;
+  padding: 15px;
+  border: 1px solid #E0E0E0;
+}
+
+.detail-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #E0E0E0;
+}
+
+.detail-card-header h5 {
+  color: #37474F;
+  margin: 0;
+  font-size: 15px;
+}
+
+.detail-card-header svg {
+  font-size: 16px;
+}
+
+.detail-card-content {
+  font-size: 14px;
+  color: #455A64;
+}
+
+.detail-card-content p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Tarjeta de observaciones */
+.observations-card {
+  border-left: 3px solid #4DB6AC;
+}
+
+.detail-card-header svg[data-icon="comment-medical"] {
+  color: #4DB6AC;
+}
+
+/* Tarjeta de ganancias */
+.earnings-card {
+  border-left: 3px solid #AB47BC;
+}
+
+.detail-card-header svg[data-icon="stethoscope"] {
+  color: #AB47BC;
+}
+
+/* Tarjeta de doctor externo */
+.doctor-card {
+  border-left: 3px solid #7E57C2;
+}
+
+.no-external-card {
+  border-left: 3px solid #78909C;
+}
+
+.detail-card-header svg[data-icon="user-doctor"] {
+  color: #7E57C2;
+}
+
+/* Distribución de ganancias */
+.earnings-distribution {
+  display: flex;
+  gap: 20px;
+}
+
+.distribution-column {
+  flex: 1;
+  min-width: 120px;
+}
+
+.distribution-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.distribution-header h6 {
+  color: #37474F;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.distribution-header svg {
+  font-size: 14px;
+}
+
+.clinic-column .distribution-header svg {
+  color: #42A5F5;
+}
+
+.doctor-column .distribution-header svg {
+  color: #4DB6AC;
+}
+
+.distribution-amounts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.amount-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.amount-label {
+  font-size: 12px;
+  color: #78909C;
+}
+
+.amount-value {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.clinic-column .amount-value {
+  color: #42A5F5;
+}
+
+.doctor-column .amount-value {
+  color: #4DB6AC;
+}
+
+/* Estilos para información del doctor */
+.doctor-info-row {
+  display: flex;
+  margin-bottom: 8px;
+  align-items: flex-start;
+}
+
+.doctor-info-label {
+  min-width: 100px;
+  color: #37474F;
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.doctor-info-value {
+  flex: 1;
+  color: #455A64;
+  font-size: 13px;
+}
+
+.doctor-payments-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #E0E0E0;
+}
+
+.payment-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.payment-label {
+  font-size: 12px;
+  color: #78909C;
+  font-weight: 500;
+}
+
+.payment-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #37474F;
+}
+
+.no-doctor-message {
+  color: #4CAF50;
+  font-weight: 500;
+  margin-bottom: 8px !important;
+}
+
+.additional-info {
+  color: #78909C;
+  font-size: 12px;
+  font-style: italic;
+  margin-top: 8px !important;
+}
+
+/* Mensaje sin resultados */
+.no-results {
+  text-align: center;
+  padding: 40px 20px;
+  background-color: #F8F9FA;
+  border-radius: 10px;
+  margin-top: 20px;
+  border: 1px dashed #E0E0E0;
+}
+
+.no-results p {
+  color: #78909C;
+  margin-bottom: 20px;
+  font-size: 1rem;
+}
+
+.no-results-help {
+  color: #78909C;
+  font-size: 0.9rem;
+  font-style: italic;
+  margin-top: 10px;
+}
+
+/* Estado de carga */
+.loading-message {
+  text-align: center;
+  padding: 60px 20px;
+  background-color: #F8F9FA;
+  border-radius: 10px;
+  margin-top: 20px;
+}
+
+.loading-message p {
+  color: #78909C;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.loading-spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 2px solid #E0E0E0;
+  border-radius: 50%;
+  border-top-color: #AB47BC;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Error message */
+.error-message {
+  text-align: center;
+  padding: 40px 20px;
+  background: #FFEBEE;
+  border-radius: 10px;
+  border: 1px solid #EF5350;
+}
+
+.error-message h3 {
+  color: #D32F2F;
+  margin-bottom: 15px;
+}
+
+.error-message p {
+  color: #C62828;
+  margin-bottom: 20px;
+}
+
+.btn-retry {
+  background: #AB47BC;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.btn-retry:hover {
+  background: #8E24AA;
+}
+
+/* ===========================================
+   MEJORAS PARA DISPOSITIVOS MÓVILES
+   =========================================== */
+
 @media (max-width: 768px) {
-  .appointments-stats {
-    padding: 0;
-    margin-bottom: 1.5rem;
+  .orthodontics-container {
+    padding: 15px;
   }
   
-  .stats-header-mobile {
-    display: flex;
+  .orthodontics-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
   }
   
-  .stats-grid-container {
-    padding: 1rem;
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1rem;
-    max-height: 0;
-    opacity: 0;
-    overflow: hidden;
-    transition: all 0.3s ease;
-  }
-  
-  .appointments-stats.expanded .stats-grid-container {
-    max-height: 600px;
-    opacity: 1;
-    padding: 1.5rem;
+  .orthodontics-tools {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 10px;
   }
   
   .filter-section {
@@ -1466,26 +838,132 @@
     font-size: 0.95rem;
   }
   
-  .total-earnings-section {
-    display: none;
+  .orthodontics-section {
+    padding: 15px;
+  }
+  
+  .orthodontics-table {
+    min-width: 800px;
+  }
+  
+  /* Contenedor de detalles mejorado */
+  .orthodontic-details {
+    padding: 12px;
+    margin: 3px;
+  }
+  
+  .details-header h4 {
+    font-size: 15px;
+  }
+  
+  /* Grid horizontal responsive */
+  .horizontal-details-grid {
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .detail-card {
+    min-width: 100%;
+  }
+  
+  /* Distribución de ganancias en móvil */
+  .earnings-distribution {
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  /* Botón ver detalles en móvil */
+  .btn-view-details {
+    width: 100%;
+    justify-content: center;
+    padding: 8px;
+    font-size: 13px;
+  }
+  
+  /* Fila principal en móvil - compacta */
+  .orthodontics-table td {
+    padding: 10px 6px !important;
+  }
+  
+  .patient-info-compact {
+    min-width: 120px;
+  }
+  
+  .patient-info-compact strong {
+    font-size: 13px;
+  }
+  
+  .patient-info-compact small {
+    font-size: 11px;
+  }
+  
+  .total-amount {
+    font-size: 12px;
+  }
+  
+  .earnings-amount {
+    font-size: 12px;
+  }
+  
+  .percentage-badge {
+    font-size: 0.7rem;
+    padding: 2px 6px;
+  }
+  
+  /* Información de doctor en móvil */
+  .doctor-info-row {
+    flex-direction: column;
+    margin-bottom: 6px;
+  }
+  
+  .doctor-info-label {
+    min-width: auto;
+    font-size: 12px;
+  }
+  
+  .doctor-info-value {
+    font-size: 12px;
+  }
+  
+  .doctor-payments-row {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .distribution-header h6 {
+    font-size: 12px;
+  }
+  
+  .amount-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+  
+  .amount-label {
+    font-size: 11px;
+  }
+  
+  .amount-value {
+    font-size: 12px;
   }
 }
 
 @media (max-width: 480px) {
-  .appointments-stats.expanded .stats-grid-container {
-    grid-template-columns: 1fr;
+  .orthodontics-table {
+    min-width: 700px;
   }
   
-  .stats-summary-mobile {
-    gap: 0.5rem;
+  .orthodontic-details {
+    padding: 10px;
   }
   
-  .stat-summary-item {
-    font-size: 0.8rem;
+  .detail-card-header h5 {
+    font-size: 14px;
   }
   
-  .filter-summary {
-    font-size: 0.8rem;
+  .detail-card-content {
+    font-size: 13px;
   }
 }
 
@@ -1506,6 +984,515 @@
   transform: rotate(180deg);
 }
 
-.appointments-stats.expanded .stats-toggle-icon {
-  transform: rotate(180deg);
+/* ============================
+   ESTILOS NUEVOS PARA ORTODONCIA
+   ============================ */
+
+/* Desglose de pagos en tabla principal */
+.payment-breakdown {
+  background-color: rgba(171, 71, 188, 0.05);
+  border-radius: 6px;
+  padding: 6px;
+  margin-top: 4px;
+  border-left: 2px solid #AB47BC;
+}
+
+.breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+  margin-bottom: 2px;
+}
+
+.breakdown-row.method {
+  justify-content: flex-start;
+  gap: 6px;
+  color: #78909C;
+  margin-top: 4px;
+}
+
+.breakdown-row.method svg {
+  font-size: 0.75rem;
+}
+
+.breakdown-label {
+  color: #78909C;
+}
+
+.breakdown-value {
+  font-weight: 600;
+  color: #37474F;
+}
+
+.breakdown-row.method span {
+  font-size: 0.75rem;
+}
+
+/* Contenedor de montos de ganancias */
+.earnings-amount-container {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Tarjeta de detalles de pagos en vista expandida */
+.payment-details-card {
+  border-left: 3px solid #AB47BC;
+  flex: 1.5;
+}
+
+.detail-card-header svg[data-icon="money-bill"] {
+  color: #AB47BC;
+}
+
+/* Tasa de cambio */
+.exchange-rate-info {
+  background-color: #F3E5F5;
+  border-radius: 6px;
+  padding: 10px;
+  margin-bottom: 15px;
+  border: 1px solid #E1BEE7;
+}
+
+.exchange-rate-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.exchange-rate-label {
+  font-weight: 500;
+  color: #8E24AA;
+}
+
+.exchange-rate-value {
+  font-weight: 600;
+  color: #6A1B9A;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.exchange-rate-value svg {
+  color: #AB47BC;
+}
+
+/* Secciones de monedas */
+.payment-currency-section {
+  background-color: white;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 15px;
+  border: 1px solid #E0E0E0;
+}
+
+.payment-currency-section.cordobas-section {
+  border-left: 3px solid #AB47BC;
+}
+
+.payment-currency-section.dollars-section {
+  border-left: 3px solid #FF9800;
+}
+
+.currency-title {
+  color: #37474F;
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.currency-title svg {
+  font-size: 13px;
+}
+
+.cordobas-section .currency-title svg {
+  color: #AB47BC;
+}
+
+.dollars-section .currency-title svg {
+  color: #FF9800;
+}
+
+.payment-details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.payment-detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  border-bottom: 1px dashed #E0E0E0;
+}
+
+.payment-detail-row:last-child {
+  border-bottom: none;
+}
+
+.payment-detail-label {
+  font-size: 12px;
+  color: #78909C;
+}
+
+.payment-detail-value {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.payment-detail-row.deduction .payment-detail-value {
+  color: #EF5350;
+}
+
+.payment-detail-row.net .payment-detail-value {
+  color: #4CAF50;
+}
+
+.payment-method-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 6px;
+  background-color: rgba(171, 71, 188, 0.05);
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.payment-method-info svg {
+  font-size: 13px;
+}
+
+/* Totales generales */
+.totals-summary {
+  background-color: #F3E5F5;
+  border-radius: 6px;
+  padding: 12px;
+  margin-top: 15px;
+  border: 1px solid #E1BEE7;
+}
+
+.total-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid #E1BEE7;
+}
+
+.total-summary-row:last-child {
+  border-bottom: none;
+}
+
+.total-summary-label {
+  font-size: 13px;
+  color: #37474F;
+}
+
+.total-summary-value {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.total-summary-row.net-total {
+  background-color: #FFF3E0;
+  padding: 8px;
+  border-radius: 4px;
+  margin-top: 4px;
+  border: 1px solid #FFE0B2;
+}
+
+.total-summary-row.net-total .total-summary-label {
+  color: #EF6C00;
+  font-weight: 600;
+}
+
+.total-summary-row.net-total .total-summary-value {
+  color: #EF6C00;
+  font-weight: 700;
+}
+
+/* Tarjeta de observaciones */
+.observations-card {
+  border-left: 3px solid #4DB6AC;
+}
+
+.detail-card-header svg[data-icon="clipboard-list"] {
+  color: #4DB6AC;
+}
+
+/* Contenido de observaciones */
+.observations-content {
+  background-color: white;
+  border-radius: 6px;
+  padding: 12px;
+  border: 1px solid #E0E0E0;
+  font-size: 13px;
+  line-height: 1.5;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.observations-content p {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Estilos específicos para distribución de ganancias */
+.distribution-summary {
+  background-color: #E3F2FD;
+  border-radius: 6px;
+  padding: 10px;
+  margin-top: 15px;
+  border: 1px solid #BBDEFB;
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+}
+
+.summary-row:first-child {
+  border-bottom: 1px dashed #BBDEFB;
+}
+
+.summary-label {
+  font-size: 12px;
+  color: #37474F;
+  font-weight: 500;
+}
+
+.summary-value {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.summary-value.total-cordobas {
+  color: #AB47BC;
+}
+
+.summary-value.total-dollars {
+  color: #FF9800;
+}
+
+/* Impacto de doctor externo */
+.external-doctor-impact {
+  background-color: #FFF3E0;
+  border-radius: 6px;
+  padding: 10px;
+  margin-top: 15px;
+  border: 1px solid #FFE0B2;
+}
+
+.external-doctor-impact h6 {
+  color: #EF6C00;
+  margin: 0 0 8px 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.impact-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.impact-label {
+  font-size: 12px;
+  color: #78909C;
+}
+
+.impact-values {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: right;
+}
+
+.impact-value {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.impact-value.cordobas {
+  color: #AB47BC;
+}
+
+.impact-value.dollars {
+  color: #FF9800;
+}
+
+/* Estilos para información del doctor */
+.doctor-info-row {
+  display: flex;
+  margin-bottom: 8px;
+  align-items: flex-start;
+}
+
+.doctor-info-label {
+  min-width: 100px;
+  color: #37474F;
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.doctor-info-value {
+  flex: 1;
+  color: #455A64;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.percentage-icon {
+  color: #7E57C2;
+  font-size: 11px;
+}
+
+/* Estilos para distribución de ganancias mejorada */
+.distribution-amounts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.amount-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.amount-label {
+  font-size: 12px;
+  color: #78909C;
+}
+
+.amount-value {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.amount-value.clinic {
+  color: #42A5F5;
+}
+
+.amount-value.doctor {
+  color: #4DB6AC;
+}
+
+.amount-value.total-cordobas {
+  color: #AB47BC;
+}
+
+.amount-value.total-dollars {
+  color: #FF9800;
+}
+
+/* ===========================================
+   MEJORAS PARA DISPOSITIVOS MÓVILES (NUEVAS)
+   =========================================== */
+
+@media (max-width: 768px) {
+  /* Desglose en móvil */
+  .payment-breakdown {
+    padding: 4px;
+  }
+  
+  .breakdown-row {
+    font-size: 0.7rem;
+  }
+  
+  /* Secciones de pago en móvil */
+  .payment-currency-section {
+    padding: 10px;
+  }
+  
+  .currency-title {
+    font-size: 13px;
+  }
+  
+  .payment-detail-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+  
+  .payment-detail-label,
+  .payment-detail-value {
+    font-size: 11px;
+  }
+  
+  .exchange-rate-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  
+  /* Distribución de ganancias en móvil */
+  .distribution-summary {
+    padding: 8px;
+  }
+  
+  .summary-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+  
+  .summary-label,
+  .summary-value {
+    font-size: 11px;
+  }
+  
+  /* Impacto doctor externo en móvil */
+  .external-doctor-impact {
+    padding: 8px;
+  }
+  
+  .impact-row {
+    flex-direction: column;
+    gap: 4px;
+  }
+  
+  .impact-values {
+    text-align: left;
+    width: 100%;
+  }
+  
+  .impact-value {
+    font-size: 11px;
+  }
+  
+  /* Observaciones en móvil */
+  .observations-content {
+    padding: 10px;
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .breakdown-row.method {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  
+  .distribution-amounts .amount-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+  
+  .amount-label,
+  .amount-value {
+    font-size: 11px;
+  }
 }

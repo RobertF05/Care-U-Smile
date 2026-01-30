@@ -6,17 +6,22 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
   faChevronDown,
   faChevronUp,
-  faChartBar,
   faFilter,
   faTimes,
   faSearch,
   faEye,
   faEyeSlash,
+  faUserDoctor,
+  faCommentMedical,
+  faHospitalUser,
+  faStethoscope,
+  faClipboardList,
   faMoneyBillWave,
   faDollarSign,
+  faExchangeAlt,
+  faMoneyBill,
   faPercentage,
-  faUserDoctor,
-  faHospitalUser
+  faCreditCard
 } from '@fortawesome/free-solid-svg-icons';
 import "./OrthodonticsPage.css";
 
@@ -36,11 +41,9 @@ export default function OrthodonticsPage() {
     endDate: ""
   });
   const [localError, setLocalError] = useState("");
-  const [expandedStats, setExpandedStats] = useState(false);
   const [expandedFilters, setExpandedFilters] = useState(false);
   const [expandedRows, setExpandedRows] = useState({});
 
-  // Cargar ortodoncias al montar
   useEffect(() => {
     if (user) {
       loadOrthodontics();
@@ -58,7 +61,6 @@ export default function OrthodonticsPage() {
     }
   };
 
-  // Aplicar filtros
   const applyFilters = async () => {
     try {
       setLocalError("");
@@ -72,7 +74,6 @@ export default function OrthodonticsPage() {
     }
   };
 
-  // Limpiar filtros
   const clearFilters = async () => {
     try {
       setLocalError("");
@@ -85,7 +86,6 @@ export default function OrthodonticsPage() {
     }
   };
 
-  // Toggle para expandir/contraer fila
   const toggleRow = (id) => {
     setExpandedRows(prev => ({
       ...prev,
@@ -93,7 +93,6 @@ export default function OrthodonticsPage() {
     }));
   };
 
-  // Filtrar ortodoncias por búsqueda
   const filteredOrthodontics = procedures
     .filter(ortho => {
       if (!search.trim()) return true;
@@ -107,24 +106,17 @@ export default function OrthodonticsPage() {
       );
     });
 
-  // Calcular ganancias para cada ortodoncia en ambas monedas
   const calculateOrthodonticEarnings = (orthodontic) => {
     const clinicPercentage = orthodontic.clinic_payment_percentage || 40;
     const doctorPercentage = orthodontic.doctor_payment_percentage || 60;
     
-    // Montos en córdobas
     const totalProcedureCordobas = orthodontic.total_procedure || 0;
     const clinicEarningsCordobas = orthodontic.clinic_payment_cordobas || (totalProcedureCordobas * clinicPercentage / 100);
     const doctorEarningsCordobas = orthodontic.doctor_payment_cordobas || (totalProcedureCordobas * doctorPercentage / 100);
     
-    // Montos en dólares
     const totalProcedureDollars = orthodontic.total_procedure_usd || 0;
     const clinicEarningsDollars = orthodontic.clinic_payment_dollars || (totalProcedureDollars * clinicPercentage / 100);
     const doctorEarningsDollars = orthodontic.doctor_payment_dollars || (totalProcedureDollars * doctorPercentage / 100);
-    
-    // Pagos recibidos
-    const cordobasAmount = orthodontic.amount_cordobas || orthodontic.total_cost || 0;
-    const dollarsAmount = orthodontic.amount_dollars || orthodontic.total_cost_USD || 0;
     
     return {
       totalProcedureCordobas,
@@ -135,80 +127,75 @@ export default function OrthodonticsPage() {
       doctorEarningsDollars,
       clinicPercentage,
       doctorPercentage,
-      cordobasAmount,
-      dollarsAmount,
-      isMixed: cordobasAmount > 0 && dollarsAmount > 0
+      cordobasAmount: orthodontic.amount_cordobas || orthodontic.total_cost || 0,
+      dollarsAmount: orthodontic.amount_dollars || orthodontic.total_cost_USD || 0
     };
   };
 
-  // Calcular estadísticas totales en ambas monedas
-  const calculateTotalEarnings = () => {
-    let totalClinicEarningsCordobas = 0;
-    let totalClinicEarningsDollars = 0;
-    let totalDoctorEarningsCordobas = 0;
-    let totalDoctorEarningsDollars = 0;
-    let totalProcedureCordobas = 0;
-    let totalProcedureDollars = 0;
-    let totalCordobas = 0;
-    let totalDollars = 0;
-    let totalExternalDoctorPaymentsCordobas = 0;
-    let totalExternalDoctorPaymentsDollars = 0;
-    let externalDoctorCount = 0;
-    let mixedPaymentCount = 0;
-    
-    filteredOrthodontics.forEach(ortho => {
-      const earnings = calculateOrthodonticEarnings(ortho);
-      totalClinicEarningsCordobas += earnings.clinicEarningsCordobas;
-      totalClinicEarningsDollars += earnings.clinicEarningsDollars;
-      totalDoctorEarningsCordobas += earnings.doctorEarningsCordobas;
-      totalDoctorEarningsDollars += earnings.doctorEarningsDollars;
-      totalProcedureCordobas += earnings.totalProcedureCordobas;
-      totalProcedureDollars += earnings.totalProcedureDollars;
-      totalCordobas += earnings.cordobasAmount;
-      totalDollars += earnings.dollarsAmount;
-      
-      if (earnings.isMixed) mixedPaymentCount++;
-      
-      // Contar pagos a doctores externos
-      if (ortho.theres_external_doctor || ortho.external_doctor) {
-        externalDoctorCount++;
-        totalExternalDoctorPaymentsCordobas += ortho.external_doctor_payment || 0;
-        totalExternalDoctorPaymentsDollars += ortho.external_doctor_payment_usd || 0;
-      }
-    });
-    
-    return {
-      totalClinicEarningsCordobas,
-      totalClinicEarningsDollars,
-      totalDoctorEarningsCordobas,
-      totalDoctorEarningsDollars,
-      totalProcedureCordobas,
-      totalProcedureDollars,
-      totalCordobas,
-      totalDollars,
-      totalExternalDoctorPaymentsCordobas,
-      totalExternalDoctorPaymentsDollars,
-      externalDoctorCount,
-      mixedPaymentCount,
-      count: filteredOrthodontics.length,
-      avgClinicCordobas: filteredOrthodontics.length > 0 ? totalClinicEarningsCordobas / filteredOrthodontics.length : 0,
-      avgClinicDollars: filteredOrthodontics.length > 0 ? totalClinicEarningsDollars / filteredOrthodontics.length : 0,
-      avgDoctorCordobas: filteredOrthodontics.length > 0 ? totalDoctorEarningsCordobas / filteredOrthodontics.length : 0,
-      avgDoctorDollars: filteredOrthodontics.length > 0 ? totalDoctorEarningsDollars / filteredOrthodontics.length : 0
-    };
-  };
-
-  const totalEarnings = calculateTotalEarnings();
-  
-  // Manejar errores
   const error = localError || contextError;
 
-  // Formatear moneda en dólares
   const formatCurrencyUSD = (amount) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD'
     }).format(amount || 0);
+  };
+
+  // Calcular totales separados
+  const calculateSeparateTotals = (procedure) => {
+    const cordobas = procedure.amount_cordobas || procedure.total_cost || 0;
+    const dollars = procedure.amount_dollars || procedure.total_cost_USD || 0;
+    const exchangeRate = procedure.exchange_rate_used || 36.5;
+    
+    // Si solo hay total_procedure (neto), estimamos los bruto
+    if (procedure.total_procedure && !cordobas && !dollars) {
+      // Asumimos que es todo en córdobas
+      return {
+        cordobas: procedure.total_procedure,
+        dollars: 0,
+        exchangeRate
+      };
+    }
+    
+    return {
+      cordobas,
+      dollars,
+      exchangeRate
+    };
+  };
+
+  // Obtener método de pago principal
+  const getMainPaymentMethod = (procedure) => {
+    if (procedure.payment_method_cordobas && procedure.payment_method_dollars) {
+      return 'Mixto';
+    }
+    return procedure.payment_method_cordobas || procedure.payment_method_dollars || procedure.payment_method || 'No especificado';
+  };
+
+  // Obtener icono según método de pago
+  const getPaymentMethodIcon = (method) => {
+    if (!method) return faMoneyBillWave;
+    
+    const methodLower = method.toLowerCase();
+    if (methodLower.includes('efectivo')) return faMoneyBillWave;
+    if (methodLower.includes('pos') || methodLower.includes('tarjeta')) return faCreditCard;
+    if (methodLower.includes('transferencia')) return faExchangeAlt;
+    if (methodLower.includes('mixto')) return faExchangeAlt;
+    if (methodLower.includes('cheque')) return faMoneyBillWave;
+    return faMoneyBillWave;
+  };
+
+  // Obtener color según método de pago
+  const getPaymentMethodColor = (method) => {
+    if (!method) return '#78909C';
+    
+    const methodLower = method.toLowerCase();
+    if (methodLower.includes('efectivo')) return '#4CAF50';
+    if (methodLower.includes('pos') || methodLower.includes('tarjeta')) return '#2196F3';
+    if (methodLower.includes('transferencia')) return '#9C27B0';
+    if (methodLower.includes('mixto')) return '#FF5722';
+    if (methodLower.includes('cheque')) return '#FF9800';
+    return '#78909C';
   };
 
   if (loading && procedures.length === 0) {
@@ -243,99 +230,6 @@ export default function OrthodonticsPage() {
         <div className="orthodontics-tools">
           <div className="orthodontics-count">
             <span>{filteredOrthodontics.length}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Estadísticas desplegables */}
-      <div className={`appointments-stats ${expandedStats ? 'expanded' : ''}`}>
-        <div className="stats-header-mobile" onClick={() => setExpandedStats(!expandedStats)}>
-          <div className="stats-header-content">
-            <h3 className="stats-title">
-              <FontAwesomeIcon icon={faChartBar} />
-              Estadísticas de Ortodoncia
-            </h3>
-            <div className="stats-summary-mobile">
-              <span className="stat-summary-item">Total: {totalEarnings.count}</span>
-              <span className="stat-summary-item">C$ {formatCurrency(totalEarnings.totalProcedureCordobas)}</span>
-              <span className="stat-summary-item">US$ {formatCurrencyUSD(totalEarnings.totalProcedureDollars)}</span>
-            </div>
-          </div>
-          <FontAwesomeIcon 
-            icon={expandedStats ? faChevronUp : faChevronDown} 
-            className="stats-toggle-icon"
-          />
-        </div>
-        
-        <div className="stats-grid-container">
-          <div className="stat-card total-orthodontics">
-            <div className="stat-icon">
-              <FontAwesomeIcon icon={faChartBar} />
-            </div>
-            <div className="stat-content">
-              <div className="stat-value">{totalEarnings.count}</div>
-              <div className="stat-label">Tratamientos</div>
-            </div>
-          </div>
-          
-          <div className="stat-card total-income-cordobas">
-            <div className="stat-icon">
-              <FontAwesomeIcon icon={faMoneyBillWave} />
-            </div>
-            <div className="stat-content">
-              <div className="stat-value">{formatCurrency(totalEarnings.totalProcedureCordobas)}</div>
-              <div className="stat-label">Total C$</div>
-            </div>
-          </div>
-          
-          <div className="stat-card total-income-dollars">
-            <div className="stat-icon">
-              <FontAwesomeIcon icon={faDollarSign} />
-            </div>
-            <div className="stat-content">
-              <div className="stat-value">{formatCurrencyUSD(totalEarnings.totalProcedureDollars)}</div>
-              <div className="stat-label">Total US$</div>
-            </div>
-          </div>
-          
-          <div className="stat-card clinic-earnings-cordobas">
-            <div className="stat-icon">
-              <FontAwesomeIcon icon={faHospitalUser} />
-            </div>
-            <div className="stat-content">
-              <div className="stat-value">{formatCurrency(totalEarnings.totalClinicEarningsCordobas)}</div>
-              <div className="stat-label">Clínica C$</div>
-            </div>
-          </div>
-          
-          <div className="stat-card clinic-earnings-dollars">
-            <div className="stat-icon">
-              <FontAwesomeIcon icon={faDollarSign} />
-            </div>
-            <div className="stat-content">
-              <div className="stat-value">{formatCurrencyUSD(totalEarnings.totalClinicEarningsDollars)}</div>
-              <div className="stat-label">Clínica US$</div>
-            </div>
-          </div>
-          
-          <div className="stat-card doctor-earnings-cordobas">
-            <div className="stat-icon">
-              <FontAwesomeIcon icon={faUserDoctor} />
-            </div>
-            <div className="stat-content">
-              <div className="stat-value">{formatCurrency(totalEarnings.totalDoctorEarningsCordobas)}</div>
-              <div className="stat-label">Doctora C$</div>
-            </div>
-          </div>
-          
-          <div className="stat-card doctor-earnings-dollars">
-            <div className="stat-icon">
-              <FontAwesomeIcon icon={faDollarSign} />
-            </div>
-            <div className="stat-content">
-              <div className="stat-value">{formatCurrencyUSD(totalEarnings.totalDoctorEarningsDollars)}</div>
-              <div className="stat-label">Doctora US$</div>
-            </div>
           </div>
         </div>
       </div>
@@ -418,7 +312,7 @@ export default function OrthodonticsPage() {
         </div>
       </div>
 
-      {/* Tabla de ortodoncias simplificada */}
+      {/* Tabla de ortodoncias */}
       <div className="orthodontics-section">
         <h3>Tratamientos de Ortodoncia ({filteredOrthodontics.length})</h3>
         
@@ -444,9 +338,7 @@ export default function OrthodonticsPage() {
                   <th>Total C$</th>
                   <th>Total US$</th>
                   <th>Clínica C$</th>
-                  <th>Clínica US$</th>
                   <th>Doctora C$</th>
-                  <th>Doctora US$</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
@@ -454,6 +346,14 @@ export default function OrthodonticsPage() {
                 {filteredOrthodontics.map((orthodontic) => {
                   const earnings = calculateOrthodonticEarnings(orthodontic);
                   const isExpanded = expandedRows[orthodontic.procedure_ID];
+                  const hasExternalDoctor = orthodontic.theres_external_doctor || orthodontic.external_doctor;
+                  const hasObservations = orthodontic.observations && orthodontic.observations.trim() !== "";
+                  const mainPaymentMethod = getMainPaymentMethod(orthodontic);
+                  const paymentIcon = getPaymentMethodIcon(mainPaymentMethod);
+                  const paymentColor = getPaymentMethodColor(mainPaymentMethod);
+                  
+                  // Calcular totales separados
+                  const separateTotals = calculateSeparateTotals(orthodontic);
                   
                   return (
                     <>
@@ -473,54 +373,74 @@ export default function OrthodonticsPage() {
                           </div>
                         </td>
                         
-                        {/* Totales en ambas monedas */}
+                        {/* Totales en ambas monedas con desglose */}
                         <td className="total-cordobas-cell">
-                          <div className="total-amount cordobas">
-                            {formatCurrency(earnings.totalProcedureCordobas)}
+                          <div className="total-amount-container">
+                            <div className="total-amount cordobas">
+                              {formatCurrency(earnings.totalProcedureCordobas)}
+                            </div>
+                            {separateTotals.cordobas > 0 && (
+                              <div className="payment-breakdown">
+                                <div className="breakdown-row">
+                                  <span className="breakdown-label">Abono C$:</span>
+                                  <span className="breakdown-value">{formatCurrency(separateTotals.cordobas)}</span>
+                                </div>
+                                <div className="breakdown-row method">
+                                  <FontAwesomeIcon 
+                                    icon={getPaymentMethodIcon(orthodontic.payment_method_cordobas)}
+                                    style={{ color: getPaymentMethodColor(orthodontic.payment_method_cordobas) }}
+                                  />
+                                  <span>{orthodontic.payment_method_cordobas || 'No especificado'}</span>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </td>
                         
                         <td className="total-dollars-cell">
-                          <div className="total-amount dollars">
-                            {formatCurrencyUSD(earnings.totalProcedureDollars)}
+                          <div className="total-amount-container">
+                            <div className="total-amount dollars">
+                              {formatCurrencyUSD(earnings.totalProcedureDollars)}
+                            </div>
+                            {separateTotals.dollars > 0 && (
+                              <div className="payment-breakdown">
+                                <div className="breakdown-row">
+                                  <span className="breakdown-label">Abono US$:</span>
+                                  <span className="breakdown-value">{formatCurrencyUSD(separateTotals.dollars)}</span>
+                                </div>
+                                <div className="breakdown-row method">
+                                  <FontAwesomeIcon 
+                                    icon={getPaymentMethodIcon(orthodontic.payment_method_dollars)}
+                                    style={{ color: getPaymentMethodColor(orthodontic.payment_method_dollars) }}
+                                  />
+                                  <span>{orthodontic.payment_method_dollars || 'No especificado'}</span>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </td>
                         
-                        {/* Ganancias de clínica en ambas monedas */}
+                        {/* Ganancias de clínica en córdobas */}
                         <td className="clinic-earnings-cordobas-cell">
-                          <div className="earnings-amount clinic">
-                            {formatCurrency(earnings.clinicEarningsCordobas)}
-                          </div>
-                          <div className="percentage-badge">
-                            {earnings.clinicPercentage}%
-                          </div>
-                        </td>
-                        
-                        <td className="clinic-earnings-dollars-cell">
-                          <div className="earnings-amount clinic">
-                            {formatCurrencyUSD(earnings.clinicEarningsDollars)}
-                          </div>
-                          <div className="percentage-badge">
-                            {earnings.clinicPercentage}%
+                          <div className="earnings-amount-container">
+                            <div className="earnings-amount clinic">
+                              {formatCurrency(earnings.clinicEarningsCordobas)}
+                            </div>
+                            <div className="percentage-badge clinic">
+                              {earnings.clinicPercentage}%
+                            </div>
                           </div>
                         </td>
                         
-                        {/* Ganancias de doctora en ambas monedas */}
+                        {/* Ganancias de doctora en córdobas */}
                         <td className="doctor-earnings-cordobas-cell">
-                          <div className="earnings-amount doctor">
-                            {formatCurrency(earnings.doctorEarningsCordobas)}
-                          </div>
-                          <div className="percentage-badge">
-                            {earnings.doctorPercentage}%
-                          </div>
-                        </td>
-                        
-                        <td className="doctor-earnings-dollars-cell">
-                          <div className="earnings-amount doctor">
-                            {formatCurrencyUSD(earnings.doctorEarningsDollars)}
-                          </div>
-                          <div className="percentage-badge">
-                            {earnings.doctorPercentage}%
+                          <div className="earnings-amount-container">
+                            <div className="earnings-amount doctor">
+                              {formatCurrency(earnings.doctorEarningsCordobas)}
+                            </div>
+                            <div className="percentage-badge doctor">
+                              {earnings.doctorPercentage}%
+                            </div>
                           </div>
                         </td>
                         
@@ -537,164 +457,308 @@ export default function OrthodonticsPage() {
                         </td>
                       </tr>
                       
-                      {/* Fila expandida con detalles */}
+                      {/* Fila expandida con LAYOUT HORIZONTAL */}
                       {isExpanded && (
                         <tr key={`${orthodontic.procedure_ID}-details`} className="details-row">
-                          <td colSpan="10">
+                          <td colSpan="8">
                             <div className="orthodontic-details">
                               <div className="details-header">
-                                <h4>📋 Detalles del Tratamiento de Ortodoncia</h4>
+                                <h4>📋 Información Adicional del Tratamiento</h4>
                               </div>
                               
-                              <div className="details-grid">
-                                
-                                {/* Información del tratamiento */}
-                                <div className="details-section treatment-info">
-                                  <h5>🔧 Detalles del Tratamiento</h5>
-                                  <div className="details-content">
-                                    <p><strong>Descripción:</strong> {orthodontic.procedure_description || "N/A"}</p>
-                                    <p><strong>Fecha:</strong> {orthodontic.procedure_date ? formatDate(orthodontic.procedure_date) : "N/A"}</p>
-                                    <p><strong>Observaciones:</strong> {orthodontic.observations || "Ninguna"}</p>
-                                  </div>
-                                </div>
-                                
-                                {/* Pagos */}
-                                <div className="details-section payments-info">
-                                  <h5>💰 Pagos Recibidos</h5>
-                                  <div className="details-content">
-                                    <div className="payment-row">
-                                      <div className="payment-column">
-                                        <h6>En Córdobas (C$)</h6>
-                                        <p><strong>Cantidad:</strong> {formatCurrency(earnings.cordobasAmount)}</p>
-                                        <p><strong>Método:</strong> {orthodontic.payment_method_cordobas || "No especificado"}</p>
-                                        {orthodontic.payment_method_cordobas === 'POS' && (
-                                          <>
-                                            <p><strong>Deducción POS (5.5%):</strong> -{formatCurrency(orthodontic.pos_deduction_cordobas || 0)}</p>
-                                            <p><strong>Neto:</strong> {formatCurrency(orthodontic.net_amount_cordobas || earnings.cordobasAmount)}</p>
-                                          </>
-                                        )}
-                                      </div>
-                                      <div className="payment-column">
-                                        <h6>En Dólares (US$)</h6>
-                                        <p><strong>Cantidad:</strong> {formatCurrencyUSD(earnings.dollarsAmount)}</p>
-                                        <p><strong>Método:</strong> {orthodontic.payment_method_dollars || "No especificado"}</p>
-                                        {orthodontic.payment_method_dollars === 'POS' && (
-                                          <>
-                                            <p><strong>Deducción POS (5.5%):</strong> -{formatCurrencyUSD(orthodontic.pos_deduction_dollars || 0)}</p>
-                                            <p><strong>Neto:</strong> {formatCurrencyUSD(orthodontic.net_amount_dollars || earnings.dollarsAmount)}</p>
-                                          </>
-                                        )}
-                                      </div>
+                              <div className="horizontal-details-grid">
+                                {/* Observaciones del procedimiento */}
+                                {hasObservations && (
+                                  <div className="detail-card observations-card">
+                                    <div className="detail-card-header">
+                                      <FontAwesomeIcon icon={faClipboardList} />
+                                      <h5>Observaciones del Procedimiento</h5>
                                     </div>
-                                    
-                                    {/* Totales */}
-                                    <div className="total-summary">
-                                      <div className="total-row">
-                                        <span>Total Bruto (C$):</span>
-                                        <span>{formatCurrency(orthodontic.gross_amount_cordobas || earnings.cordobasAmount)}</span>
+                                    <div className="detail-card-content">
+                                      <div className="observations-content">
+                                        <p>{orthodontic.observations}</p>
                                       </div>
-                                      <div className="total-row">
-                                        <span>Total Bruto (US$):</span>
-                                        <span>{formatCurrencyUSD(orthodontic.gross_amount_dollars || earnings.dollarsAmount)}</span>
-                                      </div>
-                                      {orthodontic.total_pos_deduction > 0 && (
-                                        <div className="total-row deduction">
-                                          <span>Total Deducciones POS (C$):</span>
-                                          <span>-{formatCurrency(orthodontic.total_pos_deduction)}</span>
-                                        </div>
-                                      )}
-                                      <div className="total-row final">
-                                        <span><strong>Total Neto (C$):</strong></span>
-                                        <span><strong>{formatCurrency(earnings.totalProcedureCordobas)}</strong></span>
-                                      </div>
-                                      <div className="total-row final">
-                                        <span><strong>Total Neto (US$):</strong></span>
-                                        <span><strong>{formatCurrencyUSD(earnings.totalProcedureDollars)}</strong></span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                                
-                                {/* Distribución de ganancias */}
-                                <div className="details-section earnings-distribution">
-                                  <h5>📈 Distribución de Ganancias</h5>
-                                  <div className="details-content">
-                                    <div className="distribution-header">
-                                      <div className="distribution-title">Clínica ({earnings.clinicPercentage}%)</div>
-                                      <div className="distribution-title">Doctora ({earnings.doctorPercentage}%)</div>
-                                    </div>
-                                    
-                                    <div className="distribution-row">
-                                      <div className="distribution-column clinic">
-                                        <h6>En Córdobas (C$)</h6>
-                                        <p><strong>Monto:</strong> {formatCurrency(earnings.clinicEarningsCordobas)}</p>
-                                        <p><strong>Porcentaje:</strong> {earnings.clinicPercentage}%</p>
-                                      </div>
-                                      <div className="distribution-column doctor">
-                                        <h6>En Córdobas (C$)</h6>
-                                        <p><strong>Monto:</strong> {formatCurrency(earnings.doctorEarningsCordobas)}</p>
-                                        <p><strong>Porcentaje:</strong> {earnings.doctorPercentage}%</p>
-                                      </div>
-                                    </div>
-                                    
-                                    <div className="distribution-row">
-                                      <div className="distribution-column clinic">
-                                        <h6>En Dólares (US$)</h6>
-                                        <p><strong>Monto:</strong> {formatCurrencyUSD(earnings.clinicEarningsDollars)}</p>
-                                        <p><strong>Porcentaje:</strong> {earnings.clinicPercentage}%</p>
-                                      </div>
-                                      <div className="distribution-column doctor">
-                                        <h6>En Dólares (US$)</h6>
-                                        <p><strong>Monto:</strong> {formatCurrencyUSD(earnings.doctorEarningsDollars)}</p>
-                                        <p><strong>Porcentaje:</strong> {earnings.doctorPercentage}%</p>
-                                      </div>
-                                    </div>
-                                    
-                                    {/* Ganancias netas después de doctor externo */}
-                                    {(orthodontic.theres_external_doctor || orthodontic.external_doctor) && (
-                                      <div className="net-earnings">
-                                        <h6>Ganancias Netas después de pago a doctor externo:</h6>
-                                        <div className="net-earnings-row">
-                                          <div className="net-earnings-column">
-                                            <p><strong>Clínica C$:</strong> {formatCurrency(earnings.clinicEarningsCordobas - (orthodontic.external_doctor_payment || 0))}</p>
-                                            <p><strong>Clínica US$:</strong> {formatCurrencyUSD(earnings.clinicEarningsDollars - (orthodontic.external_doctor_payment_usd || 0))}</p>
-                                          </div>
-                                          <div className="net-earnings-column">
-                                            <p><strong>Doctora C$:</strong> {formatCurrency(earnings.doctorEarningsCordobas)}</p>
-                                            <p><strong>Doctora US$:</strong> {formatCurrencyUSD(earnings.doctorEarningsDollars)}</p>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                                
-                                {/* Doctor Externo (si aplica) */}
-                                {(orthodontic.theres_external_doctor || orthodontic.external_doctor) && (
-                                  <div className="details-section external-doctor-info">
-                                    <h5>👨‍⚕️ Doctor Externo</h5>
-                                    <div className="details-content">
-                                      <p><strong>Nombre:</strong> {orthodontic.external_doctor_name || orthodontic.external_doctor || "N/A"}</p>
-                                      <p><strong>Especialidad:</strong> {orthodontic.external_doctor_specialty || "N/A"}</p>
-                                      <p><strong>Tipo de pago:</strong> {orthodontic.external_doctor_payment_type === 'percentage' ? 'Porcentaje' : 'Cantidad fija'}</p>
-                                      <p><strong>Valor:</strong> {orthodontic.external_doctor_payment_type === 'percentage' ? 
-                                        `${orthodontic.external_doctor_payment_value}%` : 
-                                        formatCurrency(orthodontic.external_doctor_payment)} ({orthodontic.external_doctor_payment_currency})</p>
-                                      {orthodontic.external_doctor_payment_usd && (
-                                        <p><strong>Equivalente en US$:</strong> {formatCurrencyUSD(orthodontic.external_doctor_payment_usd)}</p>
-                                      )}
                                     </div>
                                   </div>
                                 )}
                                 
-                                {/* Información adicional */}
-                                <div className="details-section additional-info">
-                                  <h5>📝 Información Adicional</h5>
-                                  <div className="details-content">
-                                    <p><strong>Tipo de cambio usado:</strong> C$ {orthodontic.exchange_rate_used || "36.5"} por US$ 1</p>
-                                    <p><strong>Fecha de creación:</strong> {orthodontic.creation_date ? formatDate(orthodontic.creation_date) : "N/A"}</p>
+                                {/* Información de pagos con tasa de cambio */}
+                                <div className="detail-card payment-details-card">
+                                  <div className="detail-card-header">
+                                    <FontAwesomeIcon icon={faMoneyBill} />
+                                    <h5>Detalles de Pagos</h5>
+                                  </div>
+                                  <div className="detail-card-content">
+                                    {/* Tasa de cambio */}
+                                    <div className="exchange-rate-info">
+                                      <div className="exchange-rate-row">
+                                        <span className="exchange-rate-label">Tasa de cambio:</span>
+                                        <span className="exchange-rate-value">
+                                          <FontAwesomeIcon icon={faExchangeAlt} />
+                                          C$ {separateTotals.exchangeRate} = US$ 1
+                                        </span>
+                                      </div>
+                                    </div>
+                                    
+                                    {/* Desglose de pagos en Córdobas */}
+                                    {separateTotals.cordobas > 0 && (
+                                      <div className="payment-currency-section cordobas-section">
+                                        <h6 className="currency-title">
+                                          <FontAwesomeIcon icon={faMoneyBillWave} />
+                                          Pagos en Córdobas (C$)
+                                        </h6>
+                                        <div className="payment-details">
+                                          <div className="payment-detail-row">
+                                            <span className="payment-detail-label">Monto bruto:</span>
+                                            <span className="payment-detail-value">
+                                              {formatCurrency(orthodontic.gross_amount_cordobas || separateTotals.cordobas)}
+                                            </span>
+                                          </div>
+                                          {orthodontic.pos_deduction_cordobas > 0 && (
+                                            <div className="payment-detail-row deduction">
+                                              <span className="payment-detail-label">Deducción POS:</span>
+                                              <span className="payment-detail-value">
+                                                -{formatCurrency(orthodontic.pos_deduction_cordobas)}
+                                              </span>
+                                            </div>
+                                          )}
+                                          <div className="payment-detail-row net">
+                                            <span className="payment-detail-label">Monto neto:</span>
+                                            <span className="payment-detail-value">
+                                              {formatCurrency(orthodontic.net_amount_cordobas || separateTotals.cordobas)}
+                                            </span>
+                                          </div>
+                                          <div className="payment-method-info">
+                                            <FontAwesomeIcon 
+                                              icon={getPaymentMethodIcon(orthodontic.payment_method_cordobas)}
+                                              style={{ color: getPaymentMethodColor(orthodontic.payment_method_cordobas) }}
+                                            />
+                                            <span>{orthodontic.payment_method_cordobas || 'No especificado'}</span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
+                                    
+                                    {/* Desglose de pagos en Dólares */}
+                                    {separateTotals.dollars > 0 && (
+                                      <div className="payment-currency-section dollars-section">
+                                        <h6 className="currency-title">
+                                          <FontAwesomeIcon icon={faDollarSign} />
+                                          Pagos en Dólares (US$)
+                                        </h6>
+                                        <div className="payment-details">
+                                          <div className="payment-detail-row">
+                                            <span className="payment-detail-label">Monto bruto:</span>
+                                            <span className="payment-detail-value">
+                                              {formatCurrencyUSD(orthodontic.gross_amount_dollars || separateTotals.dollars)}
+                                            </span>
+                                          </div>
+                                          {orthodontic.pos_deduction_dollars > 0 && (
+                                            <div className="payment-detail-row deduction">
+                                              <span className="payment-detail-label">Deducción POS:</span>
+                                              <span className="payment-detail-value">
+                                                -{formatCurrencyUSD(orthodontic.pos_deduction_dollars)}
+                                              </span>
+                                            </div>
+                                          )}
+                                          <div className="payment-detail-row net">
+                                            <span className="payment-detail-label">Monto neto:</span>
+                                            <span className="payment-detail-value">
+                                              {formatCurrencyUSD(orthodontic.net_amount_dollars || separateTotals.dollars)}
+                                            </span>
+                                          </div>
+                                          <div className="payment-method-info">
+                                            <FontAwesomeIcon 
+                                              icon={getPaymentMethodIcon(orthodontic.payment_method_dollars)}
+                                              style={{ color: getPaymentMethodColor(orthodontic.payment_method_dollars) }}
+                                            />
+                                            <span>{orthodontic.payment_method_dollars || 'No especificado'}</span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
+                                    
+                                    {/* Totales generales */}
+                                    <div className="totals-summary">
+                                      <div className="total-summary-row">
+                                        <span className="total-summary-label">Total bruto (C$):</span>
+                                        <span className="total-summary-value">
+                                          {formatCurrency(orthodontic.total_cost || separateTotals.cordobas)}
+                                        </span>
+                                      </div>
+                                      <div className="total-summary-row">
+                                        <span className="total-summary-label">Total bruto (US$):</span>
+                                        <span className="total-summary-value">
+                                          {formatCurrencyUSD(orthodontic.total_cost_USD || separateTotals.dollars)}
+                                        </span>
+                                      </div>
+                                      <div className="total-summary-row net-total">
+                                        <span className="total-summary-label">Total neto (C$):</span>
+                                        <span className="total-summary-value">
+                                          {formatCurrency(orthodontic.total_procedure || separateTotals.cordobas)}
+                                        </span>
+                                      </div>
+                                      <div className="total-summary-row net-total">
+                                        <span className="total-summary-label">Total neto (US$):</span>
+                                        <span className="total-summary-value">
+                                          {formatCurrencyUSD(orthodontic.total_procedure_usd || separateTotals.dollars)}
+                                        </span>
+                                      </div>
+                                    </div>
                                   </div>
                                 </div>
+                                
+                                {/* Distribución de Ganancias */}
+                                <div className="detail-card earnings-card">
+                                  <div className="detail-card-header">
+                                    <FontAwesomeIcon icon={faStethoscope} />
+                                    <h5>Distribución de Ganancias</h5>
+                                  </div>
+                                  <div className="detail-card-content">
+                                    <div className="earnings-distribution">
+                                      <div className="distribution-column clinic-column">
+                                        <div className="distribution-header">
+                                          <FontAwesomeIcon icon={faHospitalUser} />
+                                          <h6>Clínica ({earnings.clinicPercentage}%)</h6>
+                                        </div>
+                                        <div className="distribution-amounts">
+                                          <div className="amount-item">
+                                            <span className="amount-label">C$:</span>
+                                            <span className="amount-value clinic">
+                                              {formatCurrency(earnings.clinicEarningsCordobas)}
+                                            </span>
+                                          </div>
+                                          <div className="amount-item">
+                                            <span className="amount-label">US$:</span>
+                                            <span className="amount-value clinic">
+                                              {formatCurrencyUSD(earnings.clinicEarningsDollars)}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <div className="distribution-column doctor-column">
+                                        <div className="distribution-header">
+                                          <FontAwesomeIcon icon={faUserDoctor} />
+                                          <h6>Doctora ({earnings.doctorPercentage}%)</h6>
+                                        </div>
+                                        <div className="distribution-amounts">
+                                          <div className="amount-item">
+                                            <span className="amount-label">C$:</span>
+                                            <span className="amount-value doctor">
+                                              {formatCurrency(earnings.doctorEarningsCordobas)}
+                                            </span>
+                                          </div>
+                                          <div className="amount-item">
+                                            <span className="amount-label">US$:</span>
+                                            <span className="amount-value doctor">
+                                              {formatCurrencyUSD(earnings.doctorEarningsDollars)}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    
+                                    {/* Resumen total */}
+                                    <div className="distribution-summary">
+                                      <div className="summary-row">
+                                        <span className="summary-label">Total tratamiento (C$):</span>
+                                        <span className="summary-value total-cordobas">
+                                          {formatCurrency(earnings.totalProcedureCordobas)}
+                                        </span>
+                                      </div>
+                                      <div className="summary-row">
+                                        <span className="summary-label">Total tratamiento (US$):</span>
+                                        <span className="summary-value total-dollars">
+                                          {formatCurrencyUSD(earnings.totalProcedureDollars)}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                                
+                                {/* Información de Doctor Externo */}
+                                {hasExternalDoctor ? (
+                                  <div className="detail-card doctor-card">
+                                    <div className="detail-card-header">
+                                      <FontAwesomeIcon icon={faUserDoctor} />
+                                      <h5>Doctor Externo</h5>
+                                    </div>
+                                    <div className="detail-card-content">
+                                      <div className="doctor-info-row">
+                                        <span className="doctor-info-label">Nombre:</span>
+                                        <span className="doctor-info-value">{orthodontic.external_doctor_name || orthodontic.external_doctor}</span>
+                                      </div>
+                                      {orthodontic.external_doctor_specialty && (
+                                        <div className="doctor-info-row">
+                                          <span className="doctor-info-label">Especialidad:</span>
+                                          <span className="doctor-info-value">{orthodontic.external_doctor_specialty}</span>
+                                        </div>
+                                      )}
+                                      <div className="doctor-info-row">
+                                        <span className="doctor-info-label">Tipo de pago:</span>
+                                        <span className="doctor-info-value">
+                                          {orthodontic.external_doctor_payment_type === 'percentage' ? 'Porcentaje' : 'Cantidad fija'}
+                                        </span>
+                                      </div>
+                                      
+                                      {orthodontic.external_doctor_payment_type === 'percentage' ? (
+                                        <div className="doctor-info-row">
+                                          <span className="doctor-info-label">Porcentaje:</span>
+                                          <span className="doctor-info-value">
+                                            {orthodontic.external_doctor_payment_value}%
+                                            <FontAwesomeIcon icon={faPercentage} className="percentage-icon" />
+                                          </span>
+                                        </div>
+                                      ) : (
+                                        <div className="doctor-info-row">
+                                          <span className="doctor-info-label">Monto fijo:</span>
+                                          <span className="doctor-info-value">{formatCurrency(orthodontic.external_doctor_payment || 0)}</span>
+                                        </div>
+                                      )}
+                                      
+                                      {/* Pagos en ambas monedas */}
+                                      <div className="doctor-payments-row">
+                                        <div className="payment-item">
+                                          <span className="payment-label">Pago C$:</span>
+                                          <span className="payment-value">{formatCurrency(orthodontic.external_doctor_payment || 0)}</span>
+                                        </div>
+                                        {orthodontic.external_doctor_payment_usd && (
+                                          <div className="payment-item">
+                                            <span className="payment-label">Pago US$:</span>
+                                            <span className="payment-value">{formatCurrencyUSD(orthodontic.external_doctor_payment_usd)}</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                      
+                                      {/* Ajuste en ganancias después de pago externo */}
+                                      <div className="external-doctor-impact">
+                                        <h6>Impacto en distribución:</h6>
+                                        <div className="impact-row">
+                                          <span className="impact-label">Clínica recibe:</span>
+                                          <div className="impact-values">
+                                            <span className="impact-value cordobas">
+                                              {formatCurrency(earnings.clinicEarningsCordobas - (orthodontic.external_doctor_payment || 0))}
+                                            </span>
+                                            <span className="impact-value dollars">
+                                              {formatCurrencyUSD(earnings.clinicEarningsDollars - (orthodontic.external_doctor_payment_usd || 0))}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="detail-card no-external-card">
+                                    <div className="detail-card-header">
+                                      <FontAwesomeIcon icon={faUserDoctor} />
+                                      <h5>Doctor Externo</h5>
+                                    </div>
+                                    <div className="detail-card-content">
+                                      <p className="no-doctor-message">✅ No se registró doctor externo</p>
+                                      <p className="additional-info">Las ganancias se distribuyen únicamente entre clínica y doctora.</p>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </td>

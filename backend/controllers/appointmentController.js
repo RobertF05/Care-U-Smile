@@ -366,7 +366,7 @@ const appointmentController = {
     }
   },
 
-  // Convertir cita en procedimiento - VERSIÓN CORREGIDA CON total_procedure_USD
+  // Convertir cita en procedimiento - VERSIÓN CORREGIDA CON NOMBRES DE CAMPOS EXACTOS
   convertToProcedure: async (req, res) => {
     try {
       const { id } = req.params;
@@ -395,7 +395,8 @@ const appointmentController = {
       console.log('📅 Cita encontrada:', {
         appointment_ID: appointment.appointment_ID,
         is_registered: appointment.is_registered,
-        state: appointment.state
+        state: appointment.state,
+        is_orthodontics: appointment.is_orthodontics
       });
       
       // Verificar si ya está registrada
@@ -416,72 +417,92 @@ const appointmentController = {
       
       console.log('📅 Fecha del procedimiento:', appointment.appointment_date);
       
-      // IMPORTANTE: Tomar total_procedure_USD del frontend
-      // El frontend ya calcula el valor correcto después de deducciones
-      const total_procedure_USD = procedureData.total_procedure_USD;
+      // Calcular montos si no vienen del frontend (como respaldo)
       const exchange_rate = procedureData.exchange_rate || 36.5;
+      const total_procedure_USD = procedureData.total_procedure_USD || 
+        (procedureData.total_procedure ? procedureData.total_procedure / exchange_rate : 0);
       
       console.log('💰 Valores recibidos del frontend:', {
-        total_procedure_USD_from_frontend: total_procedure_USD,
+        total_procedure_USD_from_frontend: procedureData.total_procedure_USD,
         total_procedure: procedureData.total_procedure,
         exchange_rate: exchange_rate,
-        amount_dollars: procedureData.amount_dollars
+        amount_dollars: procedureData.amount_dollars,
+        clinic_payment_cordobas: procedureData.clinic_payment_cordobas,
+        clinic_payment_dollars: procedureData.clinic_payment_dollars,
+        doctor_payment_cordobas: procedureData.doctor_payment_cordobas,
+        doctor_payment_dollars: procedureData.doctor_payment_dollars
       });
       
-      // Preparar datos para insertar - ¡INCLUYENDO total_procedure_USD!
+      // Preparar datos para insertar - USANDO LOS NOMBRES EXACTOS DE LA BD
       const procedureToInsert = {
-  appointment_ID: id,
-  Patient_ID: appointment.Patient_ID,
-  procedure_date: appointment.appointment_date,
-  procedure_description: procedureData.procedure_description,
-  total_cost: procedureData.total_cost || 0, // Bruto en córdobas
-  total_cost_USD: procedureData.total_cost_USD || 0, // Bruto en dólares
-  total_procedure: procedureData.total_procedure || 0, // Neto después de deducciones en C$
-  total_procedure_usd: total_procedure_USD || 0, // ¡CAMPO CORREGIDO! Neto después de deducciones en US$
-  payment_method: procedureData.payment_method || 'Mixto',
-  is_orthodontics: appointment.is_orthodontics,
-  observations: procedureData.observations || appointment.observations,
-  creation_date: new Date().toISOString().replace('Z', ''),
-  
-  // Campos de pagos múltiples
-  amount_cordobas: procedureData.amount_cordobas || 0,
-  amount_dollars: procedureData.amount_dollars || 0,
-  payment_method_cordobas: procedureData.payment_method_cordobas || null,
-  payment_method_dollars: procedureData.payment_method_dollars || null,
-  
-  // CAMPOS DE DEDUCCIÓN POS
-  pos_deduction_cordobas: procedureData.pos_deduction_cordobas || 0,
-  pos_deduction_dollars: procedureData.pos_deduction_dollars || 0,
-  total_pos_deduction: procedureData.total_pos_deduction || 0,
-  net_amount_cordobas: procedureData.net_amount_cordobas || procedureData.amount_cordobas || 0,
-  net_amount_dollars: procedureData.net_amount_dollars || procedureData.amount_dollars || 0,
-  gross_amount_cordobas: procedureData.gross_amount_cordobas || procedureData.amount_cordobas || 0,
-  gross_amount_dollars: procedureData.gross_amount_dollars || procedureData.amount_dollars || 0,
-  
-  // Campos de doctor externo
-  external_doctor: procedureData.external_doctor || null,
-  external_doctor_payment: procedureData.external_doctor_payment || null,
-  theres_external_doctor: procedureData.theres_external_doctor || false,
-  external_doctor_name: procedureData.external_doctor_name || null,
-  external_doctor_specialty: procedureData.external_doctor_specialty || null,
-  external_doctor_payment_type: procedureData.external_doctor_payment_type || 'fixed',
-  external_doctor_payment_value: procedureData.external_doctor_payment_value || null,
-  external_doctor_payment_currency: procedureData.external_doctor_payment_currency || 'C$',
-  
-  // Campos de porcentajes
-  clinic_payment_percentage: procedureData.clinic_payment_percentage || 
-    (appointment.is_orthodontics ? 40 : 100),
-  doctor_payment_percentage: procedureData.doctor_payment_percentage || 
-    (appointment.is_orthodontics ? 60 : 0),
-  
-  // ELIMINAR ESTA LÍNEA: No existe en la tabla procedures
-  // exchange_rate: exchange_rate ❌
-};
+        appointment_ID: id,
+        Patient_ID: appointment.Patient_ID,
+        procedure_date: appointment.appointment_date,
+        procedure_description: procedureData.procedure_description,
+        
+        // Campos en CÓRDOBAS - NOMBRES EXACTOS DE LA BD
+        total_cost: procedureData.total_cost || 0, // Bruto en córdobas
+        total_procedure: procedureData.total_procedure || 0, // Neto después de deducciones en C$
+        
+        // Campos en DÓLARES - ¡NOMBRE CORRECTO DE LA BD!
+        total_cost_USD: procedureData.total_cost_USD || 0, // Bruto en dólares (con guión bajo y mayúsculas)
+        total_procedure_usd: total_procedure_USD, // Neto después de deducciones en US$ (en minúsculas)
+        
+        payment_method: procedureData.payment_method || 'Mixto',
+        is_orthodontics: appointment.is_orthodontics,
+        observations: procedureData.observations || appointment.observations,
+        creation_date: new Date().toISOString().replace('Z', ''),
+        
+        // Campos de pagos múltiples
+        amount_cordobas: procedureData.amount_cordobas || 0,
+        amount_dollars: procedureData.amount_dollars || 0,
+        payment_method_cordobas: procedureData.payment_method_cordobas || null,
+        payment_method_dollars: procedureData.payment_method_dollars || null,
+        
+        // CAMPOS DE DEDUCCIÓN POS
+        pos_deduction_cordobas: procedureData.pos_deduction_cordobas || 0,
+        pos_deduction_dollars: procedureData.pos_deduction_dollars || 0,
+        total_pos_deduction: procedureData.total_pos_deduction || 0,
+        net_amount_cordobas: procedureData.net_amount_cordobas || 0,
+        net_amount_dollars: procedureData.net_amount_dollars || 0,
+        gross_amount_cordobas: procedureData.gross_amount_cordobas || 0,
+        gross_amount_dollars: procedureData.gross_amount_dollars || 0,
+        
+        // Campos de doctor externo
+        external_doctor: procedureData.external_doctor || null,
+        external_doctor_payment: procedureData.external_doctor_payment || null,
+        external_doctor_payment_usd: procedureData.external_doctor_payment_usd || null,
+        theres_external_doctor: procedureData.theres_external_doctor || false,
+        external_doctor_name: procedureData.external_doctor_name || null,
+        external_doctor_specialty: procedureData.external_doctor_specialty || null,
+        external_doctor_payment_type: procedureData.external_doctor_payment_type || 'fixed',
+        external_doctor_payment_value: procedureData.external_doctor_payment_value || null,
+        external_doctor_payment_currency: procedureData.external_doctor_payment_currency || 'C$',
+        
+        // Campos de porcentajes
+        clinic_payment_percentage: procedureData.clinic_payment_percentage || 
+          (appointment.is_orthodontics ? 40 : 100),
+        doctor_payment_percentage: procedureData.doctor_payment_percentage || 
+          (appointment.is_orthodontics ? 60 : 0),
+        
+        // NUEVOS CAMPOS: Montos específicos para clínica y doctora en ambas monedas
+        clinic_payment_cordobas: procedureData.clinic_payment_cordobas || 0,
+        clinic_payment_dollars: procedureData.clinic_payment_dollars || 0,
+        doctor_payment_cordobas: procedureData.doctor_payment_cordobas || 0,
+        doctor_payment_dollars: procedureData.doctor_payment_dollars || 0,
+        
+        // Tipo de cambio usado en el cálculo
+        exchange_rate_used: exchange_rate
+      };
       
-      console.log('📊 Insertando procedimiento con total_procedure_usd:', {
-        total_procedure_usd: procedureToInsert.total_procedure_usd,
+      console.log('📊 Insertando procedimiento con montos completos:', {
+        total_cost_USD: procedureToInsert.total_cost_USD, // ¡Nombre correcto!
+        total_procedure_usd: procedureToInsert.total_procedure_usd, // ¡Nombre correcto!
         total_procedure: procedureToInsert.total_procedure,
-        amount_dollars: procedureToInsert.amount_dollars
+        clinic_payment_cordobas: procedureToInsert.clinic_payment_cordobas,
+        clinic_payment_dollars: procedureToInsert.clinic_payment_dollars,
+        doctor_payment_cordobas: procedureToInsert.doctor_payment_cordobas,
+        doctor_payment_dollars: procedureToInsert.doctor_payment_dollars
       });
       
       // 2. Crear el procedimiento
@@ -499,7 +520,12 @@ const appointmentController = {
       console.log('✅ Procedimiento creado:', {
         procedure_ID: procedure.procedure_ID,
         total_procedure: procedure.total_procedure,
-        total_procedure_usd: procedure.total_procedure_usd
+        total_procedure_usd: procedure.total_procedure_usd,
+        total_cost_USD: procedure.total_cost_USD,
+        clinic_payment_cordobas: procedure.clinic_payment_cordobas,
+        clinic_payment_dollars: procedure.clinic_payment_dollars,
+        doctor_payment_cordobas: procedure.doctor_payment_cordobas,
+        doctor_payment_dollars: procedure.doctor_payment_dollars
       });
       
       // 3. Actualizar estado de la cita a "completed" y marcar como registrada

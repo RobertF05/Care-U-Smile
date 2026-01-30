@@ -361,6 +361,10 @@ const AppointmentPage = () => {
     observations: ''
   });
 
+  // Variables para cálculos
+  const [externalDoctorPaymentCordobas, setExternalDoctorPaymentCordobas] = useState(0);
+  const [externalDoctorPaymentDollars, setExternalDoctorPaymentDollars] = useState(0);
+
   const patientSearchRef = useRef(null);
 
   // Cargar datos iniciales
@@ -484,6 +488,30 @@ const AppointmentPage = () => {
     return totals.netTotalDollars;
   };
 
+  // Calcular pagos para ortodoncia en ambas monedas
+  const calculateOrthoPayments = () => {
+    const totals = calculateTotalsWithDeductions();
+    const clinicPercentage = parseFloat(procedureForm.clinic_payment_percentage) || 40;
+    const doctorPercentage = parseFloat(procedureForm.doctor_payment_percentage) || 60;
+    
+    // Calcular montos en córdobas
+    const clinicPaymentCordobas = (totals.netTotalCordobas * clinicPercentage / 100);
+    const doctorPaymentCordobas = (totals.netTotalCordobas * doctorPercentage / 100);
+    
+    // Calcular montos en dólares (usando el mismo porcentaje)
+    const clinicPaymentDollars = (totals.netTotalDollars * clinicPercentage / 100);
+    const doctorPaymentDollars = (totals.netTotalDollars * doctorPercentage / 100);
+    
+    return {
+      clinicPaymentCordobas,
+      doctorPaymentCordobas,
+      clinicPaymentDollars,
+      doctorPaymentDollars,
+      clinicPercentage,
+      doctorPercentage
+    };
+  };
+
   // Manejar cambios en los pagos
   const handlePaymentChange = (field, value) => {
     const updatedForm = { ...procedureForm };
@@ -493,6 +521,70 @@ const AppointmentPage = () => {
     if (field === 'exchange_rate') {
       const newRate = parseFloat(value) || 1;
       updatedForm.exchange_rate = newRate;
+    }
+    
+    setProcedureForm(updatedForm);
+  };
+
+  // Manejar cambios en pago de doctor externo
+  const handleExternalDoctorPaymentChange = (field, value) => {
+    let updatedForm = { ...procedureForm };
+    
+    if (field === 'payment_type') {
+      updatedForm.external_doctor_payment_type = value;
+      updatedForm.external_doctor_payment_value = '';
+    } else {
+      updatedForm[field] = value;
+    }
+    
+    // Validar que el pago no exceda el costo total
+    if (field === 'external_doctor_payment_value' && value) {
+      const totals = calculateTotalsWithDeductions();
+      const totalCost = totals.netTotalCordobas;
+      const paymentValue = parseFloat(value) || 0;
+      
+      if (updatedForm.external_doctor_payment_type === 'percentage') {
+        if (paymentValue > 100) {
+          alert('El porcentaje no puede ser mayor a 100%');
+          updatedForm.external_doctor_payment_value = '100';
+        }
+      } else {
+        let paymentInCordobas = paymentValue;
+        if (updatedForm.external_doctor_payment_currency === 'US$') {
+          paymentInCordobas = paymentValue * updatedForm.exchange_rate;
+        }
+        
+        if (paymentInCordobas > totalCost) {
+          alert('El pago al doctor externo no puede ser mayor al costo total del procedimiento');
+          updatedForm.external_doctor_payment_value = '';
+        }
+      }
+    }
+    
+    // Calcular montos de doctor externo
+    if (updatedForm.external_doctor && updatedForm.external_doctor_payment_value) {
+      const totals = calculateTotalsWithDeductions();
+      
+      if (updatedForm.external_doctor_payment_type === 'percentage') {
+        const percentage = parseFloat(updatedForm.external_doctor_payment_value) / 100;
+        const externalCordobas = totals.netTotalCordobas * percentage;
+        const externalDollars = totals.netTotalDollars * percentage;
+        
+        setExternalDoctorPaymentCordobas(externalCordobas);
+        setExternalDoctorPaymentDollars(externalDollars);
+      } else {
+        const paymentValue = parseFloat(updatedForm.external_doctor_payment_value);
+        if (updatedForm.external_doctor_payment_currency === 'US$') {
+          setExternalDoctorPaymentDollars(paymentValue);
+          setExternalDoctorPaymentCordobas(paymentValue * updatedForm.exchange_rate);
+        } else {
+          setExternalDoctorPaymentCordobas(paymentValue);
+          setExternalDoctorPaymentDollars(paymentValue / updatedForm.exchange_rate);
+        }
+      }
+    } else {
+      setExternalDoctorPaymentCordobas(0);
+      setExternalDoctorPaymentDollars(0);
     }
     
     setProcedureForm(updatedForm);
@@ -739,43 +831,6 @@ const AppointmentPage = () => {
     setShowPatientSearch(false);
   };
 
-  // Manejar cambios en pago de doctor externo
-  const handleExternalDoctorPaymentChange = (field, value) => {
-    let updatedForm = { ...procedureForm };
-    
-    if (field === 'payment_type') {
-      updatedForm.external_doctor_payment_type = value;
-      updatedForm.external_doctor_payment_value = '';
-    } else {
-      updatedForm[field] = value;
-    }
-    
-    // Validar que el pago no exceda el costo total
-    if (field === 'external_doctor_payment_value' && value) {
-      const totalCost = parseFloat(updatedForm.total_cost) || 0;
-      const paymentValue = parseFloat(value) || 0;
-      
-      if (updatedForm.external_doctor_payment_type === 'percentage') {
-        if (paymentValue > 100) {
-          alert('El porcentaje no puede ser mayor a 100%');
-          updatedForm.external_doctor_payment_value = '100';
-        }
-      } else {
-        let paymentInCordobas = paymentValue;
-        if (updatedForm.external_doctor_payment_currency === 'US$') {
-          paymentInCordobas = paymentValue * updatedForm.exchange_rate;
-        }
-        
-        if (paymentInCordobas > totalCost) {
-          alert('El pago al doctor externo no puede ser mayor al costo total del procedimiento');
-          updatedForm.external_doctor_payment_value = '';
-        }
-      }
-    }
-    
-    setProcedureForm(updatedForm);
-  };
-
   // Crear nueva cita
   const handleAddAppointment = async (e) => {
     e.preventDefault();
@@ -965,7 +1020,7 @@ const AppointmentPage = () => {
     }
   };
 
-  // Convertir cita en procedimiento CON DEDUCCIONES POS Y MANEJO DE DÓLARES
+  // Convertir cita en procedimiento CON DEDUCCIONES POS Y MANEJO COMPLETO DE DÓLARES
   const handleConvertToProcedure = async (e) => {
     e.preventDefault();
     
@@ -985,67 +1040,104 @@ const AppointmentPage = () => {
       // Calcular total_procedure_USD (neto en dólares después de deducciones)
       const total_procedure_USD = totals.netTotalDollars;
       
+      // Calcular pagos de ortodoncia si es necesario
+      let orthoPayments = {};
+      if (selectedAppointment.is_orthodontics) {
+        orthoPayments = calculateOrthoPayments();
+      }
+      
       // Calcular pago de doctor externo
-      let externalDoctorPayment = null;
+      let externalDoctorPaymentCordobas = null;
+      let externalDoctorPaymentDollars = null;
+      
       if (procedureForm.external_doctor && procedureForm.external_doctor_payment_value) {
         if (procedureForm.external_doctor_payment_type === 'percentage') {
-          externalDoctorPayment = (totals.netTotalCordobas * parseFloat(procedureForm.external_doctor_payment_value) / 100);
+          const percentage = parseFloat(procedureForm.external_doctor_payment_value) / 100;
+          externalDoctorPaymentCordobas = totals.netTotalCordobas * percentage;
+          externalDoctorPaymentDollars = totals.netTotalDollars * percentage;
         } else {
+          const paymentValue = parseFloat(procedureForm.external_doctor_payment_value);
           if (procedureForm.external_doctor_payment_currency === 'US$') {
-            externalDoctorPayment = parseFloat(procedureForm.external_doctor_payment_value) * procedureForm.exchange_rate;
+            externalDoctorPaymentDollars = paymentValue;
+            externalDoctorPaymentCordobas = paymentValue * procedureForm.exchange_rate;
           } else {
-            externalDoctorPayment = parseFloat(procedureForm.external_doctor_payment_value);
+            externalDoctorPaymentCordobas = paymentValue;
+            externalDoctorPaymentDollars = paymentValue / procedureForm.exchange_rate;
           }
         }
       }
       
-      // Preparar datos para enviar CON DEDUCCIONES Y DÓLARES
+      // Preparar datos para enviar
       const procedureData = {
-      procedure_description: procedureForm.procedure_description,
-      total_cost: totals.grossCordobas, // cantidad bruta en córdobas
-      total_cost_USD: totals.grossDollars, // cantidad bruta en dólares
-      total_procedure: totals.netTotalCordobas, // cantidad neta después de deducciones en C$
-      total_procedure_USD: total_procedure_USD, // cantidad neta después de deducciones en US$
-      payment_method: procedureForm.payment_method_cordobas || procedureForm.payment_method_dollars,
-      
-      // Campos de pagos múltiples
-      amount_cordobas: totals.grossCordobas,
-      amount_dollars: totals.grossDollars,
-      payment_method_cordobas: procedureForm.payment_method_cordobas,
-      payment_method_dollars: procedureForm.payment_method_dollars,
-      
-      // Campos para deducciones POS
-      pos_deduction_cordobas: totals.posDeductionCordobas,
-      pos_deduction_dollars: totals.posDeductionDollars,
-      total_pos_deduction: totals.totalDeductions,
-      net_amount_cordobas: totals.netCordobas,
-      net_amount_dollars: totals.netDollars,
-      gross_amount_cordobas: totals.grossCordobas,
-      gross_amount_dollars: totals.grossDollars,
-      
-      // Resto de campos
-      observations: procedureForm.observations,
-      external_doctor: procedureForm.external_doctor_name,
-      external_doctor_payment: externalDoctorPayment,
-      theres_external_doctor: procedureForm.external_doctor,
-      external_doctor_name: procedureForm.external_doctor_name,
-      external_doctor_specialty: procedureForm.external_doctor_specialty,
-      external_doctor_payment_type: procedureForm.external_doctor_payment_type,
-      external_doctor_payment_value: procedureForm.external_doctor_payment_value,
-      external_doctor_payment_currency: procedureForm.external_doctor_payment_currency,
-      exchange_rate: procedureForm.exchange_rate // Asegurar que se envíe el tipo de cambio
+        procedure_description: procedureForm.procedure_description,
+        
+        // Campos en córdobas
+        total_cost: totals.grossTotalCordobas,
+        total_procedure: totals.netTotalCordobas,
+        
+        // Campos en dólares - ¡NOMBRES CORRECTOS!
+        total_cost_USD: totals.grossTotalDollars, // ¡Con guión bajo y mayúsculas!
+        total_procedure_USD: total_procedure_USD, // ¡Con guión bajo y mayúsculas!
+        
+        payment_method: 'Mixto',
+        
+        // Campos de pagos múltiples
+        amount_cordobas: totals.grossCordobas,
+        amount_dollars: totals.grossDollars,
+        payment_method_cordobas: procedureForm.payment_method_cordobas,
+        payment_method_dollars: procedureForm.payment_method_dollars,
+        
+        // Campos para deducciones POS
+        pos_deduction_cordobas: totals.posDeductionCordobas,
+        pos_deduction_dollars: totals.posDeductionDollars,
+        total_pos_deduction: totals.totalDeductions,
+        net_amount_cordobas: totals.netCordobas,
+        net_amount_dollars: totals.netDollars,
+        gross_amount_cordobas: totals.grossCordobas,
+        gross_amount_dollars: totals.grossDollars,
+        
+        // Resto de campos
+        observations: procedureForm.observations,
+        exchange_rate: procedureForm.exchange_rate,
+        
+        // Campos de doctor externo
+        external_doctor: procedureForm.external_doctor_name,
+        external_doctor_payment: externalDoctorPaymentCordobas,
+        external_doctor_payment_usd: externalDoctorPaymentDollars,
+        theres_external_doctor: procedureForm.external_doctor,
+        external_doctor_name: procedureForm.external_doctor_name,
+        external_doctor_specialty: procedureForm.external_doctor_specialty,
+        external_doctor_payment_type: procedureForm.external_doctor_payment_type,
+        external_doctor_payment_value: procedureForm.external_doctor_payment_value,
+        external_doctor_payment_currency: procedureForm.external_doctor_payment_currency,
     };
       
-      // Solo añadir porcentajes si es ortodoncia
+      // Añadir porcentajes y montos específicos si es ortodoncia
       if (selectedAppointment.is_orthodontics) {
         procedureData.clinic_payment_percentage = procedureForm.clinic_payment_percentage;
         procedureData.doctor_payment_percentage = procedureForm.doctor_payment_percentage;
+        
+        // Montos específicos para clínica y doctora
+        procedureData.clinic_payment_cordobas = orthoPayments.clinicPaymentCordobas;
+        procedureData.clinic_payment_dollars = orthoPayments.clinicPaymentDollars;
+        procedureData.doctor_payment_cordobas = orthoPayments.doctorPaymentCordobas;
+        procedureData.doctor_payment_dollars = orthoPayments.doctorPaymentDollars;
+        
+        // Restar pago de doctor externo si existe
+        if (externalDoctorPaymentCordobas) {
+          procedureData.clinic_payment_cordobas -= externalDoctorPaymentCordobas;
+          procedureData.clinic_payment_dollars -= externalDoctorPaymentDollars;
+        }
       } else {
         procedureData.clinic_payment_percentage = 100;
         procedureData.doctor_payment_percentage = 0;
+        procedureData.clinic_payment_cordobas = totals.netTotalCordobas;
+        procedureData.clinic_payment_dollars = total_procedure_USD;
+        procedureData.doctor_payment_cordobas = 0;
+        procedureData.doctor_payment_dollars = 0;
       }
       
-      console.log('Datos del procedimiento con total en dólares:', procedureData);
+      console.log('Datos completos del procedimiento:', procedureData);
       
       await convertAppointmentToProcedure(
         selectedAppointment.appointment_ID,
@@ -1124,6 +1216,8 @@ const AppointmentPage = () => {
       doctor_payment_percentage: appointment.is_orthodontics ? currentSettings.doctor_payment : 0,
       observations: appointment.observations || ''
     });
+    setExternalDoctorPaymentCordobas(0);
+    setExternalDoctorPaymentDollars(0);
     setShowConvertModal(true);
   };
 
@@ -2107,7 +2201,7 @@ const AppointmentPage = () => {
         </div>
       )}
 
-      {/* Modal para convertir cita en procedimiento CON DEDUCCIONES POS Y MANEJO DE DÓLARES */}
+      {/* Modal para convertir cita en procedimiento CON DEDUCCIONES POS Y MANEJO COMPLETO DE DÓLARES */}
       {showConvertModal && selectedAppointment && (
         <div className="modal-overlay">
           <div className="modal-content large-modal">
@@ -2137,6 +2231,8 @@ const AppointmentPage = () => {
                     doctor_payment_percentage: currentSettings.doctor_payment,
                     observations: ''
                   });
+                  setExternalDoctorPaymentCordobas(0);
+                  setExternalDoctorPaymentDollars(0);
                 }}
               >
                 <FontAwesomeIcon icon={faTimes} />
@@ -2392,12 +2488,7 @@ const AppointmentPage = () => {
                     <input
                       type="checkbox"
                       checked={procedureForm.external_doctor}
-                      onChange={(e) => setProcedureForm({
-                        ...procedureForm,
-                        external_doctor: e.target.checked,
-                        external_doctor_name: e.target.checked ? procedureForm.external_doctor_name : '',
-                        external_doctor_specialty: e.target.checked ? procedureForm.external_doctor_specialty : ''
-                      })}
+                      onChange={(e) => handleExternalDoctorPaymentChange('external_doctor', e.target.checked)}
                     />
                     <span>¿Hubo participación de doctor externo?</span>
                   </label>
@@ -2410,10 +2501,7 @@ const AppointmentPage = () => {
                       <input
                         type="text"
                         value={procedureForm.external_doctor_name}
-                        onChange={(e) => setProcedureForm({
-                          ...procedureForm,
-                          external_doctor_name: e.target.value
-                        })}
+                        onChange={(e) => handleExternalDoctorPaymentChange('external_doctor_name', e.target.value)}
                         className="form-input"
                         placeholder="Dr. Nombre Apellido"
                       />
@@ -2424,10 +2512,7 @@ const AppointmentPage = () => {
                       <input
                         type="text"
                         value={procedureForm.external_doctor_specialty}
-                        onChange={(e) => setProcedureForm({
-                          ...procedureForm,
-                          external_doctor_specialty: e.target.value
-                        })}
+                        onChange={(e) => handleExternalDoctorPaymentChange('external_doctor_specialty', e.target.value)}
                         className="form-input"
                         placeholder="Ej: Cirujano maxilofacial, Endodoncista, etc."
                       />
@@ -2439,14 +2524,14 @@ const AppointmentPage = () => {
                         <button
                           type="button"
                           className={`payment-type-btn ${procedureForm.external_doctor_payment_type === 'percentage' ? 'active' : ''}`}
-                          onClick={() => handleExternalDoctorPaymentChange('external_doctor_payment_type', 'percentage')}
+                          onClick={() => handleExternalDoctorPaymentChange('payment_type', 'percentage')}
                         >
                           Porcentaje del total
                         </button>
                         <button
                           type="button"
                           className={`payment-type-btn ${procedureForm.external_doctor_payment_type === 'fixed' ? 'active' : ''}`}
-                          onClick={() => handleExternalDoctorPaymentChange('external_doctor_payment_type', 'fixed')}
+                          onClick={() => handleExternalDoctorPaymentChange('payment_type', 'fixed')}
                         >
                           Cantidad fija
                         </button>
@@ -2482,17 +2567,17 @@ const AppointmentPage = () => {
                       </div>
                       <small className="form-help-text">
                         {procedureForm.external_doctor_payment_type === 'percentage' 
-                          ? `Equivalente: ${(calculateTotalProcedure() * parseFloat(procedureForm.external_doctor_payment_value || 0) / 100).toFixed(2)} C$`
+                          ? `Equivalente: ${formatCurrency(externalDoctorPaymentCordobas)} (${formatCurrencyUSD(externalDoctorPaymentDollars)})`
                           : procedureForm.external_doctor_payment_currency === 'US$'
-                            ? `Equivalente: ${(parseFloat(procedureForm.external_doctor_payment_value || 0) * procedureForm.exchange_rate).toFixed(2)} C$`
-                            : ''}
+                            ? `Equivalente: ${formatCurrency(externalDoctorPaymentCordobas)}`
+                            : `Equivalente: ${formatCurrencyUSD(externalDoctorPaymentDollars)}`}
                       </small>
                     </div>
                   </div>
                 )}
               </div>
               
-              {/* Para ortodoncia, mostrar porcentajes de distribución */}
+              {/* Para ortodoncia, mostrar porcentajes de distribución CON AMBOS MONTOS */}
               {selectedAppointment.is_orthodontics && (
                 <div className="form-section">
                   <h4>
@@ -2501,23 +2586,38 @@ const AppointmentPage = () => {
                   </h4>
                   <div className="ortho-distribution-info">
                     <div className="distribution-item clinic">
-                      <span className="distribution-label">Clínica:</span>
-                      <span className="distribution-value">{procedureForm.clinic_payment_percentage}%</span>
-                      <small>Basado en configuración actual</small>
+                      <span className="distribution-label">Clínica ({procedureForm.clinic_payment_percentage}%):</span>
+                      <div className="distribution-amounts">
+                        <span className="amount-cordobas">
+                          {formatCurrency(calculateOrthoPayments().clinicPaymentCordobas)}
+                        </span>
+                        <span className="amount-dollars">
+                          {formatCurrencyUSD(calculateOrthoPayments().clinicPaymentDollars)}
+                        </span>
+                      </div>
                     </div>
                     <div className="distribution-item doctor">
-                      <span className="distribution-label">Doctora Ortodoncia:</span>
-                      <span className="distribution-value">{procedureForm.doctor_payment_percentage}%</span>
-                      <small>Basado en configuración actual</small>
+                      <span className="distribution-label">Doctora ({procedureForm.doctor_payment_percentage}%):</span>
+                      <div className="distribution-amounts">
+                        <span className="amount-cordobas">
+                          {formatCurrency(calculateOrthoPayments().doctorPaymentCordobas)}
+                        </span>
+                        <span className="amount-dollars">
+                          {formatCurrencyUSD(calculateOrthoPayments().doctorPaymentDollars)}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                  <div className="ortho-calculations">
-                    <small>
-                      * Total del procedimiento: {formatCurrency(calculateTotalProcedure())} <br />
-                      * Clínica recibirá: {formatCurrency((calculateTotalProcedure() * procedureForm.clinic_payment_percentage / 100) - (procedureForm.external_doctor ? parseFloat(procedureForm.external_doctor_payment_value || 0) : 0))} <br />
-                      * Doctora ortodoncia recibirá: {formatCurrency(calculateTotalProcedure() * procedureForm.doctor_payment_percentage / 100)}
-                    </small>
-                  </div>
+                  
+                  {procedureForm.external_doctor && (
+                    <div className="external-doctor-deduction">
+                      <small>
+                        * Después de pago a doctor externo, la clínica recibirá:<br />
+                        &nbsp;&nbsp;C$ {formatCurrency(calculateOrthoPayments().clinicPaymentCordobas - externalDoctorPaymentCordobas)}<br />
+                        &nbsp;&nbsp;US$ {formatCurrencyUSD(calculateOrthoPayments().clinicPaymentDollars - externalDoctorPaymentDollars)}
+                      </small>
+                    </div>
+                  )}
                 </div>
               )}
               
@@ -2558,6 +2658,8 @@ const AppointmentPage = () => {
                       doctor_payment_percentage: currentSettings.doctor_payment,
                       observations: ''
                     });
+                    setExternalDoctorPaymentCordobas(0);
+                    setExternalDoctorPaymentDollars(0);
                   }}
                 >
                   Cancelar

@@ -25,7 +25,11 @@ import {
   faCalendarCheck,
   faFileExcel,
   faFilePdf,
-  faListAlt
+  faListAlt,
+  faDollarSign,
+  faMoneyBill,
+  faSyncAlt,
+  faExclamationTriangle
 } from '@fortawesome/free-solid-svg-icons';
 import { AppContext } from '../../context/AppContext';
 import { AuthContext } from '../../context/AuthContext';
@@ -45,19 +49,18 @@ const MonthlyClosingsPage = () => {
     loading, 
     fetchMonthlyClosings,
     fetchDailyClosings,
-    getIncomeStats,
     createMonthlyClosing,
     createDailyClosing,
     getDailySummary,
     checkDailyClosingExists,
-    apiFetch
+    apiFetch,
+    systemSettings
   } = useContext(AppContext);
 
   // Estados
   const [showFilters, setShowFilters] = useState(true);
   const [yearFilter, setYearFilter] = useState(new Date().getFullYear().toString());
   const [closingTypeFilter, setClosingTypeFilter] = useState('all');
-  const [closingSubTypeFilter, setClosingSubTypeFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showCreateDailyModal, setShowCreateDailyModal] = useState(false);
@@ -68,6 +71,7 @@ const MonthlyClosingsPage = () => {
   const [creatingDaily, setCreatingDaily] = useState(false);
   const [dailySummary, setDailySummary] = useState(null);
   const [deleteVariableExpenses, setDeleteVariableExpenses] = useState(true);
+  const [exchangeRate, setExchangeRate] = useState(36.5);
   
   // Formulario para crear cierre mensual
   const [newClosing, setNewClosing] = useState({
@@ -75,6 +79,7 @@ const MonthlyClosingsPage = () => {
     year: new Date().getFullYear().toString(),
     startDate: '',
     endDate: '',
+    closing_type: 'all',
     comentary: ''
   });
 
@@ -88,7 +93,7 @@ const MonthlyClosingsPage = () => {
   // Generar años para filtro
   const years = useMemo(() => {
     const currentYear = new Date().getFullYear();
-    return Array.from({ length: 5 }, (_, i) => (currentYear - i).toString());
+    return Array.from({ length: 6 }, (_, i) => (currentYear - i).toString());
   }, []);
 
   useEffect(() => {
@@ -97,6 +102,13 @@ const MonthlyClosingsPage = () => {
       fetchDailyClosings();
     }
   }, [user]);
+
+  // Obtener tipo de cambio actual
+  useEffect(() => {
+    if (systemSettings?.exchange_rate) {
+      setExchangeRate(systemSettings.exchange_rate);
+    }
+  }, [systemSettings]);
 
   // Función auxiliar para número de mes
   function getMonthNumber(month) {
@@ -111,8 +123,48 @@ const MonthlyClosingsPage = () => {
     return `${year}-${monthNumber}-${lastDay}`;
   }
 
-  // Formateadores
-  const formatCurrency = (amount) => {
+  // Formateadores de moneda
+  const formatCurrency = (amount, currency = 'NIO', showBoth = false) => {
+    if (showBoth) {
+      const cordobas = new Intl.NumberFormat('es-NI', {
+        style: 'currency',
+        currency: 'NIO'
+      }).format(amount || 0);
+      
+      const dollars = new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD'
+      }).format((amount || 0) / exchangeRate);
+      
+      return (
+        <div className="dual-currency-display">
+          <span className="main-currency">{cordobas}</span>
+          <span className="secondary-currency">({dollars})</span>
+        </div>
+      );
+    }
+    
+    if (currency === 'USD') {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD'
+      }).format(amount || 0);
+    }
+    
+    return new Intl.NumberFormat('es-NI', {
+      style: 'currency',
+      currency: 'NIO'
+    }).format(amount || 0);
+  };
+
+  const formatCurrencySimple = (amount, currency = 'NIO') => {
+    if (currency === 'USD') {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD'
+      }).format(amount || 0);
+    }
+    
     return new Intl.NumberFormat('es-NI', {
       style: 'currency',
       currency: 'NIO'
@@ -129,7 +181,7 @@ const MonthlyClosingsPage = () => {
     });
   };
 
-  // Funciones para expandir/contraer - AGREGADA
+  // Funciones para expandir/contraer
   const toggleExpandClosing = (closingId) => {
     setExpandedClosings(prev => ({
       ...prev,
@@ -144,13 +196,15 @@ const MonthlyClosingsPage = () => {
       id: closing.closing_ID || closing.id,
       closing_id: closing.closing_ID,
       type: 'monthly',
-      sub_type: 'monthly',
+      sub_type: closing.closing_type || 'all',
       display_date: `Cierre de ${closing.month} ${closing.year}`,
       date_exact: closing.closing_date_display || formatDate(closing.closing_date),
       date_sort: `${closing.year}-${getMonthNumber(closing.month).padStart(2, '0')}-01`,
       total_clinic_income: (closing.total_general_income || 0) + (closing.total_clinical_orthodontic_income || 0),
-      // CAMBIO: No incluir pago doctora en gastos mensuales
-      total_expenses: (closing.total_fixed_expenses || 0) + (closing.total_variable_expenses || 0)
+      total_expenses: (closing.total_fixed_expenses || 0) + (closing.total_variable_expenses || 0),
+      total_clinic_income_usd: ((closing.total_general_income || 0) + (closing.total_clinical_orthodontic_income || 0)) / exchangeRate,
+      total_expenses_usd: ((closing.total_fixed_expenses || 0) + (closing.total_variable_expenses || 0)) / exchangeRate,
+      net_profit_usd: (closing.net_profit || 0) / exchangeRate
     }));
 
     const daily = dailyClosings.map(closing => ({
@@ -158,28 +212,33 @@ const MonthlyClosingsPage = () => {
       id: closing.daily_closing_id || closing.id,
       closing_id: closing.daily_closing_id,
       type: 'daily',
-      sub_type: closing.closing_type,
+      sub_type: closing.closing_type || 'general',
       display_date: `Cierre Diario - ${closing.closing_date_formatted || formatDate(closing.closing_date)}`,
       date_exact: closing.closing_date_formatted || formatDate(closing.closing_date),
       date_sort: closing.closing_date,
       total_clinic_income: closing.total_clinic_income || 0,
+      total_clinic_income_usd: (closing.total_clinic_income || 0) / exchangeRate,
       total_expenses: 0,
-      net_profit: closing.net_profit || 0
+      total_expenses_usd: 0,
+      net_profit: closing.net_profit || 0,
+      net_profit_usd: (closing.net_profit || 0) / exchangeRate,
+      total_income_usd: (closing.total_income || 0) / exchangeRate,
+      total_doctor_income_usd: (closing.total_doctor_income || 0) / exchangeRate
     }));
 
     return [...monthly, ...daily];
-  }, [monthlyClosings, dailyClosings]);
+  }, [monthlyClosings, dailyClosings, exchangeRate]);
 
   // Filtrar cierres combinados
   const filteredClosings = useMemo(() => {
     let filtered = [...allClosings];
 
     if (closingTypeFilter !== 'all') {
-      filtered = filtered.filter(closing => closing.type === closingTypeFilter);
-    }
-
-    if (closingSubTypeFilter !== 'all' && closingTypeFilter === 'daily') {
-      filtered = filtered.filter(closing => closing.sub_type === closingSubTypeFilter);
+      if (closingTypeFilter === 'monthly' || closingTypeFilter === 'daily') {
+        filtered = filtered.filter(closing => closing.type === closingTypeFilter);
+      } else {
+        filtered = filtered.filter(closing => closing.sub_type === closingTypeFilter);
+      }
     }
 
     if (yearFilter !== 'all') {
@@ -203,7 +262,8 @@ const MonthlyClosingsPage = () => {
         (closing.year && closing.year.toString().includes(term)) ||
         (closing.closing_date && closing.closing_date.toLowerCase().includes(term)) ||
         (closing.comentary && closing.comentary.toLowerCase().includes(term)) ||
-        (closing.closing_type && closing.closing_type.toLowerCase().includes(term))
+        (closing.closing_type && closing.closing_type.toLowerCase().includes(term)) ||
+        (closing.sub_type && closing.sub_type.toLowerCase().includes(term))
       );
     }
 
@@ -212,126 +272,113 @@ const MonthlyClosingsPage = () => {
       if (b.date_sort > a.date_sort) return 1;
       return 0;
     });
-  }, [allClosings, closingTypeFilter, closingSubTypeFilter, yearFilter, searchTerm]);
+  }, [allClosings, closingTypeFilter, yearFilter, searchTerm]);
+
+  // Función para verificar existencia de cierre mensual
+const checkMonthlyClosingExists = async (month, year, closingType) => {
+  try {
+    const queryParams = new URLSearchParams({ 
+      month, 
+      year, 
+      closing_type: closingType 
+    }).toString();
+    
+    const response = await apiFetch(`/monthly-closings/check/exists?${queryParams}`);
+    
+    if (response.success) {
+      return response.data.exists;
+    }
+    return false;
+  } catch (error) {
+    console.error('Error verificando cierre:', error);
+    return false;
+  }
+};
 
   // Crear cierre mensual
-  const handleCreateClosing = async (e) => {
-    e.preventDefault();
-    setCreating(true);
+  // Crear cierre mensual - VERSIÓN CORREGIDA
+const handleCreateClosing = async (e) => {
+  e.preventDefault();
+  setCreating(true);
+  
+  try {
+    // Verificar si ya existe cierre
+    const exists = await checkMonthlyClosingExists(newClosing.month, newClosing.year, newClosing.closing_type);
     
-    try {
-      // Validar que no exista ya un cierre para ese mes/año
-      const exists = monthlyClosings.some(
-        closing => closing.month === newClosing.month && 
-                   closing.year.toString() === newClosing.year
-      );
-      
-      if (exists) {
-        alert(`⚠️ Ya existe un cierre para ${newClosing.month} ${newClosing.year}`);
-        setCreating(false);
-        return;
-      }
-
-      // Calcular fechas del período
-      const startDate = newClosing.startDate || `${newClosing.year}-${getMonthNumber(newClosing.month)}-01`;
-      const endDate = newClosing.endDate || getLastDayOfMonth(newClosing.year, newClosing.month);
-      
-      console.log('📅 Período a calcular:', { startDate, endDate });
-      
-      // Obtener resumen financiero desde el backend
-      console.log('🔍 Llamando a getIncomeStats...');
-      const summaryResponse = await getIncomeStats(startDate, endDate);
-      
-      console.log('📊 Respuesta completa de getIncomeStats:', summaryResponse);
-      console.log('📈 Datos del summary:', summaryResponse.data);
-      
-      if (!summaryResponse.success) {
-        console.error('❌ Error en getIncomeStats:', summaryResponse.error);
-        throw new Error('Error al obtener el resumen financiero: ' + summaryResponse.error);
-      }
-
-      const summary = summaryResponse.data;
-      
-      // Usar valores por defecto si no existen
-      const totalGeneralIncome = summary.general_income || summary.total_general_income || 0;
-      const totalClinicOrthodonticIncome = summary.clinic_orthodontic_income || summary.total_clinical_orthodontic_income || 0;
-      const totalFixedExpenses = summary.fixed_expenses || summary.total_fixed_expenses || 0;
-      const totalVariableExpenses = summary.variable_expenses || summary.total_variable_expenses || 0;
-      
-      console.log('🧮 Valores calculados:', {
-        totalGeneralIncome,
-        totalClinicOrthodonticIncome,
-        totalFixedExpenses,
-        totalVariableExpenses
-      });
-      
-      // CAMBIO: No incluir pago doctora ortodoncia en cálculo mensual
-      const totalClinicIncome = totalGeneralIncome + totalClinicOrthodonticIncome;
-      const totalExpenses = totalFixedExpenses + totalVariableExpenses;
-      const netProfit = totalClinicIncome - totalExpenses; // Eliminado el pago doctora
-      
-      console.log('💰 Resultados finales:', {
-        totalClinicIncome,
-        totalExpenses,
-        netProfit
-      });
-      
-      // Crear cierre con opción de eliminar gastos variables
-      const closingData = {
-        month: newClosing.month,
-        year: parseInt(newClosing.year),
-        total_general_income: totalGeneralIncome,
-        total_clinical_orthodontic_income: totalClinicOrthodonticIncome,
-        // CAMBIO: No incluir pago doctora en datos de cierre mensual
-        total_orthodontic_doctor_income: 0, // Se establece en 0
-        total_fixed_expenses: totalFixedExpenses,
-        total_variable_expenses: totalVariableExpenses,
-        net_profit: netProfit,
-        comentary: newClosing.comentary || '',
-        deleteVariableExpenses: deleteVariableExpenses
-      };
-      
-      console.log('📤 Datos para crear cierre mensual:', closingData);
-
-      const response = await apiFetch('/monthly-closings', {
-        method: 'POST',
-        body: JSON.stringify(closingData),
-      });
-      
-      if (response.success) {
-        const deleteMessage = deleteVariableExpenses ? 
-          '\n✅ Gastos variables eliminados automáticamente' : 
-          '\n⚠️ Gastos variables conservados en el sistema';
-        
-        alert(`✅ Cierre de ${newClosing.month} ${newClosing.year} creado exitosamente${deleteMessage}\n\n` +
-              `Ingresos Generales: ${formatCurrency(closingData.total_general_income)}\n` +
-              `Ortodoncia Clínica (40%): ${formatCurrency(closingData.total_clinical_orthodontic_income)}\n` +
-              `Gastos Fijos: ${formatCurrency(closingData.total_fixed_expenses)}\n` +
-              `Gastos Variables: ${formatCurrency(closingData.total_variable_expenses)}\n` +
-              `Utilidad Neta: ${formatCurrency(closingData.net_profit)}`);
-        
-        setShowCreateModal(false);
-        setNewClosing({
-          month: MONTHS[new Date().getMonth()],
-          year: new Date().getFullYear().toString(),
-          startDate: '',
-          endDate: '',
-          comentary: ''
-        });
-        
-        // Recargar cierres
-        fetchMonthlyClosings();
-      } else {
-        throw new Error(response.error || 'Error al crear cierre');
-      }
-      
-    } catch (error) {
-      console.error('❌ Error detallado al crear cierre:', error);
-      alert(`❌ Error: ${error.message}`);
-    } finally {
+    if (exists) {
+      alert(`⚠️ Ya existe un cierre ${getClosingTypeLabel(newClosing.closing_type)} para ${newClosing.month} ${newClosing.year}`);
       setCreating(false);
+      return;
     }
-  };
+
+    // Calcular fechas del período
+    const startDate = newClosing.startDate || `${newClosing.year}-${getMonthNumber(newClosing.month)}-01`;
+    const endDate = newClosing.endDate || getLastDayOfMonth(newClosing.year, newClosing.month);
+    
+    console.log('📅 Período a calcular:', { startDate, endDate, type: newClosing.closing_type });
+    
+    // Crear cierre
+    const closingData = {
+      month: newClosing.month,
+      year: parseInt(newClosing.year),
+      startDate,
+      endDate,
+      closing_type: newClosing.closing_type,
+      comentary: newClosing.comentary || '',
+      deleteVariableExpenses: newClosing.closing_type === 'all' ? deleteVariableExpenses : false
+    };
+    
+    console.log('📤 Datos para crear cierre mensual:', closingData);
+
+    const response = await createMonthlyClosing(closingData);
+    
+    if (response.success) {
+      let message = `✅ Cierre ${getClosingTypeLabel(newClosing.closing_type)} de ${newClosing.month} ${newClosing.year} creado exitosamente\n\n`;
+      
+      if (newClosing.closing_type === 'all' && deleteVariableExpenses) {
+        message += '✅ Gastos variables procesados\n';
+      }
+      
+      if (newClosing.closing_type === 'all') {
+        message += `Ingresos Generales: ${formatCurrencySimple(response.data.total_general_income || 0)}\n`;
+        message += `Ortodoncia Clínica (${systemSettings?.clinic_payment || 40}%): ${formatCurrencySimple(response.data.total_clinical_orthodontic_income || 0)}\n`;
+        message += `Gastos Fijos: ${formatCurrencySimple(response.data.total_fixed_expenses || 0)}\n`;
+        message += `Gastos Variables: ${formatCurrencySimple(response.data.total_variable_expenses || 0)}\n`;
+      } else if (newClosing.closing_type === 'general') {
+        message += `Ingresos Generales: ${formatCurrencySimple(response.data.total_general_income || 0)}\n`;
+      } else if (newClosing.closing_type === 'orthodontics') {
+        message += `Ortodoncia Total: ${formatCurrencySimple(response.data.total_clinical_orthodontic_income + response.data.total_orthodontic_doctor_income || 0)}\n`;
+        message += `Clínica (${systemSettings?.clinic_payment || 40}%): ${formatCurrencySimple(response.data.total_clinical_orthodontic_income || 0)}\n`;
+        message += `Doctora (${systemSettings?.doctor_payment || 60}%): ${formatCurrencySimple(response.data.total_orthodontic_doctor_income || 0)}\n`;
+      }
+      
+      message += `Utilidad Neta: ${formatCurrencySimple(response.data.net_profit || 0)}`;
+      
+      alert(message);
+      
+      setShowCreateModal(false);
+      setNewClosing({
+        month: MONTHS[new Date().getMonth()],
+        year: new Date().getFullYear().toString(),
+        startDate: '',
+        endDate: '',
+        closing_type: 'all',
+        comentary: ''
+      });
+      
+      // Recargar cierres
+      fetchMonthlyClosings();
+    } else {
+      throw new Error(response.error || 'Error al crear cierre');
+    }
+    
+  } catch (error) {
+    console.error('❌ Error detallado al crear cierre:', error);
+    alert(`❌ Error: ${error.message}`);
+  } finally {
+    setCreating(false);
+  }
+};
 
   // Obtener resumen diario previo
   const handleGetDailySummary = async () => {
@@ -382,12 +429,20 @@ const MonthlyClosingsPage = () => {
       
       if (response.success) {
         const typeLabel = newDailyClosing.closing_type === 'orthodontics' ? 'de Ortodoncia' : 'General';
-        alert(`✅ Cierre Diario ${typeLabel} creado exitosamente\n\n` +
-              `Fecha: ${formatDate(newDailyClosing.date)}\n` +
-              `Procedimientos incluidos: ${response.data.procedure_count || 0}\n` +
-              `Gastos incluidos: ${response.data.bill_count || 0}\n` +
-              `Ingresos Clínica: ${formatCurrency(response.data.total_clinic_income || 0)}\n` +
-              `Utilidad Neta: ${formatCurrency(response.data.net_profit || 0)}`);
+        let message = `✅ Cierre Diario ${typeLabel} creado exitosamente\n\n`;
+        message += `Fecha: ${formatDate(newDailyClosing.date)}\n`;
+        message += `Procedimientos incluidos: ${response.data.procedure_count || 0}\n`;
+        message += `Tipo de cambio: C$${exchangeRate.toFixed(2)} = $1\n\n`;
+        
+        if (newDailyClosing.closing_type === 'orthodontics') {
+          message += `Ingresos Totales: ${formatCurrency(response.data.total_income, 'NIO', true)}\n`;
+          message += `Clínica (${response.data.clinic_percentage || 40}%): ${formatCurrency(response.data.total_clinic_income, 'NIO', true)}\n`;
+          message += `Doctora (${response.data.doctor_percentage || 60}%): ${formatCurrency(response.data.total_doctor_income, 'NIO', true)}\n`;
+        } else {
+          message += `Ingresos Clínica: ${formatCurrency(response.data.total_clinic_income, 'NIO', true)}\n`;
+        }
+        
+        alert(message);
         
         setShowCreateDailyModal(false);
         setNewDailyClosing({
@@ -433,23 +488,45 @@ const MonthlyClosingsPage = () => {
 
   // Obtener icono según tipo de cierre
   const getClosingTypeIcon = (type, subType) => {
-    if (type === 'monthly') return faCalendarAlt;
+    if (type === 'monthly') {
+      if (subType === 'orthodontics') return faTooth;
+      if (subType === 'general') return faHospital;
+      return faCalendarAlt;
+    }
     if (subType === 'orthodontics') return faTooth;
-    return faHospital;
+    return faCalendarDay;
   };
 
   // Obtener color según tipo de cierre
   const getClosingTypeColor = (type, subType) => {
-    if (type === 'monthly') return '#2196F3';
-    if (subType === 'orthodontics') return '#9C27B0';
+    if (type === 'monthly') {
+      if (subType === 'orthodontics') return '#9C27B0';
+      if (subType === 'general') return '#2196F3';
+      return '#3F51B5';
+    }
+    if (subType === 'orthodontics') return '#E91E63';
     return '#4CAF50';
   };
 
   // Obtener texto del tipo de cierre
   const getClosingTypeText = (type, subType) => {
-    if (type === 'monthly') return 'Mensual';
-    if (subType === 'orthodontics') return 'Ortodoncia Diario';
-    return 'General Diario';
+    if (type === 'monthly') {
+      if (subType === 'orthodontics') return 'Mensual Ortodoncia';
+      if (subType === 'general') return 'Mensual General';
+      return 'Mensual Completo';
+    }
+    if (subType === 'orthodontics') return 'Diario Ortodoncia';
+    return 'Diario General';
+  };
+
+  // Obtener etiqueta para formulario
+  const getClosingTypeLabel = (type) => {
+    const labels = {
+      'general': 'de Procedimientos Generales',
+      'orthodontics': 'de Ortodoncia',
+      'all': 'Completo (General + Ortodoncia)'
+    };
+    return labels[type] || '';
   };
 
   // Exportar a PDF
@@ -475,9 +552,9 @@ const MonthlyClosingsPage = () => {
     try {
       let endpoint;
       if (closing.type === 'monthly') {
-        endpoint = `/export/excel/detailed/monthly/${closing.closing_id}`;
+        endpoint = `/export/excel/detailed/monthly/${closing.closing_id}?type=${closing.sub_type}`;
       } else {
-        endpoint = `/export/excel/detailed/daily/${closing.closing_id}`;
+        endpoint = `/export/excel/detailed/daily/${closing.closing_id}?type=${closing.sub_type}`;
       }
       
       window.open(`/api${endpoint}`, '_blank');
@@ -494,7 +571,8 @@ const MonthlyClosingsPage = () => {
       const queryParams = new URLSearchParams({
         type: type,
         ...(filters.startDate && { startDate: filters.startDate }),
-        ...(filters.endDate && { endDate: filters.endDate })
+        ...(filters.endDate && { endDate: filters.endDate }),
+        ...(filters.closing_type && { closing_type: filters.closing_type })
       }).toString();
       
       const endpoint = `/export/excel${queryParams ? `?${queryParams}` : ''}`;
@@ -504,6 +582,17 @@ const MonthlyClosingsPage = () => {
     } catch (error) {
       console.error('Error al exportar Excel general:', error);
       alert('Error al exportar a Excel general');
+    }
+  };
+
+  // Función para verificar existencia de cierre
+  const handleCheckClosingExists = async (month, year, type) => {
+    try {
+      const response = await apiFetch(`/monthly-closings/check?month=${month}&year=${year}&closing_type=${type}`);
+      return response.data?.exists || false;
+    } catch (error) {
+      console.error('Error verificando cierre:', error);
+      return false;
     }
   };
 
@@ -528,15 +617,25 @@ const MonthlyClosingsPage = () => {
             Cierres Financieros
           </h2>
           <p className="subtitle">
-            Gestión de cierres mensuales y diarios de la clínica
+            Gestión de cierres mensuales y diarios - Tipo de cambio: C${exchangeRate.toFixed(2)} = $1
           </p>
+          <div className="clinic-info">
+            <span className="info-item">
+              <FontAwesomeIcon icon={faHospital} />
+              <span>Clínica: {systemSettings?.clinic_payment || 40}%</span>
+            </span>
+            <span className="info-item">
+              <FontAwesomeIcon icon={faUserMd} />
+              <span>Doctora: {systemSettings?.doctor_payment || 60}%</span>
+            </span>
+          </div>
         </div>
         <div className="header-right">
           <div className="btn-group">
             <button 
               className="secondary-btn"
               onClick={() => handleExportExcelGeneral('monthly')}
-              title="Exportar cierres mensuales a Excel (formato tabla)"
+              title="Exportar cierres mensuales a Excel"
             >
               <FontAwesomeIcon icon={faFileExcel} />
               Excel Mensual
@@ -544,7 +643,7 @@ const MonthlyClosingsPage = () => {
             <button 
               className="secondary-btn"
               onClick={() => handleExportExcelGeneral('daily')}
-              title="Exportar cierres diarios a Excel (formato tabla)"
+              title="Exportar cierres diarios a Excel"
             >
               <FontAwesomeIcon icon={faFileExcel} />
               Excel Diario
@@ -601,26 +700,18 @@ const MonthlyClosingsPage = () => {
                   onChange={(e) => setClosingTypeFilter(e.target.value)}
                   className="form-select"
                 >
-                  <option value="all">Todos los tipos</option>
-                  <option value="monthly">Cierres Mensuales</option>
-                  <option value="daily">Cierres Diarios</option>
+                  <option value="all">Todos los cierres</option>
+                  <optgroup label="Por frecuencia">
+                    <option value="monthly">Cierres Mensuales</option>
+                    <option value="daily">Cierres Diarios</option>
+                  </optgroup>
+                  <optgroup label="Por tipo específico">
+                    <option value="all">Completos (General + Ortodoncia)</option>
+                    <option value="general">Solo Procedimientos Generales</option>
+                    <option value="orthodontics">Solo Ortodoncia</option>
+                  </optgroup>
                 </select>
               </div>
-
-              {closingTypeFilter === 'daily' && (
-                <div className="filter-group">
-                  <label className="form-label">Subtipo:</label>
-                  <select
-                    value={closingSubTypeFilter}
-                    onChange={(e) => setClosingSubTypeFilter(e.target.value)}
-                    className="form-select"
-                  >
-                    <option value="all">Todos</option>
-                    <option value="general">General</option>
-                    <option value="orthodontics">Ortodoncia</option>
-                  </select>
-                </div>
-              )}
 
               <div className="filter-group">
                 <label className="form-label">Año:</label>
@@ -645,7 +736,7 @@ const MonthlyClosingsPage = () => {
                 <div className="search-box">
                   <input
                     type="text"
-                    placeholder="Buscar por fecha, mes, año o comentario..."
+                    placeholder="Buscar por fecha, mes, año, tipo o comentario..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="form-input"
@@ -753,12 +844,12 @@ const MonthlyClosingsPage = () => {
                 
                 <div className="closing-right">
                   <div className="closing-profit">
-                    <span 
+                    <div 
                       className="profit-value"
                       style={{ color: getProfitColor(closing.net_profit) }}
                     >
-                      {formatCurrency(closing.net_profit)}
-                    </span>
+                      {formatCurrency(closing.net_profit, 'NIO', true)}
+                    </div>
                     <span className="profit-label">Utilidad Neta</span>
                     <div 
                       className={`profit-indicator ${closing.net_profit >= 0 ? 'positive' : 'negative'}`}
@@ -779,7 +870,7 @@ const MonthlyClosingsPage = () => {
                     <button 
                       className="action-btn print"
                       onClick={() => handleExportPDF(closing)}
-                      title="Exportar a PDF (formato vertical)"
+                      title="Exportar a PDF"
                     >
                       <FontAwesomeIcon icon={faFilePdf} />
                     </button>
@@ -794,7 +885,7 @@ const MonthlyClosingsPage = () => {
                     <FontAwesomeIcon 
                       icon={expandedClosings[closing.id] ? faChevronUp : faChevronDown} 
                       className="expand-icon"
-                      onClick={() => toggleExpandClosing(closing.id)} // CORREGIDO
+                      onClick={() => toggleExpandClosing(closing.id)}
                     />
                   </div>
                 </div>
@@ -808,48 +899,77 @@ const MonthlyClosingsPage = () => {
                     
                     {closing.type === 'monthly' ? (
                       <div className="summary-grid">
-                        <div className="summary-item income">
-                          <span className="summary-label">Ingresos Generales:</span>
-                          <span className="summary-value">{formatCurrency(closing.total_general_income)}</span>
-                        </div>
-                        <div className="summary-item income-ortho">
-                          <span className="summary-label">Ortodoncia (Clínica 40%):</span>
-                          <span className="summary-value">{formatCurrency(closing.total_clinical_orthodontic_income)}</span>
-                        </div>
-                        <div className="summary-item expense-fixed">
-                          <span className="summary-label">Gastos Fijos:</span>
-                          <span className="summary-value">{formatCurrency(closing.total_fixed_expenses)}</span>
-                        </div>
-                        <div className="summary-item expense-variable">
-                          <span className="summary-label">Gastos Variables:</span>
-                          <span className="summary-value">{formatCurrency(closing.total_variable_expenses)}</span>
-                        </div>
-                        {/* NOTA: Se elimina la fila de pago doctora ortodoncia para cierres mensuales */}
+                        {closing.sub_type === 'all' && (
+                          <>
+                            <div className="summary-item income">
+                              <span className="summary-label">Ingresos Generales:</span>
+                              <span className="summary-value">{formatCurrency(closing.total_general_income, 'NIO', true)}</span>
+                            </div>
+                            <div className="summary-item income-ortho">
+                              <span className="summary-label">Ortodoncia (Clínica {systemSettings?.clinic_payment || 40}%):</span>
+                              <span className="summary-value">{formatCurrency(closing.total_clinical_orthodontic_income, 'NIO', true)}</span>
+                            </div>
+                            <div className="summary-item expense-fixed">
+                              <span className="summary-label">Gastos Fijos:</span>
+                              <span className="summary-value">{formatCurrency(closing.total_fixed_expenses, 'NIO', true)}</span>
+                            </div>
+                            <div className="summary-item expense-variable">
+                              <span className="summary-label">Gastos Variables:</span>
+                              <span className="summary-value">{formatCurrency(closing.total_variable_expenses, 'NIO', true)}</span>
+                            </div>
+                          </>
+                        )}
+                        
+                        {closing.sub_type === 'general' && (
+                          <div className="summary-item income">
+                            <span className="summary-label">Ingresos Generales:</span>
+                            <span className="summary-value">{formatCurrency(closing.total_general_income, 'NIO', true)}</span>
+                          </div>
+                        )}
+                        
+                        {closing.sub_type === 'orthodontics' && (
+                          <>
+                            <div className="summary-item income-ortho-total">
+                              <span className="summary-label">Ortodoncia Total:</span>
+                              <span className="summary-value">{formatCurrency(closing.total_clinical_orthodontic_income + closing.total_orthodontic_doctor_income, 'NIO', true)}</span>
+                            </div>
+                            <div className="summary-item income-ortho-clinic">
+                              <span className="summary-label">Clínica ({systemSettings?.clinic_payment || 40}%):</span>
+                              <span className="summary-value">{formatCurrency(closing.total_clinical_orthodontic_income, 'NIO', true)}</span>
+                            </div>
+                            <div className="summary-item income-ortho-doctor">
+                              <span className="summary-label">
+                                <FontAwesomeIcon icon={faUserMd} /> Doctora ({systemSettings?.doctor_payment || 60}%):
+                              </span>
+                              <span className="summary-value">{formatCurrency(closing.total_orthodontic_doctor_income, 'NIO', true)}</span>
+                            </div>
+                          </>
+                        )}
                       </div>
                     ) : (
                       <div className="summary-grid">
                         <div className="summary-item income">
                           <span className="summary-label">Ingresos Totales:</span>
-                          <span className="summary-value">{formatCurrency(closing.total_income)}</span>
+                          <span className="summary-value">{formatCurrency(closing.total_income, 'NIO', true)}</span>
                         </div>
                         <div className="summary-item clinic-income">
                           <span className="summary-label">
-                            {closing.sub_type === 'orthodontics' ? 'Clínica (40%)' : 'Ingresos Clínica'}:
+                            {closing.sub_type === 'orthodontics' ? `Clínica (${systemSettings?.clinic_payment || 40}%)` : 'Ingresos Clínica'}:
                           </span>
-                          <span className="summary-value">{formatCurrency(closing.total_clinic_income)}</span>
+                          <span className="summary-value">{formatCurrency(closing.total_clinic_income, 'NIO', true)}</span>
                         </div>
                         {closing.sub_type === 'orthodontics' && (
                           <div className="summary-item doctor-income">
                             <span className="summary-label">
-                              <FontAwesomeIcon icon={faUserMd} /> Doctora (60%):
+                              <FontAwesomeIcon icon={faUserMd} /> Doctora ({systemSettings?.doctor_payment || 60}%):
                             </span>
-                            <span className="summary-value">{formatCurrency(closing.total_doctor_income)}</span>
+                            <span className="summary-value">{formatCurrency(closing.total_doctor_income, 'NIO', true)}</span>
                           </div>
                         )}
                         {closing.total_external_doctor_payments > 0 && (
                           <div className="summary-item external-doctor">
                             <span className="summary-label">Pagos Doctores Externos:</span>
-                            <span className="summary-value">{formatCurrency(closing.total_external_doctor_payments)}</span>
+                            <span className="summary-value">{formatCurrency(closing.total_external_doctor_payments, 'NIO', true)}</span>
                           </div>
                         )}
                       </div>
@@ -861,14 +981,14 @@ const MonthlyClosingsPage = () => {
                           {closing.type === 'monthly' ? 'Ingresos Clínica:' : 'Ingresos Netos:'}
                         </span>
                         <span className="net-profit-value">
-                          {formatCurrency(closing.total_clinic_income)}
+                          {formatCurrency(closing.total_clinic_income, 'NIO', true)}
                         </span>
                       </div>
-                      {closing.type === 'monthly' && (
+                      {closing.type === 'monthly' && closing.sub_type === 'all' && (
                         <div className="net-profit-item">
                           <span className="net-profit-label">Gastos Totales:</span>
                           <span className="net-profit-value">
-                            {formatCurrency(closing.total_expenses)}
+                            {formatCurrency(closing.total_expenses, 'NIO', true)}
                           </span>
                         </div>
                       )}
@@ -878,7 +998,7 @@ const MonthlyClosingsPage = () => {
                           className="net-profit-value"
                           style={{ color: getProfitColor(closing.net_profit) }}
                         >
-                          {formatCurrency(closing.net_profit)}
+                          {formatCurrency(closing.net_profit, 'NIO', true)}
                         </span>
                       </div>
                     </div>
@@ -892,21 +1012,21 @@ const MonthlyClosingsPage = () => {
                         onClick={() => handleExportPDF(closing)}
                       >
                         <FontAwesomeIcon icon={faFilePdf} />
-                        PDF (Formato Vertical)
+                        PDF
                       </button>
                       <button 
                         className="secondary-btn small"
                         onClick={() => handleExportExcelDetailed(closing)}
                       >
                         <FontAwesomeIcon icon={faListAlt} />
-                        Excel con Desglose Completo
+                        Excel Detallado
                       </button>
                       <button 
                         className="secondary-btn small"
                         onClick={() => handleExportExcelGeneral(closing.type === 'monthly' ? 'monthly' : 'daily')}
                       >
                         <FontAwesomeIcon icon={faFileExcel} />
-                        Excel (Formato Tabla)
+                        Excel General
                       </button>
                     </div>
                   </div>
@@ -965,6 +1085,26 @@ const MonthlyClosingsPage = () => {
                     disabled={creating}
                   />
                 </div>
+
+                <div className="form-group">
+                  <label className="form-label">Tipo de cierre:</label>
+                  <select
+                    required
+                    value={newClosing.closing_type}
+                    onChange={(e) => setNewClosing({...newClosing, closing_type: e.target.value})}
+                    className="form-select"
+                    disabled={creating}
+                  >
+                    <option value="all">Completo (General + Ortodoncia)</option>
+                    <option value="general">Solo Procedimientos Generales</option>
+                    <option value="orthodontics">Solo Ortodoncia</option>
+                  </select>
+                  <small className="form-help">
+                    {newClosing.closing_type === 'all' && 'Incluye todos los procedimientos y gastos'}
+                    {newClosing.closing_type === 'general' && 'Solo procedimientos generales, sin gastos'}
+                    {newClosing.closing_type === 'orthodontics' && 'Solo ortodoncia, sin gastos'}
+                  </small>
+                </div>
               </div>
 
               <div className="form-group">
@@ -991,30 +1131,32 @@ const MonthlyClosingsPage = () => {
                 <small className="form-help">Si no se especifica, se usará el último día del mes</small>
               </div>
 
-              <div className="form-group">
-                <label className="form-label">
-                  <div className="switch-container">
-                    <span>Eliminar gastos variables después del cierre:</span>
-                    <label className="switch">
-                      <input
-                        type="checkbox"
-                        checked={deleteVariableExpenses}
-                        onChange={(e) => setDeleteVariableExpenses(e.target.checked)}
-                        disabled={creating}
-                      />
-                      <span className="slider round"></span>
-                    </label>
-                    <span className="switch-label">
-                      {deleteVariableExpenses ? 'Sí, eliminar automáticamente' : 'No, conservar en el sistema'}
-                    </span>
-                  </div>
-                </label>
-                <small className="form-help">
-                  {deleteVariableExpenses 
-                    ? '⚠️ Los gastos variables del período serán eliminados permanentemente para mantener la base de datos limpia'
-                    : 'Los gastos variables se conservarán para futuras consultas'}
-                </small>
-              </div>
+              {newClosing.closing_type === 'all' && (
+                <div className="form-group">
+                  <label className="form-label">
+                    <div className="switch-container">
+                      <span>Eliminar gastos variables después del cierre:</span>
+                      <label className="switch">
+                        <input
+                          type="checkbox"
+                          checked={deleteVariableExpenses}
+                          onChange={(e) => setDeleteVariableExpenses(e.target.checked)}
+                          disabled={creating}
+                        />
+                        <span className="slider round"></span>
+                      </label>
+                      <span className="switch-label">
+                        {deleteVariableExpenses ? 'Sí, eliminar automáticamente' : 'No, conservar en el sistema'}
+                      </span>
+                    </div>
+                  </label>
+                  <small className="form-help">
+                    {deleteVariableExpenses 
+                      ? '⚠️ Los gastos variables del período serán eliminados permanentemente'
+                      : 'Los gastos variables se conservarán para futuras consultas'}
+                  </small>
+                </div>
+              )}
 
               <div className="form-group">
                 <label className="form-label">Comentarios (opcional):</label>
@@ -1033,10 +1175,13 @@ const MonthlyClosingsPage = () => {
                 <div>
                   <strong>IMPORTANTE:</strong> El sistema calculará automáticamente:
                   <ul>
-                    <li>✅ Todos los procedimientos del período</li>
-                    <li>✅ Gastos fijos (se incluyen automáticamente)</li>
-                    <li>✅ Gastos variables del período {deleteVariableExpenses ? '(se eliminarán)' : ''}</li>
-                    <li>✅ <strong>NOTA: El pago a doctora ortodoncia NO se incluye en cierres mensuales</strong></li>
+                    <li>✅ Procedimientos del período seleccionado</li>
+                    {newClosing.closing_type === 'all' && <li>✅ Gastos fijos y variables del período</li>}
+                    {newClosing.closing_type === 'orthodontics' && (
+                      <li>✅ Separación automática: Clínica ({systemSettings?.clinic_payment || 40}%), Doctora ({systemSettings?.doctor_payment || 60}%)</li>
+                    )}
+                    <li>✅ Cálculo en ambas monedas (C$ y USD)</li>
+                    <li>✅ Tipo de cambio actual: C${exchangeRate.toFixed(2)} = $1</li>
                   </ul>
                 </div>
               </div>
@@ -1063,7 +1208,7 @@ const MonthlyClosingsPage = () => {
                   ) : (
                     <>
                       <FontAwesomeIcon icon={faCalculator} />
-                      Calcular y Crear Cierre
+                      Crear Cierre {getClosingTypeLabel(newClosing.closing_type)}
                     </>
                   )}
                 </button>
@@ -1123,6 +1268,11 @@ const MonthlyClosingsPage = () => {
                     <option value="general">General (Todos los procedimientos)</option>
                     <option value="orthodontics">Ortodoncia</option>
                   </select>
+                  <small className="form-help">
+                    {newDailyClosing.closing_type === 'orthodontics' 
+                      ? `Separa automáticamente: Clínica (${systemSettings?.clinic_payment || 40}%), Doctora (${systemSettings?.doctor_payment || 60}%)`
+                      : 'Todos los procedimientos del día'}
+                  </small>
                 </div>
               </div>
 
@@ -1151,41 +1301,37 @@ const MonthlyClosingsPage = () => {
                     </div>
                     <div className="preview-item">
                       <span>Ingresos Totales:</span>
-                      <span className="preview-value">{formatCurrency(dailySummary.total_income || 0)}</span>
+                      <span className="preview-value">{formatCurrency(dailySummary.total_income, 'NIO', true)}</span>
                     </div>
                     {newDailyClosing.closing_type === 'orthodontics' ? (
                       <>
                         <div className="preview-item">
-                          <span>Clínica (40%):</span>
-                          <span className="preview-value">{formatCurrency(dailySummary.total_clinic_income || 0)}</span>
+                          <span>Clínica ({dailySummary.clinic_percentage || 40}%):</span>
+                          <span className="preview-value">{formatCurrency(dailySummary.total_clinic_income, 'NIO', true)}</span>
                         </div>
                         <div className="preview-item">
-                          <span>Doctora (60%):</span>
-                          <span className="preview-value">{formatCurrency(dailySummary.total_doctor_income || 0)}</span>
+                          <span>Doctora ({dailySummary.doctor_percentage || 60}%):</span>
+                          <span className="preview-value">{formatCurrency(dailySummary.total_doctor_income, 'NIO', true)}</span>
                         </div>
                       </>
                     ) : (
                       <div className="preview-item">
                         <span>Ingresos Clínica:</span>
-                        <span className="preview-value">{formatCurrency(dailySummary.total_clinic_income || 0)}</span>
+                        <span className="preview-value">{formatCurrency(dailySummary.total_clinic_income, 'NIO', true)}</span>
                       </div>
                     )}
-                    <div className="preview-item">
-                      <span>Gastos por incluir:</span>
-                      <span className="preview-value">{formatCurrency(dailySummary.total_expenses || 0)}</span>
-                    </div>
                     <div className="preview-item total">
                       <span>Utilidad Neta estimada:</span>
                       <span 
                         className="preview-value"
                         style={{ color: getProfitColor(dailySummary.net_profit || 0) }}
                       >
-                        {formatCurrency(dailySummary.net_profit || 0)}
+                        {formatCurrency(dailySummary.net_profit, 'NIO', true)}
                       </span>
                     </div>
                     {dailySummary.closing_exists && (
                       <div className="preview-warning">
-                        <FontAwesomeIcon icon={faTimesCircle} />
+                        <FontAwesomeIcon icon={faExclamationTriangle} />
                         <span>Ya existe un cierre para esta fecha y tipo</span>
                       </div>
                     )}
@@ -1198,8 +1344,9 @@ const MonthlyClosingsPage = () => {
                 <div>
                   <strong>NOTA:</strong> 
                   <ul>
-                    <li>Los cierres diarios de ortodoncia separan automáticamente el 40% para la clínica y 60% para la doctora</li>
-                    <li>Los gastos variables del día se marcarán como procesados</li>
+                    <li>Los cierres diarios solo incluyen ingresos por procedimientos</li>
+                    <li>No se incluyen gastos en los cierres diarios</li>
+                    <li>Tipo de cambio: C${exchangeRate.toFixed(2)} = $1</li>
                     <li>No se pueden crear dos cierres para la misma fecha y tipo</li>
                   </ul>
                 </div>
@@ -1329,46 +1476,79 @@ const MonthlyClosingsPage = () => {
                   {selectedClosing.type === 'monthly' ? (
                     // Resumen mensual
                     <>
-                      <div className="breakdown-section income">
-                        <h5>Ingresos de la Clínica</h5>
-                        <div className="breakdown-item">
-                          <span>Procedimientos Generales (100% clínica):</span>
-                          <span className="amount">{formatCurrency(selectedClosing.total_general_income)}</span>
+                      {selectedClosing.sub_type === 'all' && (
+                        <div className="breakdown-section income">
+                          <h5>Ingresos de la Clínica</h5>
+                          <div className="breakdown-item">
+                            <span>Procedimientos Generales (100% clínica):</span>
+                            <span className="amount">{formatCurrency(selectedClosing.total_general_income, 'NIO', true)}</span>
+                          </div>
+                          <div className="breakdown-item">
+                            <span>Ortodoncia ({systemSettings?.clinic_payment || 40}% clínica):</span>
+                            <span className="amount">{formatCurrency(selectedClosing.total_clinical_orthodontic_income, 'NIO', true)}</span>
+                          </div>
+                          <div className="breakdown-total">
+                            <span>Total Ingresos Clínica:</span>
+                            <span className="total-amount">
+                              {formatCurrency(selectedClosing.total_clinic_income, 'NIO', true)}
+                            </span>
+                          </div>
                         </div>
-                        <div className="breakdown-item">
-                          <span>Ortodoncia (40% clínica):</span>
-                          <span className="amount">{formatCurrency(selectedClosing.total_clinical_orthodontic_income)}</span>
-                        </div>
-                        <div className="breakdown-total">
-                          <span>Total Ingresos Clínica:</span>
-                          <span className="total-amount">
-                            {formatCurrency(selectedClosing.total_clinic_income)}
-                          </span>
-                        </div>
-                      </div>
+                      )}
 
-                      <div className="breakdown-section expenses">
-                        <h5>Gastos</h5>
-                        <div className="breakdown-item">
-                          <span>Gastos Fijos:</span>
-                          <span className="amount">{formatCurrency(selectedClosing.total_fixed_expenses)}</span>
+                      {selectedClosing.sub_type === 'general' && (
+                        <div className="breakdown-section income">
+                          <h5>Ingresos Generales</h5>
+                          <div className="breakdown-item">
+                            <span>Procedimientos Generales:</span>
+                            <span className="amount">{formatCurrency(selectedClosing.total_general_income, 'NIO', true)}</span>
+                          </div>
                         </div>
-                        <div className="breakdown-item highlight">
-                          <span>
-                            Gastos Variables:
-                          </span>
-                          <span className="amount">
-                            {formatCurrency(selectedClosing.total_variable_expenses)}
-                          </span>
+                      )}
+
+                      {selectedClosing.sub_type === 'orthodontics' && (
+                        <div className="breakdown-section income">
+                          <h5>Ingresos de Ortodoncia</h5>
+                          <div className="breakdown-item">
+                            <span>Ortodoncia Total:</span>
+                            <span className="amount">{formatCurrency(selectedClosing.total_clinical_orthodontic_income + selectedClosing.total_orthodontic_doctor_income, 'NIO', true)}</span>
+                          </div>
+                          <div className="breakdown-item">
+                            <span>Clínica ({systemSettings?.clinic_payment || 40}%):</span>
+                            <span className="amount">{formatCurrency(selectedClosing.total_clinical_orthodontic_income, 'NIO', true)}</span>
+                          </div>
+                          <div className="breakdown-item">
+                            <span>
+                              <FontAwesomeIcon icon={faUserMd} /> Doctora ({systemSettings?.doctor_payment || 60}%):
+                            </span>
+                            <span className="amount">{formatCurrency(selectedClosing.total_orthodontic_doctor_income, 'NIO', true)}</span>
+                          </div>
                         </div>
-                        {/* NOTA: Se elimina la sección de pago doctora ortodoncia para cierres mensuales */}
-                        <div className="breakdown-total">
-                          <span>Total Gastos:</span>
-                          <span className="total-amount">
-                            {formatCurrency(selectedClosing.total_expenses)}
-                          </span>
+                      )}
+
+                      {selectedClosing.sub_type === 'all' && (
+                        <div className="breakdown-section expenses">
+                          <h5>Gastos</h5>
+                          <div className="breakdown-item">
+                            <span>Gastos Fijos:</span>
+                            <span className="amount">{formatCurrency(selectedClosing.total_fixed_expenses, 'NIO', true)}</span>
+                          </div>
+                          <div className="breakdown-item highlight">
+                            <span>
+                              Gastos Variables:
+                            </span>
+                            <span className="amount">
+                              {formatCurrency(selectedClosing.total_variable_expenses, 'NIO', true)}
+                            </span>
+                          </div>
+                          <div className="breakdown-total">
+                            <span>Total Gastos:</span>
+                            <span className="total-amount">
+                              {formatCurrency(selectedClosing.total_expenses, 'NIO', true)}
+                            </span>
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </>
                   ) : (
                     // Resumen diario
@@ -1377,25 +1557,25 @@ const MonthlyClosingsPage = () => {
                         <h5>Ingresos</h5>
                         <div className="breakdown-item">
                           <span>Ingresos Totales:</span>
-                          <span className="amount">{formatCurrency(selectedClosing.total_income)}</span>
+                          <span className="amount">{formatCurrency(selectedClosing.total_income, 'NIO', true)}</span>
                         </div>
                         {selectedClosing.sub_type === 'orthodontics' ? (
                           <>
                             <div className="breakdown-item">
-                              <span>Clínica (40%):</span>
-                              <span className="amount">{formatCurrency(selectedClosing.total_clinic_income)}</span>
+                              <span>Clínica ({systemSettings?.clinic_payment || 40}%):</span>
+                              <span className="amount">{formatCurrency(selectedClosing.total_clinic_income, 'NIO', true)}</span>
                             </div>
                             <div className="breakdown-item">
                               <span>
-                                <FontAwesomeIcon icon={faUserMd} /> Doctora (60%):
+                                <FontAwesomeIcon icon={faUserMd} /> Doctora ({systemSettings?.doctor_payment || 60}%):
                               </span>
-                              <span className="amount">{formatCurrency(selectedClosing.total_doctor_income)}</span>
+                              <span className="amount">{formatCurrency(selectedClosing.total_doctor_income, 'NIO', true)}</span>
                             </div>
                           </>
                         ) : (
                           <div className="breakdown-item">
                             <span>Ingresos Clínica:</span>
-                            <span className="amount">{formatCurrency(selectedClosing.total_clinic_income)}</span>
+                            <span className="amount">{formatCurrency(selectedClosing.total_clinic_income, 'NIO', true)}</span>
                           </div>
                         )}
                       </div>
@@ -1405,7 +1585,7 @@ const MonthlyClosingsPage = () => {
                           <h5>Pagos a Doctores Externos</h5>
                           <div className="breakdown-item">
                             <span>Total pagos externos:</span>
-                            <span className="amount">{formatCurrency(selectedClosing.total_external_doctor_payments)}</span>
+                            <span className="amount">{formatCurrency(selectedClosing.total_external_doctor_payments, 'NIO', true)}</span>
                           </div>
                         </div>
                       )}
@@ -1418,14 +1598,14 @@ const MonthlyClosingsPage = () => {
                     <div className="breakdown-item">
                       <span>Ingresos Netos Clínica:</span>
                       <span className="amount">
-                        {formatCurrency(selectedClosing.total_clinic_income)}
+                        {formatCurrency(selectedClosing.total_clinic_income, 'NIO', true)}
                       </span>
                     </div>
-                    {selectedClosing.type === 'monthly' && (
+                    {selectedClosing.type === 'monthly' && selectedClosing.sub_type === 'all' && (
                       <div className="breakdown-item">
                         <span>Gastos Totales:</span>
                         <span className="amount">
-                          {formatCurrency(selectedClosing.total_expenses)}
+                          {formatCurrency(selectedClosing.total_expenses, 'NIO', true)}
                         </span>
                       </div>
                     )}
@@ -1435,7 +1615,7 @@ const MonthlyClosingsPage = () => {
                         className="final-amount"
                         style={{ color: getProfitColor(selectedClosing.net_profit) }}
                       >
-                        {formatCurrency(selectedClosing.net_profit)}
+                        {formatCurrency(selectedClosing.net_profit, 'NIO', true)}
                       </span>
                     </div>
                     {selectedClosing.total_clinic_income > 0 && (

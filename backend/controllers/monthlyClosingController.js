@@ -1,14 +1,17 @@
-// monthlyClosingController.js - Corrección completa
 import MonthlyClosing from '../models/monthlyClosingModel.js';
-import { supabaseAdmin } from '../config/supabase.js'; // ¡IMPORTAR supabaseAdmin!
-import Bill from '../models/billModel.js';
+import { supabaseAdmin } from '../config/supabase.js';
 
 const monthlyClosingController = {
   // Obtener todos los cierres
   getAll: async (req, res) => {
     try {
-      const { page = 1, limit = 12 } = req.query;
-      const result = await MonthlyClosing.getAll(parseInt(page), parseInt(limit));
+      const { page = 1, limit = 12, closing_type, year } = req.query;
+      
+      const filters = {};
+      if (closing_type) filters.closing_type = closing_type;
+      if (year) filters.year = parseInt(year);
+      
+      const result = await MonthlyClosing.getAll(parseInt(page), parseInt(limit), filters);
       
       res.json({ 
         success: true, 
@@ -54,12 +57,20 @@ const monthlyClosingController = {
     }
   },
 
-  // Crear cierre mensual - VERSIÓN CORREGIDA
-  // monthlyClosingController.js - Modificar función create
+  // Crear cierre mensual
+  // monthlyClosingController.js - Corregir función create
 
 create: async (req, res) => {
   try {
-    const { month, year, startDate, endDate, comentary = '', deleteVariableExpenses = false } = req.body; // Cambiar por defecto a false
+    const { 
+      month, 
+      year, 
+      startDate, 
+      endDate, 
+      closing_type = 'all',
+      comentary = '', 
+      deleteVariableExpenses = false 
+    } = req.body;
     
     if (!month || !year) {
       return res.status(400).json({ 
@@ -68,12 +79,21 @@ create: async (req, res) => {
       });
     }
     
-    // Verificar si ya existe cierre
-    const exists = await MonthlyClosing.exists(month, year);
+    // Validar tipo de cierre
+    const validTypes = ['general', 'orthodontics', 'all'];
+    if (!validTypes.includes(closing_type)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: `Tipo de cierre inválido. Use: ${validTypes.join(', ')}` 
+      });
+    }
+    
+    // Verificar si ya existe cierre para este tipo
+    const exists = await MonthlyClosing.exists(month, year, closing_type);
     if (exists) {
       return res.status(400).json({ 
         success: false, 
-        error: 'Ya existe un cierre para este mes y año' 
+        error: `Ya existe un cierre ${getClosingTypeLabel(closing_type)} para ${month} ${year}` 
       });
     }
     
@@ -81,22 +101,28 @@ create: async (req, res) => {
     const periodStartDate = startDate || `${year}-${getMonthNumber(month)}-01`;
     const periodEndDate = endDate || getLastDayOfMonth(year, month);
     
-    // Obtener resumen financiero
+    console.log('📅 Período a calcular:', { 
+      startDate: periodStartDate, 
+      endDate: periodEndDate,
+      type: closing_type 
+    });
+    
+    // Obtener resumen financiero según tipo
     const financialSummary = await MonthlyClosing.getFinancialSummary(
       periodStartDate,
-      periodEndDate
+      periodEndDate,
+      closing_type
     );
     
-    // SOLO marcar gastos como procesados, NO eliminarlos
+    // Solo procesar gastos variables si es cierre 'all'
     let variableBillsProcessed = [];
     let variableExpensesAmount = 0;
     
-    if (deleteVariableExpenses) { // Solo si el usuario específicamente lo solicita
+    if (deleteVariableExpenses && closing_type === 'all') {
       try {
-        // Obtener gastos variables no procesados
         const { data: variableBills, error } = await supabaseAdmin
           .from('bills')
-          .select('bill_ID, description, amount')
+          .select('bill_ID, description, amount, currency_used, amount_usd, exchange_rate_bill')
           .eq('is_recurrent', false)
           .eq('is_processed_in_closing', false)
           .gte('bill_date', periodStartDate)
@@ -104,23 +130,30 @@ create: async (req, res) => {
         
         if (!error && variableBills) {
           variableBillsProcessed = variableBills;
-          variableExpensesAmount = variableBillsProcessed.reduce((sum, bill) => sum + (bill.amount || 0), 0);
           
-          // Marcar como procesados (NO eliminar)
+          // Calcular monto total en córdobas
+          variableExpensesAmount = variableBillsProcessed.reduce((sum, bill) => {
+            if (bill.currency_used === 'USD') {
+              return sum + ((bill.amount_usd || 0) * (bill.exchange_rate_bill || 36.5));
+            } else {
+              return sum + (bill.amount || 0);
+            }
+          }, 0);
+          
           const billIds = variableBillsProcessed.map(bill => bill.bill_ID);
           
           const { error: updateError } = await supabaseAdmin
             .from('bills')
             .update({
               is_processed_in_closing: true,
-              processed_in_closing_ID: null // Solo marcamos, no vinculamos
+              processed_in_closing_ID: null
             })
             .in('bill_ID', billIds);
           
           if (updateError) {
             console.warn('⚠️ No se pudieron marcar gastos como procesados:', updateError.message);
           } else {
-            console.log(`✅ Marcados ${billIds.length} gastos variables como procesados (NO eliminados)`);
+            console.log(`✅ Marcados ${billIds.length} gastos variables como procesados`);
           }
         }
       } catch (billError) {
@@ -128,16 +161,24 @@ create: async (req, res) => {
       }
     }
     
-    // Crear cierre
+    // Crear cierre - SOLO con columnas que existen
     const closingData = {
       month,
-      year,
-      ...financialSummary,
+      year: parseInt(year),
+      closing_type,
+      total_general_income: financialSummary.total_general_income,
+      total_clinical_orthodontic_income: financialSummary.total_clinical_orthodontic_income,
+      total_orthodontic_doctor_income: financialSummary.total_orthodontic_doctor_income,
+      total_fixed_expenses: financialSummary.total_fixed_expenses,
+      total_variable_expenses: financialSummary.total_variable_expenses,
+      net_profit: financialSummary.net_profit,
       comentary,
+      processed_variable_expenses: deleteVariableExpenses && closing_type === 'all',
       daily_closings_included: false,
-      orthodontics_daily_closings_included: false,
-      processed_variable_expenses: deleteVariableExpenses
+      orthodontics_daily_closings_included: false
     };
+    
+    console.log('📤 Datos para crear cierre:', closingData);
     
     const newClosing = await MonthlyClosing.create(closingData);
     
@@ -148,20 +189,55 @@ create: async (req, res) => {
       id: newClosing.closing_ID,
       variable_expenses_processed: variableBillsProcessed.length,
       variable_expenses_amount: variableExpensesAmount,
-      delete_operation: deleteVariableExpenses ? 'marked_as_processed' : 'skipped'
+      delete_operation: deleteVariableExpenses ? 'marked_as_processed' : 'skipped',
+      // Agregar información adicional para la respuesta (no se guarda en BD)
+      clinic_percentage: financialSummary.clinic_percentage,
+      doctor_percentage: financialSummary.doctor_percentage,
+      exchange_rate: financialSummary.exchange_rate
     };
+    
+    const typeLabel = getClosingTypeLabel(closing_type);
     
     res.status(201).json({ 
       success: true, 
-      message: 'Cierre mensual creado exitosamente' + 
-              (deleteVariableExpenses ? ' (gastos variables marcados como procesados)' : ''),
+      message: `Cierre mensual ${typeLabel} creado exitosamente` + 
+              (deleteVariableExpenses && closing_type === 'all' ? ' (gastos variables procesados)' : ''),
       data: formattedClosing 
     });
   } catch (error) {
     console.error('Error al crear cierre:', error);
     res.status(500).json({ 
       success: false, 
-      error: 'Error al crear cierre' 
+      error: 'Error al crear cierre: ' + error.message 
+    });
+  }
+},
+
+  // Agregar esta función al monthlyClosingController.js
+
+// Verificar si existe cierre
+checkExists: async (req, res) => {
+  try {
+    const { month, year, closing_type = 'all' } = req.query;
+    
+    if (!month || !year) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Mes y año son requeridos' 
+      });
+    }
+    
+    const exists = await MonthlyClosing.exists(month, year, closing_type);
+    
+    res.json({ 
+      success: true, 
+      data: { exists } 
+    });
+  } catch (error) {
+    console.error('Error al verificar cierre:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Error al verificar cierre' 
     });
   }
 },
@@ -169,7 +245,7 @@ create: async (req, res) => {
   // Obtener resumen financiero
   getFinancialSummary: async (req, res) => {
     try {
-      const { startDate, endDate } = req.query;
+      const { startDate, endDate, closing_type = 'all' } = req.query;
       
       if (!startDate || !endDate) {
         return res.status(400).json({ 
@@ -178,7 +254,7 @@ create: async (req, res) => {
         });
       }
       
-      const summary = await MonthlyClosing.getFinancialSummary(startDate, endDate);
+      const summary = await MonthlyClosing.getFinancialSummary(startDate, endDate, closing_type);
       
       res.json({ 
         success: true, 
@@ -189,6 +265,33 @@ create: async (req, res) => {
       res.status(500).json({ 
         success: false, 
         error: 'Error al obtener resumen' 
+      });
+    }
+  },
+
+  // Obtener resumen por mes
+  getMonthlySummary: async (req, res) => {
+    try {
+      const { month, year, closing_type = 'all' } = req.query;
+      
+      if (!month || !year) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Mes y año son requeridos' 
+        });
+      }
+      
+      const summary = await MonthlyClosing.getMonthlySummary(month, year, closing_type);
+      
+      res.json({ 
+        success: true, 
+        data: summary 
+      });
+    } catch (error) {
+      console.error('Error al obtener resumen mensual:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: 'Error al obtener resumen mensual' 
       });
     }
   }
@@ -208,6 +311,15 @@ function getLastDayOfMonth(year, month) {
   const monthNumber = getMonthNumber(month);
   const lastDay = new Date(parseInt(year), parseInt(monthNumber), 0).getDate();
   return `${year}-${monthNumber}-${lastDay}`;
+}
+
+function getClosingTypeLabel(type) {
+  const labels = {
+    'general': 'de Procedimientos Generales',
+    'orthodontics': 'de Ortodoncia',
+    'all': 'Completo (General + Ortodoncia)'
+  };
+  return labels[type] || '';
 }
 
 export default monthlyClosingController;

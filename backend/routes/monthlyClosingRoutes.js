@@ -8,5 +8,6 @@ router.get('/', monthlyClosingController.getAll);
 router.get('/:id', monthlyClosingController.getById);
 router.post('/', monthlyClosingController.create);
 router.get('/summary/financial', monthlyClosingController.getFinancialSummary);
+router.get('/check/exists', monthlyClosingController.checkExists);
 
 export default router;

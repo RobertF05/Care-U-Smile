@@ -40,14 +40,22 @@ const DailyClosing = {
     
     if (error) throw error;
     
-    // Convertir fechas para mostrar con fecha EXACTA
+    // Obtener configuración para convertir montos
+    const settings = await this.getSystemSettings();
+    const exchangeRate = settings?.exchange_rate || 36.5;
+    
+    // Convertir fechas para mostrar
     const formattedData = data.map(closing => ({
       ...closing,
       // Fecha exacta en formato legible
       closing_date_exact: closing.closing_date,
       closing_date_formatted: formatNicaraguaDate(closing.closing_date),
       closing_date_display: `${formatNicaraguaDate(closing.closing_date)} (${closing.closing_type === 'orthodontics' ? 'Ortodoncia' : 'General'})`,
-      created_at_display: formatNicaraguaDateTime(closing.created_at)
+      created_at_display: formatNicaraguaDateTime(closing.created_at),
+      // Agregar montos en USD calculados
+      total_income_usd: (closing.total_income || 0) / exchangeRate,
+      total_clinic_income_usd: (closing.total_clinic_income || 0) / exchangeRate,
+      total_doctor_income_usd: (closing.total_doctor_income || 0) / exchangeRate
     }));
     
     return {
@@ -69,10 +77,18 @@ const DailyClosing = {
     
     if (error) throw error;
     
+    // Obtener configuración
+    const settings = await this.getSystemSettings();
+    const exchangeRate = settings?.exchange_rate || 36.5;
+    
     return {
       ...data,
       closing_date_display: formatNicaraguaDate(data.closing_date),
-      created_at_display: formatNicaraguaDateTime(data.created_at)
+      created_at_display: formatNicaraguaDateTime(data.created_at),
+      total_income_usd: (data.total_income || 0) / exchangeRate,
+      total_clinic_income_usd: (data.total_clinic_income || 0) / exchangeRate,
+      total_doctor_income_usd: (data.total_doctor_income || 0) / exchangeRate,
+      total_external_doctor_payments_usd: (data.total_external_doctor_payments || 0) / exchangeRate
     };
   },
 
@@ -125,11 +141,18 @@ const DailyClosing = {
       console.log('📄 Datos completos:', data);
     }
     
+    // Obtener configuración para USD
+    const settings = await this.getSystemSettings();
+    const exchangeRate = settings?.exchange_rate || 36.5;
+    
     const result = {
       ...data,
-      daily_closing_id: closingId, // Asegurar que siempre haya daily_closing_id
+      daily_closing_id: closingId,
       closing_date_display: formatNicaraguaDate(data.closing_date),
-      created_at_display: formatNicaraguaDateTime(data.created_at)
+      created_at_display: formatNicaraguaDateTime(data.created_at),
+      total_income_usd: (data.total_income || 0) / exchangeRate,
+      total_clinic_income_usd: (data.total_clinic_income || 0) / exchangeRate,
+      total_doctor_income_usd: (data.total_doctor_income || 0) / exchangeRate
     };
     
     console.log('📋 Resultado final a devolver:', result);
@@ -177,70 +200,80 @@ const DailyClosing = {
     return !!data;
   },
 
-  // Obtener procedimientos del día para cierre (con fechas UTC)
-  async getDailyProcedures(date, closingType = 'general') {
-    const { start, end } = createNicaraguaDateRange(date);
+  // Obtener configuración del sistema
+  async getSystemSettings() {
+    const { data, error } = await supabaseAdmin
+      .from('settings')
+      .select('*')
+      .order('setting_ID', { ascending: false })
+      .limit(1)
+      .single();
     
-    console.log('Buscando procedimientos para cierre diario:', {
-      fechaNicaragua: date,
-      inicioUTC: start,
-      finUTC: end,
-      tipo: closingType
-    });
+    if (error) {
+      console.warn('No se pudo obtener configuración, usando valores por defecto');
+      return {
+        exchange_rate: 36.5,
+        clinic_payment: 40,
+        doctor_payment: 60
+      };
+    }
     
-    let query = supabaseAdmin
-      .from('procedures')
-      .select(`
-        *,
-        patients (first_name, first_last_name)
-      `)
-      .eq('is_orthodontics', closingType === 'orthodontics')
-      .gte('procedure_date', start)
-      .lte('procedure_date', end);
-    
-    const { data, error } = await query;
-    
-    if (error) throw error;
-    
-    // Convertir fechas a Nicaragua para mostrar
-    return data.map(procedure => ({
-      ...procedure,
-      procedure_date_display: formatNicaraguaDateTime(procedure.procedure_date),
-      procedure_date_utc: procedure.procedure_date
-    }));
+    return data;
   },
 
-  // Obtener gastos del día (bill_date es DATE)
-  async getDailyBills(date, expenseType = 'general') {
+  // Obtener procedimientos del día para cierre
+  // En dailyClosingModel.js - getDailyProcedures
+async getDailyProcedures(date, closingType = 'general') {
+  const { start, end } = createNicaraguaDateRange(date);
+  
+  console.log('🔍 Buscando procedimientos para cierre diario:', {
+    fechaNicaragua: date,
+    inicioUTC: start,
+    finUTC: end,
+    tipo: closingType
+  });
+  
+  let query = supabaseAdmin
+    .from('procedures')
+    .select(`
+      *,
+      patients (first_name, first_last_name)
+    `)
+    .eq('is_orthodontics', closingType === 'orthodontics')
+    .gte('procedure_date', start)
+    .lte('procedure_date', end);
+  
+  const { data, error } = await query;
+  
+  if (error) {
+    console.error('❌ Error obteniendo procedimientos:', error);
+    throw error;
+  }
+  
+  console.log(`✅ Encontrados ${data.length} procedimientos para el día ${date}`);
+  
+  // Convertir fechas a Nicaragua para mostrar
+  const formattedData = data.map(procedure => ({
+    ...procedure,
+    procedure_date_display: formatNicaraguaDateTime(procedure.procedure_date),
+    procedure_date_utc: procedure.procedure_date
+  }));
+  
+  return formattedData;
+},
+
+  // Obtener gastos del día (solo para referencia, no se incluyen en cierres diarios)
+  async getDailyBills(date) {
     const billDate = adjustDateForQuery(date);
     
     const { data, error } = await supabaseAdmin
       .from('bills')
       .select('*')
       .eq('bill_date', billDate)
-      .eq('expense_type', expenseType)
       .eq('is_processed_in_closing', false);
     
     if (error) throw error;
     return data || [];
-  },
-
-  // Marcar gastos como procesados
-  async markBillsAsProcessed(billIds, closingId, closingType = 'daily') {
-    if (!billIds || billIds.length === 0) return;
-    
-    const updateData = {
-      is_processed_in_closing: true,
-      processed_in_daily_closing_ID: closingType === 'daily' ? closingId : null,
-      processed_in_closing_ID: closingType === 'monthly' ? closingId : null
-    };
-    
-    const { error } = await supabaseAdmin
-      .from('bills')
-      .update(updateData)
-      .in('bill_id', billIds);
-    
-    if (error) throw error;
   },
 
   // Crear relación entre procedimientos y cierre diario
@@ -252,15 +285,15 @@ const DailyClosing = {
     
     console.log('🔍 createProcedureRelations - Datos recibidos:', procedureClosings);
     
-    // Verificar que todos tengan los campos necesarios (USAR minúsculas)
+    // Verificar que todos tengan los campos necesarios
     const validProcedureClosings = procedureClosings.map(pc => {
-      // Verificar procedure_id (minúscula)
+      // Verificar procedure_id
       if (!pc.procedure_id) {
         console.error('❌ Falta procedure_id en:', pc);
         throw new Error('procedure_id es requerido');
       }
       
-      // Verificar daily_closing_id (minúscula)
+      // Verificar daily_closing_id
       if (!pc.daily_closing_id) {
         console.error('❌ Falta daily_closing_id en:', pc);
         throw new Error('daily_closing_id es requerido');
@@ -296,103 +329,141 @@ const DailyClosing = {
     }
   },
 
-  // dailyClosingModel.js - getDailyFinancialSummary corregida
-  async getDailyFinancialSummary(date, closingType = 'general') {
-    const procedures = await this.getDailyProcedures(date, closingType);
-    const bills = await this.getDailyBills(date, closingType);
+  // getDailyFinancialSummary - Actualizado para usar settings
+  // models/dailyClosingModel.js - Corregir getDailyFinancialSummary
+async getDailyFinancialSummary(date, closingType = 'general') {
+  console.log('🔍 Obteniendo resumen diario para:', { date, closingType });
+  
+  const procedures = await this.getDailyProcedures(date, closingType);
+  
+  console.log('📊 Procedimientos encontrados:', procedures.length);
+  console.log('📄 Procedimientos:', procedures.map(p => ({
+    id: p.procedure_ID,
+    desc: p.procedure_description,
+    total_procedure: p.total_procedure,
+    total_procedure_usd: p.total_procedure_usd,
+    is_orthodontics: p.is_orthodontics
+  })));
+  
+  // Obtener configuración desde settings
+  const settings = await this.getSystemSettings();
+  const exchangeRate = settings.exchange_rate || 36.5;
+  let clinicPercentage = 100;
+  let doctorPercentage = 0;
+  
+  if (closingType === 'orthodontics') {
+    clinicPercentage = settings.clinic_payment || 40;
+    doctorPercentage = settings.doctor_payment || 60;
+  }
+  
+  console.log('🔢 Configuración aplicada:', {
+    clinic: clinicPercentage,
+    doctor: doctorPercentage,
+    exchange_rate: exchangeRate,
+    type: closingType
+  });
+  
+  // Calcular ingresos USANDO total_procedure y total_procedure_usd
+  let totalIncomeCordobas = 0;
+  let totalIncomeDollars = 0;
+  let totalClinicIncomeCordobas = 0;
+  let totalDoctorIncomeCordobas = 0;
+  let totalExternalDoctorPaymentsCordobas = 0;
+  
+  const procedureClosings = [];
+  
+  procedures.forEach(procedure => {
+    console.log('📝 Procesando procedimiento:', {
+      id: procedure.procedure_ID,
+      desc: procedure.procedure_description,
+      total_procedure: procedure.total_procedure,
+      total_procedure_usd: procedure.total_procedure_usd
+    });
     
-    // Configuración de porcentajes (si es ortodoncia)
-    let clinicPercentage = 100;
-    let doctorPercentage = 0;
+    // Usar total_procedure y total_procedure_usd que ya están calculados
+    const procedureAmountCordobas = procedure.total_procedure || 0;
+    const procedureAmountDollars = procedure.total_procedure_usd || 0;
+    
+    totalIncomeCordobas += procedureAmountCordobas;
+    totalIncomeDollars += procedureAmountDollars;
+    
+    let clinicPortionCordobas = 0;
+    let doctorPortionCordobas = 0;
     
     if (closingType === 'orthodontics') {
-      const { data: config } = await supabaseAdmin
-        .from('specialty_payment_config')
-        .select('clinic_percentage, doctor_percentage')
-        .eq('specialty_name', 'orthodontics')
-        .eq('is_active', true)
-        .single();
+      // Solo aplicar porcentajes si es ortodoncia
+      clinicPortionCordobas = procedureAmountCordobas * (clinicPercentage / 100);
+      doctorPortionCordobas = procedureAmountCordobas * (doctorPercentage / 100);
+    } else {
+      // Para cierres generales, 100% para clínica
+      clinicPortionCordobas = procedureAmountCordobas;
+    }
+    
+    // Restar pagos a doctores externos si existen
+    let externalPaymentCordobas = 0;
+    
+    if (procedure.theres_external_doctor && procedure.external_doctor_payment_value) {
+      console.log('💰 Procedimiento con doctor externo:', {
+        valor: procedure.external_doctor_payment_value,
+        moneda: procedure.external_doctor_payment_currency
+      });
       
-      if (config) {
-        clinicPercentage = config.clinic_percentage;
-        doctorPercentage = config.doctor_percentage;
+      if (procedure.external_doctor_payment_currency === 'C$') {
+        externalPaymentCordobas = procedure.external_doctor_payment_value;
+        clinicPortionCordobas -= externalPaymentCordobas;
       } else {
-        // Valores por defecto corregidos (clínica 60%, doctora 40%)
-        clinicPercentage = 60;
-        doctorPercentage = 40;
+        // Si es USD, convertir a córdobas
+        externalPaymentCordobas = procedure.external_doctor_payment_value * exchangeRate;
+        clinicPortionCordobas -= externalPaymentCordobas;
       }
     }
     
-    console.log('🔢 Porcentajes aplicados:', {
-      clinic: clinicPercentage,
-      doctor: doctorPercentage,
-      type: closingType
+    totalClinicIncomeCordobas += clinicPortionCordobas;
+    totalDoctorIncomeCordobas += doctorPortionCordobas;
+    totalExternalDoctorPaymentsCordobas += externalPaymentCordobas;
+    
+    procedureClosings.push({
+      procedure_id: procedure.procedure_ID,
+      clinic_income_portion: clinicPortionCordobas,
+      doctor_income_portion: doctorPortionCordobas,
+      external_doctor_payment: externalPaymentCordobas
     });
-    
-    // Calcular ingresos - USAR TOTAL_PROCEDURE
-    let totalIncome = 0;
-    let totalClinicIncome = 0;
-    let totalDoctorIncome = 0;
-    let totalExternalDoctorPayments = 0;
-    
-    const procedureClosings = [];
-    
-    procedures.forEach(procedure => {
-      const procedureAmount = procedure.total_procedure || 0;
-      totalIncome += procedureAmount;
-      
-      let clinicPortion = 0;
-      let doctorPortion = 0;
-      
-      if (closingType === 'orthodontics') {
-        clinicPortion = procedureAmount * (clinicPercentage / 100);
-        doctorPortion = procedureAmount * (doctorPercentage / 100);
-      } else {
-        clinicPortion = procedureAmount;
-        doctorPortion = 0;
-      }
-      
-      let externalPayment = 0;
-      if (procedure.theres_external_doctor && procedure.external_doctor_payment_value) {
-        externalPayment = procedure.external_doctor_payment_value;
-        clinicPortion -= externalPayment;
-      }
-      
-      totalClinicIncome += clinicPortion;
-      totalDoctorIncome += doctorPortion;
-      totalExternalDoctorPayments += externalPayment;
-      
-      // IMPORTANTE: Usar minúsculas para los IDs
-      procedureClosings.push({
-        procedure_id: procedure.procedure_ID, // procedure_ID de la tabla, pero guardamos como procedure_id
-        clinic_income_portion: clinicPortion,
-        doctor_income_portion: doctorPortion,
-        external_doctor_payment: externalPayment
-      });
-    });
-    
-    const totalExpenses = bills.reduce((sum, bill) => sum + (bill.amount || 0), 0);
-    const netProfit = totalClinicIncome - totalExpenses;
-    
-    return {
-      procedures,
-      procedureClosings,
-      bills,
-      total_income: totalIncome,
-      total_clinic_income: totalClinicIncome,
-      total_doctor_income: totalDoctorIncome,
-      total_external_doctor_payments: totalExternalDoctorPayments,
-      total_expenses: totalExpenses,
-      net_profit: netProfit,
-      clinic_percentage: clinicPercentage,
-      doctor_percentage: doctorPercentage,
-      fecha_nicaragua: date,
-      cantidad_procedimientos: procedures.length,
-      cantidad_gastos: bills.length
-    };
-  },
+  });
+  
+  // Calcular totales
+  const totalClinicIncome = totalClinicIncomeCordobas;
+  const totalDoctorIncome = totalDoctorIncomeCordobas;
+  const totalIncome = totalIncomeCordobas;
+  
+  // Los cierres diarios solo muestran ingresos, no gastos
+  const netProfit = totalClinicIncome;
+  
+  const result = {
+    procedures,
+    procedureClosings,
+    total_income: totalIncome,
+    total_income_usd: totalIncomeDollars + (totalIncomeCordobas / exchangeRate),
+    total_clinic_income: totalClinicIncome,
+    total_clinic_income_usd: (totalClinicIncome / exchangeRate),
+    total_doctor_income: totalDoctorIncome,
+    total_doctor_income_usd: (totalDoctorIncome / exchangeRate),
+    total_external_doctor_payments: totalExternalDoctorPaymentsCordobas,
+    total_external_doctor_payments_usd: (totalExternalDoctorPaymentsCordobas / exchangeRate),
+    net_profit: netProfit,
+    net_profit_usd: netProfit / exchangeRate,
+    clinic_percentage: clinicPercentage,
+    doctor_percentage: doctorPercentage,
+    exchange_rate: exchangeRate,
+    fecha_nicaragua: date,
+    cantidad_procedimientos: procedures.length
+  };
+  
+  console.log('📋 Resultado final del resumen diario:', result);
+  
+  return result;
+},
 
-  // Obtener estadísticas por rango de fechas (fechas DATE)
+  // Obtener estadísticas por rango de fechas
   async getStatsByDateRange(startDate, endDate, closingType = 'general') {
     const start = adjustDateForQuery(startDate);
     const end = adjustDateForQuery(endDate);
@@ -407,13 +478,20 @@ const DailyClosing = {
     
     if (error) throw error;
     
+    // Obtener configuración
+    const settings = await this.getSystemSettings();
+    const exchangeRate = settings?.exchange_rate || 36.5;
+    
     const stats = {
       total_closings: data.length,
       total_income: 0,
+      total_income_usd: 0,
       total_clinic_income: 0,
+      total_clinic_income_usd: 0,
       total_doctor_income: 0,
-      total_expenses: 0,
+      total_doctor_income_usd: 0,
       total_net_profit: 0,
+      total_net_profit_usd: 0,
       average_daily_profit: 0
     };
     
@@ -422,17 +500,23 @@ const DailyClosing = {
         stats.total_income += closing.total_income || 0;
         stats.total_clinic_income += closing.total_clinic_income || 0;
         stats.total_doctor_income += closing.total_doctor_income || 0;
-        stats.total_expenses += closing.total_expenses || 0;
         stats.total_net_profit += closing.net_profit || 0;
       });
       
+      stats.total_income_usd = stats.total_income / exchangeRate;
+      stats.total_clinic_income_usd = stats.total_clinic_income / exchangeRate;
+      stats.total_doctor_income_usd = stats.total_doctor_income / exchangeRate;
+      stats.total_net_profit_usd = stats.total_net_profit / exchangeRate;
       stats.average_daily_profit = stats.total_net_profit / data.length;
     }
     
     return {
       data: data.map(closing => ({
         ...closing,
-        closing_date_display: formatNicaraguaDate(closing.closing_date)
+        closing_date_display: formatNicaraguaDate(closing.closing_date),
+        total_income_usd: (closing.total_income || 0) / exchangeRate,
+        total_clinic_income_usd: (closing.total_clinic_income || 0) / exchangeRate,
+        total_doctor_income_usd: (closing.total_doctor_income || 0) / exchangeRate
       })),
       stats
     };

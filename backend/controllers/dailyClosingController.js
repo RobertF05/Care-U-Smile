@@ -58,7 +58,7 @@ const dailyClosingController = {
     }
   },
 
-  // Crear cierre diario - VERSIÓN SIMPLIFICADA
+  // Crear cierre diario
   create: async (req, res) => {
     try {
       const { date, closing_date, closing_type = 'general', comentary = '' } = req.body;
@@ -72,6 +72,15 @@ const dailyClosingController = {
         return res.status(400).json({ 
           success: false, 
           error: 'La fecha es requerida' 
+        });
+      }
+      
+      // Validar tipo de cierre
+      const validTypes = ['general', 'orthodontics'];
+      if (!validTypes.includes(closing_type)) {
+        return res.status(400).json({ 
+          success: false, 
+          error: `Tipo de cierre inválido. Use: ${validTypes.join(', ')}` 
         });
       }
       
@@ -109,15 +118,9 @@ const dailyClosingController = {
       // Verificar que tenemos el ID
       if (!newClosing.daily_closing_id) {
         console.error('❌ No se recibió daily_closing_id del cierre creado');
-        console.log('📄 Cierre completo recibido:', newClosing);
         
         // Intentar obtener el ID de diferentes formas
         const closingId = newClosing.daily_closing_id || newClosing.id || newClosing.daily_closing_ID;
-        console.log('🔍 IDs disponibles:', { 
-          daily_closing_id: newClosing.daily_closing_id,
-          id: newClosing.id,
-          daily_closing_ID: newClosing.daily_closing_ID 
-        });
         
         if (!closingId) {
           throw new Error('No se pudo obtener el ID del cierre creado');
@@ -126,49 +129,43 @@ const dailyClosingController = {
         newClosing.daily_closing_id = closingId;
       }
       
-      // Crear relaciones con procedimientos - USAR minúsculas
+      // Crear relaciones con procedimientos
       if (financialSummary.procedureClosings && financialSummary.procedureClosings.length > 0) {
         console.log(`📝 Creando ${financialSummary.procedureClosings.length} relaciones de procedimientos`);
         
-        // Verificar estructura del primer elemento
-        const firstProcedure = financialSummary.procedureClosings[0];
-        console.log('🔍 Estructura del primer procedureClosing:', firstProcedure);
-        
         try {
           const procedureClosings = financialSummary.procedureClosings.map(pc => ({
-            // IMPORTANTE: Usar minúsculas
-            procedure_id: pc.procedure_id, // Ya viene como minúscula desde el modelo
+            procedure_id: pc.procedure_id,
             daily_closing_id: newClosing.daily_closing_id,
             clinic_income_portion: pc.clinic_income_portion || 0,
             doctor_income_portion: pc.doctor_income_portion || 0,
             external_doctor_payment: pc.external_doctor_payment || 0
           }));
           
-          console.log('📤 Insertando relaciones con minúsculas:', procedureClosings);
+          console.log('📤 Insertando relaciones:', procedureClosings);
           await DailyClosing.createProcedureRelations(procedureClosings);
         } catch (relationError) {
           console.warn('⚠️ No se pudieron crear relaciones, pero el cierre se guardó:', relationError.message);
-          // Continuar sin relaciones - esto no debería impedir la creación del cierre
+          // Continuar sin relaciones
         }
       } else {
         console.log('ℹ️ No hay procedimientos para crear relaciones');
       }
       
-      // Marcar gastos como procesados
-      if (financialSummary.bills && financialSummary.bills.length > 0) {
-        const billIds = financialSummary.bills.map(bill => bill.bill_ID);
-        await DailyClosing.markBillsAsProcessed(billIds, newClosing.daily_closing_id, 'daily');
-      }
+      const typeLabel = closing_type === 'orthodontics' ? 'de Ortodoncia' : 'General';
       
       res.status(201).json({ 
         success: true, 
-        message: `Cierre ${closing_type === 'orthodontics' ? 'de ortodoncia' : 'general'} creado exitosamente`,
+        message: `Cierre Diario ${typeLabel} creado exitosamente`,
         data: {
           ...newClosing,
           procedure_count: financialSummary.procedures ? financialSummary.procedures.length : 0,
-          bill_count: financialSummary.bills ? financialSummary.bills.length : 0,
           clinic_percentage: financialSummary.clinic_percentage,
-          doctor_percentage: financialSummary.doctor_percentage
+          doctor_percentage: financialSummary.doctor_percentage,
+          exchange_rate: financialSummary.exchange_rate,
+          total_income_usd: financialSummary.total_income_usd,
+          total_clinic_income_usd: financialSummary.total_clinic_income_usd,
+          total_doctor_income_usd: financialSummary.total_doctor_income_usd
         }
       });
     } catch (error) {
@@ -238,7 +235,7 @@ const dailyClosingController = {
     }
   },
 
-  // Obtener resumen financiero del día (sin crear cierre)
+  // Obtener resumen financiero del día
   getDailySummary: async (req, res) => {
     try {
       const { date, closing_type = 'general' } = req.query;
@@ -247,6 +244,15 @@ const dailyClosingController = {
         return res.status(400).json({ 
           success: false, 
           error: 'La fecha es requerida' 
+        });
+      }
+      
+      // Validar tipo
+      const validTypes = ['general', 'orthodontics'];
+      if (!validTypes.includes(closing_type)) {
+        return res.status(400).json({ 
+          success: false, 
+          error: `Tipo de cierre inválido. Use: ${validTypes.join(', ')}` 
         });
       }
       
@@ -283,6 +289,15 @@ const dailyClosingController = {
         });
       }
       
+      // Validar tipo
+      const validTypes = ['general', 'orthodontics'];
+      if (closing_type && !validTypes.includes(closing_type)) {
+        return res.status(400).json({ 
+          success: false, 
+          error: `Tipo de cierre inválido. Use: ${validTypes.join(', ')}` 
+        });
+      }
+      
       const result = await DailyClosing.getStatsByDateRange(startDate, endDate, closing_type);
       
       res.json({ 
@@ -307,6 +322,15 @@ const dailyClosingController = {
         return res.status(400).json({ 
           success: false, 
           error: 'La fecha es requerida' 
+        });
+      }
+      
+      // Validar tipo
+      const validTypes = ['general', 'orthodontics'];
+      if (!validTypes.includes(closing_type)) {
+        return res.status(400).json({ 
+          success: false, 
+          error: `Tipo de cierre inválido. Use: ${validTypes.join(', ')}` 
         });
       }
       

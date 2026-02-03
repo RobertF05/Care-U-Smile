@@ -140,18 +140,98 @@ export const createMonthlyDateRange = (year, month) => {
  * Convierte fecha string a UTC (inicio del día)
  */
 export const convertDateStringToUTCStart = (dateString) => {
-  const nicaraguaStart = new Date(dateString + 'T00:00:00');
-  const utcStart = new Date(nicaraguaStart.getTime() - NICARAGUA_OFFSET);
-  return utcStart.toISOString();
+  try {
+    if (!dateString) return null;
+    
+    console.log('🔄 convertDateStringToUTCStart recibió:', dateString);
+    
+    // Si ya es una fecha ISO completa con Z
+    if (dateString.includes('T') && dateString.includes('Z')) {
+      console.log('✅ Ya es fecha ISO UTC:', dateString);
+      return dateString;
+    }
+    
+    // Si es solo fecha (YYYY-MM-DD)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+      // Asumir que es fecha en Nicaragua
+      const nicaraguaStart = new Date(`${dateString}T00:00:00`);
+      
+      if (isNaN(nicaraguaStart.getTime())) {
+        console.error('❌ Fecha inválida:', dateString);
+        return null;
+      }
+      
+      const utcStart = new Date(nicaraguaStart.getTime() - NICARAGUA_OFFSET);
+      const result = utcStart.toISOString();
+      console.log('✅ Convertido a UTC:', result);
+      return result;
+    }
+    
+    // Si es una fecha ISO sin Z
+    if (dateString.includes('T')) {
+      const date = new Date(dateString);
+      if (!isNaN(date.getTime())) {
+        const result = date.toISOString();
+        console.log('✅ Convertido a ISO UTC:', result);
+        return result;
+      }
+    }
+    
+    console.error('❌ Formato de fecha no reconocido:', dateString);
+    return null;
+  } catch (error) {
+    console.error('❌ Error en convertDateStringToUTCStart:', error.message);
+    return null;
+  }
 };
 
 /**
  * Convierte fecha string a UTC (fin del día)
  */
 export const convertDateStringToUTCEnd = (dateString) => {
-  const nicaraguaEnd = new Date(dateString + 'T23:59:59');
-  const utcEnd = new Date(nicaraguaEnd.getTime() - NICARAGUA_OFFSET);
-  return utcEnd.toISOString();
+  try {
+    if (!dateString) return null;
+    
+    console.log('🔄 convertDateStringToUTCEnd recibió:', dateString);
+    
+    // Si ya es una fecha ISO completa con Z
+    if (dateString.includes('T') && dateString.includes('Z')) {
+      console.log('✅ Ya es fecha ISO UTC:', dateString);
+      return dateString;
+    }
+    
+    // Si es solo fecha (YYYY-MM-DD)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+      // Asumir que es fecha en Nicaragua
+      const nicaraguaEnd = new Date(`${dateString}T23:59:59.999`);
+      
+      if (isNaN(nicaraguaEnd.getTime())) {
+        console.error('❌ Fecha inválida:', dateString);
+        return null;
+      }
+      
+      const utcEnd = new Date(nicaraguaEnd.getTime() - NICARAGUA_OFFSET);
+      const result = utcEnd.toISOString();
+      console.log('✅ Convertido a UTC:', result);
+      return result;
+    }
+    
+    // Si es una fecha ISO sin Z
+    if (dateString.includes('T')) {
+      const date = new Date(dateString);
+      if (!isNaN(date.getTime())) {
+        const result = date.toISOString();
+        console.log('✅ Convertido a ISO UTC:', result);
+        return result;
+      }
+    }
+    
+    console.error('❌ Formato de fecha no reconocido:', dateString);
+    return null;
+  } catch (error) {
+    console.error('❌ Error en convertDateStringToUTCEnd:', error.message);
+    return null;
+  }
 };
 
 /**
@@ -281,6 +361,23 @@ export const adjustDateForNicaraguaQuery = (dateString) => {
   }
 };
 
+export const toUTCString = (dateInput) => {
+  try {
+    if (!dateInput) return null;
+    
+    const date = new Date(dateInput);
+    if (isNaN(date.getTime())) {
+      console.error('❌ Fecha inválida en toUTCString:', dateInput);
+      return null;
+    }
+    
+    return date.toISOString();
+  } catch (error) {
+    console.error('❌ Error en toUTCString:', error.message);
+    return null;
+  }
+};
+
 // Exportar todas las funciones necesarias
 export default {
   toUTCFromNicaragua,
@@ -300,5 +397,6 @@ export default {
   getCurrentMonthRange,
   convertDateStringToNicaraguaStart,
   convertDateStringToNicaraguaEnd,
-  adjustDateForNicaraguaQuery
+  adjustDateForNicaraguaQuery,
+  toUTCString
 };

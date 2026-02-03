@@ -1175,3 +1175,252 @@
 .filter-section.expanded .filter-toggle-icon {
   transform: rotate(180deg);
 }
+
+/* ProceduresPage.css - AGREGAR ESTOS ESTILOS */
+
+/* Botones de filtro de tiempo */
+.time-filter-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 5px;
+}
+
+.time-filter-btn {
+  background-color: #F5F5F5;
+  color: #78909C;
+  border: 1px solid #E0E0E0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 120px;
+  justify-content: center;
+}
+
+.time-filter-btn:hover {
+  background-color: #E0E0E0;
+  transform: translateY(-2px);
+}
+
+.time-filter-btn.active {
+  background-color: #4DB6AC;
+  color: white;
+  border-color: #4DB6AC;
+  font-weight: 600;
+}
+
+.time-filter-btn.active:hover {
+  background-color: #26A69A;
+  transform: translateY(-2px);
+}
+
+/* Celda de ingreso neto clínica */
+.clinic-net-cell {
+  text-align: right;
+  padding-right: 15px !important;
+}
+
+.net-amount-container {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.net-amount.clinic-net {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #4CAF50;
+}
+
+.external-doctor-impact small {
+  font-size: 0.7rem;
+  color: #EF5350;
+  font-style: italic;
+}
+
+/* Resumen de ingresos netos en vista expandida */
+.net-income-summary {
+  background-color: #E8F5E9;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 15px;
+  border: 1px solid #C8E6C9;
+}
+
+.net-income-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px dashed #C8E6C9;
+}
+
+.net-income-row:last-child {
+  border-bottom: none;
+}
+
+.net-income-row.deduction {
+  color: #EF5350;
+}
+
+.net-income-row.net-total {
+  background-color: #FFF3E0;
+  padding: 8px;
+  border-radius: 4px;
+  margin-top: 4px;
+  border: 1px solid #FFE0B2;
+}
+
+.net-income-row.net-total-usd {
+  background-color: #FFF8E1;
+  padding: 8px;
+  border-radius: 4px;
+  margin-top: 4px;
+  border: 1px solid #FFECB3;
+}
+
+.net-income-row.no-external {
+  background-color: #F5F5F5;
+  padding: 8px;
+  border-radius: 4px;
+  margin-top: 4px;
+  border: 1px solid #E0E0E0;
+}
+
+.net-income-label {
+  font-size: 13px;
+  color: #37474F;
+}
+
+.net-income-value {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.net-income-row.net-total .net-income-label,
+.net-income-row.net-total .net-income-value {
+  color: #EF6C00;
+  font-weight: 700;
+}
+
+.net-income-row.net-total-usd .net-income-label,
+.net-income-row.net-total-usd .net-income-value {
+  color: #FF9800;
+  font-weight: 700;
+}
+
+.net-income-row.no-external .net-income-label,
+.net-income-row.no-external .net-income-value {
+  color: #78909C;
+  font-style: italic;
+}
+
+/* Resumen de impacto de doctor externo */
+.doctor-impact-summary {
+  background-color: #FFF3E0;
+  border-radius: 6px;
+  padding: 12px;
+  margin-top: 15px;
+  border: 1px solid #FFE0B2;
+}
+
+.doctor-impact-summary h6 {
+  color: #EF6C00;
+  margin: 0 0 10px 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.impact-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  border-bottom: 1px dashed #FFE0B2;
+}
+
+.impact-item:last-child {
+  border-bottom: none;
+}
+
+.impact-item.deduction {
+  color: #EF5350;
+}
+
+.impact-item.net {
+  font-weight: 600;
+  color: #4CAF50;
+  margin-top: 4px;
+}
+
+.impact-label {
+  font-size: 12px;
+  color: #37474F;
+}
+
+.impact-value {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.impact-item.deduction .impact-value {
+  color: #EF5350;
+}
+
+.impact-item.net .impact-value {
+  color: #4CAF50;
+}
+
+/* Ajustes responsivos */
+@media (max-width: 768px) {
+  .time-filter-buttons {
+    flex-direction: column;
+  }
+  
+  .time-filter-btn {
+    width: 100%;
+    min-width: auto;
+    justify-content: flex-start;
+  }
+  
+  .clinic-net-cell {
+    text-align: left;
+    padding-left: 10px !important;
+  }
+  
+  .net-amount-container {
+    align-items: flex-start;
+  }
+  
+  .net-income-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+  
+  .net-income-label,
+  .net-income-value {
+    font-size: 11px;
+  }
+  
+  .doctor-impact-summary {
+    padding: 10px;
+  }
+  
+  .impact-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+  
+  .impact-label,
+  .impact-value {
+    font-size: 11px;
+  }
+}

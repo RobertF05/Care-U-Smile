@@ -1,4 +1,5 @@
-import { useContext, useState, useEffect } from "react";
+// ProceduresPage.js - AGREGAR Y MODIFICAR
+import React, { useContext, useState, useEffect } from "react";
 import { AppContext } from "../../context/AppContext";
 import { AuthContext } from "../../context/AuthContext";
 import { formatDate, formatCurrency } from "../../utils/formatters";
@@ -12,16 +13,27 @@ import {
   faEye,
   faEyeSlash,
   faUserDoctor,
-  faCommentMedical,
-  faMoneyBillWave,
-  faCreditCard,
-  faExchangeAlt,
   faClipboardList,
+  faMoneyBillWave,
   faDollarSign,
+  faExchangeAlt,
   faMoneyBill,
-  faPercentage
+  faPercentage,
+  faCreditCard,
+  faCalendarDay,
+  faCalendarWeek,
+  faCalendar,
+  faCalendarAlt
 } from '@fortawesome/free-solid-svg-icons';
 import "./ProceduresPage.css";
+
+// Definir filtros de tiempo
+const TIME_FILTERS = {
+  TODAY: 'today',
+  THIS_WEEK: 'thisWeek',
+  THIS_MONTH: 'thisMonth',
+  ALL: 'all'
+};
 
 export default function ProceduresPage() {
   const { user } = useContext(AuthContext);
@@ -34,13 +46,10 @@ export default function ProceduresPage() {
   } = useContext(AppContext);
   
   const [search, setSearch] = useState("");
-  const [dateFilter, setDateFilter] = useState({
-    startDate: "",
-    endDate: ""
-  });
-  const [localError, setLocalError] = useState("");
+  const [timeFilter, setTimeFilter] = useState(TIME_FILTERS.THIS_MONTH);
   const [expandedFilters, setExpandedFilters] = useState(false);
   const [expandedRows, setExpandedRows] = useState({});
+  const [localError, setLocalError] = useState("");
 
   useEffect(() => {
     if (user) {
@@ -52,7 +61,7 @@ export default function ProceduresPage() {
     try {
       setLocalError("");
       clearError();
-      await fetchProceduresNormal();
+      await fetchProceduresNormal({ timeFilter });
     } catch (error) {
       console.error('Error al cargar procedimientos:', error);
       setLocalError(error.message || 'Error al cargar procedimientos');
@@ -62,10 +71,7 @@ export default function ProceduresPage() {
   const applyFilters = async () => {
     try {
       setLocalError("");
-      const filters = {};
-      if (dateFilter.startDate) filters.startDate = dateFilter.startDate;
-      if (dateFilter.endDate) filters.endDate = dateFilter.endDate;
-      await fetchProceduresNormal(filters);
+      await fetchProceduresNormal({ timeFilter });
     } catch (error) {
       console.error('Error al aplicar filtros:', error);
       setLocalError(error.message || 'Error al aplicar filtros');
@@ -75,9 +81,9 @@ export default function ProceduresPage() {
   const clearFilters = async () => {
     try {
       setLocalError("");
-      setDateFilter({ startDate: "", endDate: "" });
       setSearch("");
-      await fetchProceduresNormal();
+      setTimeFilter(TIME_FILTERS.THIS_MONTH);
+      await fetchProceduresNormal({ timeFilter: TIME_FILTERS.THIS_MONTH });
     } catch (error) {
       console.error('Error al limpiar filtros:', error);
       setLocalError(error.message || 'Error al limpiar filtros');
@@ -111,6 +117,21 @@ export default function ProceduresPage() {
       style: 'currency',
       currency: 'USD'
     }).format(amount || 0);
+  };
+
+  // Calcular cantidad neta de la clínica (restando pago al doctor externo)
+  const calculateClinicNetIncome = (procedure) => {
+    const clinicIncome = procedure.clinic_income || procedure.total_cost || 0;
+    const externalDoctorPayment = procedure.external_doctor_payment || 0;
+    return Math.max(0, clinicIncome - externalDoctorPayment);
+  };
+
+  // Calcular cantidad neta en dólares
+  const calculateClinicNetIncomeUSD = (procedure) => {
+    const clinicIncomeUSD = procedure.clinic_payment_dollars || 
+                           (procedure.total_procedure_usd || procedure.total_cost_USD || 0);
+    const externalDoctorPaymentUSD = procedure.external_doctor_payment_usd || 0;
+    return Math.max(0, clinicIncomeUSD - externalDoctorPaymentUSD);
   };
 
   // Obtener método de pago principal
@@ -206,7 +227,7 @@ export default function ProceduresPage() {
         </div>
       </div>
 
-      {/* Filtros desplegables */}
+      {/* Filtros desplegables con filtro de tiempo */}
       <div className={`filter-section ${expandedFilters ? 'expanded' : ''}`}>
         <div className="filter-header-mobile" onClick={() => setExpandedFilters(!expandedFilters)}>
           <div className="filter-header-content">
@@ -215,8 +236,10 @@ export default function ProceduresPage() {
               Filtros
             </h3>
             <span className="filter-summary">
-              {dateFilter.startDate ? `Desde: ${dateFilter.startDate}` : 'Sin fecha inicio'} • 
-              {dateFilter.endDate ? ` Hasta: ${dateFilter.endDate}` : ' Sin fecha fin'}
+              {timeFilter === TIME_FILTERS.TODAY ? 'Hoy' : 
+               timeFilter === TIME_FILTERS.THIS_WEEK ? 'Esta semana' :
+               timeFilter === TIME_FILTERS.THIS_MONTH ? 'Este mes' : 'Todos'} • 
+              {search ? ` Buscando: "${search}"` : ''}
             </span>
           </div>
           <FontAwesomeIcon 
@@ -228,22 +251,41 @@ export default function ProceduresPage() {
         <div className="filter-content-container">
           <div className="filters-section">
             <div className="filters-row">
+              {/* Filtro de tiempo */}
               <div className="filter-group">
-                <label>Fecha desde:</label>
-                <input
-                  type="date"
-                  value={dateFilter.startDate}
-                  onChange={(e) => setDateFilter({...dateFilter, startDate: e.target.value})}
-                />
+                <label>Periodo:</label>
+                <div className="time-filter-buttons">
+                  <button 
+                    className={`time-filter-btn ${timeFilter === TIME_FILTERS.TODAY ? 'active' : ''}`}
+                    onClick={() => setTimeFilter(TIME_FILTERS.TODAY)}
+                  >
+                    <FontAwesomeIcon icon={faCalendarDay} />
+                    Hoy
+                  </button>
+                  <button 
+                    className={`time-filter-btn ${timeFilter === TIME_FILTERS.THIS_WEEK ? 'active' : ''}`}
+                    onClick={() => setTimeFilter(TIME_FILTERS.THIS_WEEK)}
+                  >
+                    <FontAwesomeIcon icon={faCalendarWeek} />
+                    Esta semana
+                  </button>
+                  <button 
+                    className={`time-filter-btn ${timeFilter === TIME_FILTERS.THIS_MONTH ? 'active' : ''}`}
+                    onClick={() => setTimeFilter(TIME_FILTERS.THIS_MONTH)}
+                  >
+                    <FontAwesomeIcon icon={faCalendar} />
+                    Este mes
+                  </button>
+                  <button 
+                    className={`time-filter-btn ${timeFilter === TIME_FILTERS.ALL ? 'active' : ''}`}
+                    onClick={() => setTimeFilter(TIME_FILTERS.ALL)}
+                  >
+                    <FontAwesomeIcon icon={faCalendarAlt} />
+                    Todos
+                  </button>
+                </div>
               </div>
-              <div className="filter-group">
-                <label>Fecha hasta:</label>
-                <input
-                  type="date"
-                  value={dateFilter.endDate}
-                  onChange={(e) => setDateFilter({...dateFilter, endDate: e.target.value})}
-                />
-              </div>
+              
               <div className="filter-actions">
                 <button className="btn-apply-filters" onClick={applyFilters}>
                   Aplicar Filtros
@@ -291,7 +333,7 @@ export default function ProceduresPage() {
         {filteredProcedures.length === 0 ? (
           <div className="no-results">
             <p>
-              {search || dateFilter.startDate || dateFilter.endDate
+              {search || timeFilter !== TIME_FILTERS.THIS_MONTH
                 ? "No se encontraron procedimientos con los filtros aplicados."
                 : "No hay procedimientos registrados."}
             </p>
@@ -309,6 +351,7 @@ export default function ProceduresPage() {
                   <th>Descripción</th>
                   <th>Total C$</th>
                   <th>Total US$</th>
+                  <th>Clínica Neto C$</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
@@ -318,15 +361,17 @@ export default function ProceduresPage() {
                   const hasExternalDoctor = procedure.theres_external_doctor || procedure.external_doctor;
                   const hasObservations = procedure.observations && procedure.observations.trim() !== "";
                   const mainPaymentMethod = getMainPaymentMethod(procedure);
-                  const paymentIcon = getPaymentMethodIcon(mainPaymentMethod);
-                  const paymentColor = getPaymentMethodColor(mainPaymentMethod);
                   
                   // Calcular totales separados
                   const separateTotals = calculateSeparateTotals(procedure);
                   
+                  // Calcular cantidad neta de la clínica
+                  const clinicNetIncome = calculateClinicNetIncome(procedure);
+                  const clinicNetIncomeUSD = calculateClinicNetIncomeUSD(procedure);
+                  
                   return (
-                    <>
-                      <tr key={procedure.procedure_ID} className={isExpanded ? "expanded-row" : ""}>
+                    <React.Fragment key={procedure.procedure_ID}>
+                      <tr className={isExpanded ? "expanded-row" : ""}>
                         <td>
                           {procedure.procedure_date ? formatDate(procedure.procedure_date) : "N/A"}
                         </td>
@@ -390,6 +435,22 @@ export default function ProceduresPage() {
                           </div>
                         </td>
                         
+                        {/* Cantidad neta de la clínica */}
+                        <td className="clinic-net-cell">
+                          <div className="net-amount-container">
+                            <div className="net-amount clinic-net">
+                              {formatCurrency(clinicNetIncome)}
+                            </div>
+                            {hasExternalDoctor && (
+                              <div className="external-doctor-impact">
+                                <small>
+                                  -{formatCurrency(procedure.external_doctor_payment || 0)} doctor externo
+                                </small>
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        
                         {/* Botón Ver/Detalles */}
                         <td className="actions-cell">
                           <button 
@@ -405,8 +466,8 @@ export default function ProceduresPage() {
                       
                       {/* Fila expandida con LAYOUT HORIZONTAL */}
                       {isExpanded && (
-                        <tr key={`${procedure.procedure_ID}-details`} className="details-row">
-                          <td colSpan="6">
+                        <tr className="details-row">
+                          <td colSpan="7">
                             <div className="procedure-details">
                               <div className="details-header">
                                 <h4>📋 Información Adicional del Procedimiento</h4>
@@ -417,9 +478,57 @@ export default function ProceduresPage() {
                                 <div className="detail-card payment-details-card">
                                   <div className="detail-card-header">
                                     <FontAwesomeIcon icon={faMoneyBill} />
-                                    <h5>Detalles de Pagos</h5>
+                                    <h5>Detalles Financieros</h5>
                                   </div>
                                   <div className="detail-card-content">
+                                    {/* Resumen de ingresos netos */}
+                                    <div className="net-income-summary">
+                                      <div className="net-income-row total">
+                                        <span className="net-income-label">Ingreso total (C$):</span>
+                                        <span className="net-income-value">
+                                          {formatCurrency(procedure.total_procedure || procedure.total_cost || 0)}
+                                        </span>
+                                      </div>
+                                      
+                                      {hasExternalDoctor && (
+                                        <>
+                                          <div className="net-income-row deduction">
+                                            <span className="net-income-label">Pago doctor externo (C$):</span>
+                                            <span className="net-income-value">
+                                              -{formatCurrency(procedure.external_doctor_payment || 0)}
+                                            </span>
+                                          </div>
+                                          <div className="net-income-row net-total">
+                                            <span className="net-income-label">
+                                              <strong>Ingreso neto clínica (C$):</strong>
+                                            </span>
+                                            <span className="net-income-value">
+                                              <strong>{formatCurrency(clinicNetIncome)}</strong>
+                                            </span>
+                                          </div>
+                                          <div className="net-income-row net-total-usd">
+                                            <span className="net-income-label">
+                                              <strong>Ingreso neto clínica (US$):</strong>
+                                            </span>
+                                            <span className="net-income-value">
+                                              <strong>{formatCurrencyUSD(clinicNetIncomeUSD)}</strong>
+                                            </span>
+                                          </div>
+                                        </>
+                                      )}
+                                      
+                                      {!hasExternalDoctor && (
+                                        <div className="net-income-row no-external">
+                                          <span className="net-income-label">
+                                            <em>Sin doctor externo</em>
+                                          </span>
+                                          <span className="net-income-value">
+                                            <em>Clínica recibe 100%</em>
+                                          </span>
+                                        </div>
+                                      )}
+                                    </div>
+                                    
                                     {/* Tasa de cambio */}
                                     <div className="exchange-rate-info">
                                       <div className="exchange-rate-row">
@@ -508,34 +617,6 @@ export default function ProceduresPage() {
                                         </div>
                                       </div>
                                     )}
-                                    
-                                    {/* Totales generales */}
-                                    <div className="totals-summary">
-                                      <div className="total-summary-row">
-                                        <span className="total-summary-label">Total bruto (C$):</span>
-                                        <span className="total-summary-value">
-                                          {formatCurrency(procedure.total_cost || separateTotals.cordobas)}
-                                        </span>
-                                      </div>
-                                      <div className="total-summary-row">
-                                        <span className="total-summary-label">Total bruto (US$):</span>
-                                        <span className="total-summary-value">
-                                          {formatCurrencyUSD(procedure.total_cost_USD || separateTotals.dollars)}
-                                        </span>
-                                      </div>
-                                      <div className="total-summary-row net-total">
-                                        <span className="total-summary-label">Total neto (C$):</span>
-                                        <span className="total-summary-value">
-                                          {formatCurrency(procedure.total_procedure || separateTotals.cordobas)}
-                                        </span>
-                                      </div>
-                                      <div className="total-summary-row net-total">
-                                        <span className="total-summary-label">Total neto (US$):</span>
-                                        <span className="total-summary-value">
-                                          {formatCurrencyUSD(procedure.total_procedure_usd || separateTotals.dollars)}
-                                        </span>
-                                      </div>
-                                    </div>
                                   </div>
                                 </div>
                                 
@@ -607,6 +688,23 @@ export default function ProceduresPage() {
                                           </div>
                                         )}
                                       </div>
+                                      
+                                      {/* Impacto en ingresos */}
+                                      <div className="doctor-impact-summary">
+                                        <h6>Impacto en ingresos:</h6>
+                                        <div className="impact-item">
+                                          <span className="impact-label">Ingreso original clínica:</span>
+                                          <span className="impact-value">{formatCurrency(procedure.clinic_income || procedure.total_cost || 0)}</span>
+                                        </div>
+                                        <div className="impact-item deduction">
+                                          <span className="impact-label">Menos pago doctor externo:</span>
+                                          <span className="impact-value">-{formatCurrency(procedure.external_doctor_payment || 0)}</span>
+                                        </div>
+                                        <div className="impact-item net">
+                                          <span className="impact-label">Ingreso neto clínica:</span>
+                                          <span className="impact-value">{formatCurrency(clinicNetIncome)}</span>
+                                        </div>
+                                      </div>
                                     </div>
                                   </div>
                                 ) : (
@@ -616,7 +714,7 @@ export default function ProceduresPage() {
                                       <h5>Doctor Externo</h5>
                                     </div>
                                     <div className="detail-card-content">
-                                      <p className="no-doctor-message">⚠️ No se registró ningún doctor externo para este procedimiento.</p>
+                                      <p className="no-doctor-message">✅ No se registró ningún doctor externo para este procedimiento.</p>
                                       <p className="additional-info">
                                         Para procedimientos regulares, la clínica recibe el 100% de los ingresos.
                                       </p>
@@ -628,7 +726,7 @@ export default function ProceduresPage() {
                           </td>
                         </tr>
                       )}
-                    </>
+                    </React.Fragment>
                   );
                 })}
               </tbody>

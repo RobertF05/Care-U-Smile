@@ -527,28 +527,35 @@ const AppointmentPage = () => {
   };
 
   // Manejar cambios en pago de doctor externo
-  const handleExternalDoctorPaymentChange = (field, value) => {
-    let updatedForm = { ...procedureForm };
+  // Manejar cambios en pago de doctor externo - VERSIÓN CORREGIDA
+const handleExternalDoctorPaymentChange = (field, value) => {
+  let updatedForm = { ...procedureForm };
+  
+  if (field === 'payment_type') {
+    updatedForm.external_doctor_payment_type = value;
+    updatedForm.external_doctor_payment_value = '';
+  } else {
+    updatedForm[field] = value;
+  }
+  
+  // Solo validar si hay montos del procedimiento ingresados
+  const hasProcedureAmounts = procedureForm.amount_cordobas > 0 || procedureForm.amount_dollars > 0;
+  
+  // Validar que el pago no exceda el costo total (solo si hay montos del procedimiento)
+  if (field === 'external_doctor_payment_value' && value && hasProcedureAmounts) {
+    const paymentValue = parseFloat(value) || 0;
     
-    if (field === 'payment_type') {
-      updatedForm.external_doctor_payment_type = value;
-      updatedForm.external_doctor_payment_value = '';
+    if (updatedForm.external_doctor_payment_type === 'percentage') {
+      if (paymentValue > 100) {
+        alert('El porcentaje no puede ser mayor a 100%');
+        updatedForm.external_doctor_payment_value = '100';
+      }
     } else {
-      updatedForm[field] = value;
-    }
-    
-    // Validar que el pago no exceda el costo total
-    if (field === 'external_doctor_payment_value' && value) {
       const totals = calculateTotalsWithDeductions();
       const totalCost = totals.netTotalCordobas;
-      const paymentValue = parseFloat(value) || 0;
       
-      if (updatedForm.external_doctor_payment_type === 'percentage') {
-        if (paymentValue > 100) {
-          alert('El porcentaje no puede ser mayor a 100%');
-          updatedForm.external_doctor_payment_value = '100';
-        }
-      } else {
+      // Solo validar si hay un costo total mayor a 0
+      if (totalCost > 0) {
         let paymentInCordobas = paymentValue;
         if (updatedForm.external_doctor_payment_currency === 'US$') {
           paymentInCordobas = paymentValue * updatedForm.exchange_rate;
@@ -560,35 +567,38 @@ const AppointmentPage = () => {
         }
       }
     }
+  }
+  
+  // Calcular montos de doctor externo
+  if (updatedForm.external_doctor && updatedForm.external_doctor_payment_value) {
+    const paymentValue = parseFloat(updatedForm.external_doctor_payment_value);
     
-    // Calcular montos de doctor externo
-    if (updatedForm.external_doctor && updatedForm.external_doctor_payment_value) {
+    if (updatedForm.external_doctor_payment_type === 'percentage') {
+      // Para porcentaje, necesitamos los totales calculados
       const totals = calculateTotalsWithDeductions();
+      const percentage = paymentValue / 100;
+      const externalCordobas = totals.netTotalCordobas * percentage;
+      const externalDollars = totals.netTotalDollars * percentage;
       
-      if (updatedForm.external_doctor_payment_type === 'percentage') {
-        const percentage = parseFloat(updatedForm.external_doctor_payment_value) / 100;
-        const externalCordobas = totals.netTotalCordobas * percentage;
-        const externalDollars = totals.netTotalDollars * percentage;
-        
-        setExternalDoctorPaymentCordobas(externalCordobas);
-        setExternalDoctorPaymentDollars(externalDollars);
-      } else {
-        const paymentValue = parseFloat(updatedForm.external_doctor_payment_value);
-        if (updatedForm.external_doctor_payment_currency === 'US$') {
-          setExternalDoctorPaymentDollars(paymentValue);
-          setExternalDoctorPaymentCordobas(paymentValue * updatedForm.exchange_rate);
-        } else {
-          setExternalDoctorPaymentCordobas(paymentValue);
-          setExternalDoctorPaymentDollars(paymentValue / updatedForm.exchange_rate);
-        }
-      }
+      setExternalDoctorPaymentCordobas(externalCordobas);
+      setExternalDoctorPaymentDollars(externalDollars);
     } else {
-      setExternalDoctorPaymentCordobas(0);
-      setExternalDoctorPaymentDollars(0);
+      // Para monto fijo
+      if (updatedForm.external_doctor_payment_currency === 'US$') {
+        setExternalDoctorPaymentDollars(paymentValue);
+        setExternalDoctorPaymentCordobas(paymentValue * updatedForm.exchange_rate);
+      } else {
+        setExternalDoctorPaymentCordobas(paymentValue);
+        setExternalDoctorPaymentDollars(paymentValue / updatedForm.exchange_rate);
+      }
     }
-    
-    setProcedureForm(updatedForm);
-  };
+  } else {
+    setExternalDoctorPaymentCordobas(0);
+    setExternalDoctorPaymentDollars(0);
+  }
+  
+  setProcedureForm(updatedForm);
+};
 
   // Filtrar pacientes cuando cambia el término de búsqueda
   useEffect(() => {
@@ -2569,8 +2579,8 @@ const AppointmentPage = () => {
                         {procedureForm.external_doctor_payment_type === 'percentage' 
                           ? `Equivalente: ${formatCurrency(externalDoctorPaymentCordobas)} (${formatCurrencyUSD(externalDoctorPaymentDollars)})`
                           : procedureForm.external_doctor_payment_currency === 'US$'
-                            ? `Equivalente: ${formatCurrency(externalDoctorPaymentCordobas)}`
-                            : `Equivalente: ${formatCurrencyUSD(externalDoctorPaymentDollars)}`}
+                            ? `Equivalente: ${formatCurrencyUSD(parseFloat(procedureForm.external_doctor_payment_value) || 0)} (${formatCurrency(externalDoctorPaymentCordobas)} en córdobas)`
+                            : `Equivalente: ${formatCurrency(parseFloat(procedureForm.external_doctor_payment_value) || 0)} (${formatCurrencyUSD(externalDoctorPaymentDollars)} en dólares)`}
                       </small>
                     </div>
                   </div>

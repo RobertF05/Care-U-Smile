@@ -21,9 +21,21 @@ import {
   faExchangeAlt,
   faMoneyBill,
   faPercentage,
-  faCreditCard
+  faCreditCard,
+  faCalendarDay,
+  faCalendarWeek,
+  faCalendar,
+  faCalendarAlt
 } from '@fortawesome/free-solid-svg-icons';
 import "./OrthodonticsPage.css";
+
+// Definir filtros de tiempo
+const TIME_FILTERS = {
+  TODAY: 'today',
+  THIS_WEEK: 'thisWeek',
+  THIS_MONTH: 'thisMonth',
+  ALL: 'all'
+};
 
 export default function OrthodonticsPage() {
   const { user } = useContext(AuthContext);
@@ -36,6 +48,7 @@ export default function OrthodonticsPage() {
   } = useContext(AppContext);
   
   const [search, setSearch] = useState("");
+  const [timeFilter, setTimeFilter] = useState(TIME_FILTERS.THIS_MONTH);
   const [dateFilter, setDateFilter] = useState({
     startDate: "",
     endDate: ""
@@ -54,7 +67,11 @@ export default function OrthodonticsPage() {
     try {
       setLocalError("");
       clearError();
-      await fetchOrthodontics();
+      await fetchOrthodontics({ 
+        timeFilter,
+        startDate: dateFilter.startDate,
+        endDate: dateFilter.endDate
+      });
     } catch (error) {
       console.error('Error al cargar ortodoncias:', error);
       setLocalError(error.message || 'Error al cargar ortodoncias');
@@ -65,8 +82,21 @@ export default function OrthodonticsPage() {
     try {
       setLocalError("");
       const filters = {};
-      if (dateFilter.startDate) filters.startDate = dateFilter.startDate;
-      if (dateFilter.endDate) filters.endDate = dateFilter.endDate;
+      
+      // Lógica de prioridad: fechas específicas > filtro de tiempo
+      if (dateFilter.startDate || dateFilter.endDate) {
+        // Usar fechas específicas
+        filters.startDate = dateFilter.startDate;
+        filters.endDate = dateFilter.endDate;
+        filters.timeFilter = 'all'; // Desactivar filtro de tiempo
+      } else if (timeFilter && timeFilter !== TIME_FILTERS.ALL) {
+        // Usar filtro de tiempo
+        filters.timeFilter = timeFilter;
+      } else {
+        // Por defecto: este mes
+        filters.timeFilter = TIME_FILTERS.THIS_MONTH;
+      }
+      
       await fetchOrthodontics(filters);
     } catch (error) {
       console.error('Error al aplicar filtros:', error);
@@ -78,8 +108,9 @@ export default function OrthodonticsPage() {
     try {
       setLocalError("");
       setDateFilter({ startDate: "", endDate: "" });
+      setTimeFilter(TIME_FILTERS.THIS_MONTH);
       setSearch("");
-      await fetchOrthodontics();
+      await fetchOrthodontics({ timeFilter: TIME_FILTERS.THIS_MONTH });
     } catch (error) {
       console.error('Error al limpiar filtros:', error);
       setLocalError(error.message || 'Error al limpiar filtros');
@@ -234,7 +265,7 @@ export default function OrthodonticsPage() {
         </div>
       </div>
 
-      {/* Filtros desplegables */}
+      {/* Filtros desplegables con ambos tipos de filtros */}
       <div className={`filter-section ${expandedFilters ? 'expanded' : ''}`}>
         <div className="filter-header-mobile" onClick={() => setExpandedFilters(!expandedFilters)}>
           <div className="filter-header-content">
@@ -243,8 +274,10 @@ export default function OrthodonticsPage() {
               Filtros
             </h3>
             <span className="filter-summary">
-              {dateFilter.startDate ? `Desde: ${dateFilter.startDate}` : 'Sin fecha inicio'} • 
-              {dateFilter.endDate ? ` Hasta: ${dateFilter.endDate}` : ' Sin fecha fin'}
+              {timeFilter === TIME_FILTERS.TODAY ? 'Hoy' : 
+               timeFilter === TIME_FILTERS.THIS_WEEK ? 'Esta semana' :
+               timeFilter === TIME_FILTERS.THIS_MONTH ? 'Este mes' : 
+               dateFilter.startDate || dateFilter.endDate ? 'Fechas específicas' : 'Todos'}
             </span>
           </div>
           <FontAwesomeIcon 
@@ -256,22 +289,82 @@ export default function OrthodonticsPage() {
         <div className="filter-content-container">
           <div className="filters-section">
             <div className="filters-row">
+              {/* Filtro de tiempo */}
+              <div className="filter-group">
+                <label>Periodo rápido:</label>
+                <div className="time-filter-buttons">
+                  <button 
+                    className={`time-filter-btn ${timeFilter === TIME_FILTERS.TODAY ? 'active' : ''}`}
+                    onClick={() => {
+                      setTimeFilter(TIME_FILTERS.TODAY);
+                      setDateFilter({ startDate: "", endDate: "" }); // Limpiar fechas específicas
+                    }}
+                  >
+                    <FontAwesomeIcon icon={faCalendarDay} />
+                    Hoy
+                  </button>
+                  <button 
+                    className={`time-filter-btn ${timeFilter === TIME_FILTERS.THIS_WEEK ? 'active' : ''}`}
+                    onClick={() => {
+                      setTimeFilter(TIME_FILTERS.THIS_WEEK);
+                      setDateFilter({ startDate: "", endDate: "" });
+                    }}
+                  >
+                    <FontAwesomeIcon icon={faCalendarWeek} />
+                    Esta semana
+                  </button>
+                  <button 
+                    className={`time-filter-btn ${timeFilter === TIME_FILTERS.THIS_MONTH ? 'active' : ''}`}
+                    onClick={() => {
+                      setTimeFilter(TIME_FILTERS.THIS_MONTH);
+                      setDateFilter({ startDate: "", endDate: "" });
+                    }}
+                  >
+                    <FontAwesomeIcon icon={faCalendar} />
+                    Este mes
+                  </button>
+                  <button 
+                    className={`time-filter-btn ${timeFilter === TIME_FILTERS.ALL ? 'active' : ''}`}
+                    onClick={() => {
+                      setTimeFilter(TIME_FILTERS.ALL);
+                      setDateFilter({ startDate: "", endDate: "" });
+                    }}
+                  >
+                    <FontAwesomeIcon icon={faCalendarAlt} />
+                    Todos
+                  </button>
+                </div>
+              </div>
+              
+              {/* Fechas específicas */}
               <div className="filter-group">
                 <label>Fecha desde:</label>
                 <input
                   type="date"
                   value={dateFilter.startDate}
-                  onChange={(e) => setDateFilter({...dateFilter, startDate: e.target.value})}
+                  onChange={(e) => {
+                    setDateFilter({...dateFilter, startDate: e.target.value});
+                    if (e.target.value || dateFilter.endDate) {
+                      setTimeFilter(TIME_FILTERS.ALL); // Cambiar a "Todos" cuando se usa fecha específica
+                    }
+                  }}
                 />
               </div>
+              
               <div className="filter-group">
                 <label>Fecha hasta:</label>
                 <input
                   type="date"
                   value={dateFilter.endDate}
-                  onChange={(e) => setDateFilter({...dateFilter, endDate: e.target.value})}
+                  onChange={(e) => {
+                    setDateFilter({...dateFilter, endDate: e.target.value});
+                    if (dateFilter.startDate || e.target.value) {
+                      setTimeFilter(TIME_FILTERS.ALL); // Cambiar a "Todos" cuando se usa fecha específica
+                    }
+                  }}
                 />
               </div>
+              
               <div className="filter-actions">
                 <button className="btn-apply-filters" onClick={applyFilters}>
                   Aplicar Filtros
@@ -319,7 +412,7 @@ export default function OrthodonticsPage() {
         {filteredOrthodontics.length === 0 ? (
           <div className="no-results">
             <p>
-              {search || dateFilter.startDate || dateFilter.endDate
+              {search || dateFilter.startDate || dateFilter.endDate || timeFilter !== TIME_FILTERS.THIS_MONTH
                 ? "No se encontraron tratamientos con los filtros aplicados."
                 : "No hay tratamientos de ortodoncia registrados."}
             </p>
@@ -728,22 +821,6 @@ export default function OrthodonticsPage() {
                                             <span className="payment-value">{formatCurrencyUSD(orthodontic.external_doctor_payment_usd)}</span>
                                           </div>
                                         )}
-                                      </div>
-                                      
-                                      {/* Ajuste en ganancias después de pago externo */}
-                                      <div className="external-doctor-impact">
-                                        <h6>Impacto en distribución:</h6>
-                                        <div className="impact-row">
-                                          <span className="impact-label">Clínica recibe:</span>
-                                          <div className="impact-values">
-                                            <span className="impact-value cordobas">
-                                              {formatCurrency(earnings.clinicEarningsCordobas - (orthodontic.external_doctor_payment || 0))}
-                                            </span>
-                                            <span className="impact-value dollars">
-                                              {formatCurrencyUSD(earnings.clinicEarningsDollars - (orthodontic.external_doctor_payment_usd || 0))}
-                                            </span>
-                                          </div>
-                                        </div>
                                       </div>
                                     </div>
                                   </div>

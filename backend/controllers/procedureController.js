@@ -1,41 +1,45 @@
-// controllers/procedureController.js - VERSIÓN COMPLETA CORREGIDA
+// controllers/procedureController.js - VERSIÓN UNIFICADA CON AMBOS FILTROS
 import { supabaseAdmin } from '../config/supabase.js';
 import {
   formatNicaraguaDateTime,
-  formatNicaraguaDate,
+  toUTCString,
   convertDateStringToUTCStart,
-  convertDateStringToUTCEnd
+  convertDateStringToUTCEnd,
+  safeToISOString
 } from '../utils/timezoneUtils.js';
 
 const procedureController = {
   // ============================================
   // OBTENER PROCEDIMIENTOS REGULARES (NO ORTODONCIA)
+  // CON FILTROS DE TIEMPO Y FECHAS ESPECÍFICAS
   // ============================================
   getAllNormal: async (req, res) => {
     try {
       const { 
         page = 1, 
-        limit = 50, 
+        limit = 100, 
         startDate, 
         endDate,
         patientId,
         timeFilter = 'thisMonth'
       } = req.query;
       
-      console.log('📋 Parámetros recibidos:', { 
+      console.log('📋 Parámetros recibidos (procedimientos normales):', { 
         page, limit, startDate, endDate, patientId, timeFilter 
       });
       
       const from = (page - 1) * limit;
       const to = from + limit - 1;
       
-      // Función auxiliar para obtener fechas según filtro de tiempo - VERSIÓN SIMPLIFICADA
+      // Función auxiliar para obtener fechas según filtro de tiempo
       const getDateRangeFromFilter = (filter) => {
         const now = new Date();
         const year = now.getFullYear();
         const month = now.getMonth();
         const day = now.getDate();
-        const dayOfWeek = now.getDay(); // 0 = domingo, 1 = lunes, etc.
+        const dayOfWeek = now.getDay();
+        
+        console.log(`📅 Calculando rango para filtro: ${filter}`);
         
         let startDate = null;
         let endDate = null;
@@ -45,6 +49,7 @@ const procedureController = {
             // Hoy (desde inicio del día hasta fin del día)
             startDate = new Date(year, month, day, 0, 0, 0, 0);
             endDate = new Date(year, month, day, 23, 59, 59, 999);
+            console.log(`📅 Hoy: ${startDate.toISOString()} - ${endDate.toISOString()}`);
             break;
             
           case 'thisWeek':
@@ -53,45 +58,69 @@ const procedureController = {
             const endOfWeek = new Date(year, month, day + (6 - dayOfWeek), 23, 59, 59, 999);
             startDate = startOfWeek;
             endDate = endOfWeek;
+            console.log(`📅 Esta semana: ${startDate.toISOString()} - ${endDate.toISOString()}`);
             break;
             
           case 'thisMonth':
             // Este mes (desde día 1 hasta último día del mes)
             startDate = new Date(year, month, 1, 0, 0, 0, 0);
             endDate = new Date(year, month + 1, 0, 23, 59, 59, 999);
+            console.log(`📅 Este mes: ${startDate.toISOString()} - ${endDate.toISOString()}`);
             break;
             
           case 'all':
           default:
             // Sin filtro de fecha
+            console.log('📅 Sin filtro de fechas (todos)');
             return {
               startDate: null,
               endDate: null
             };
         }
         
+        // Asegurarse de que las fechas sean válidas
+        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+          console.error('❌ Fechas calculadas inválidas');
+          return {
+            startDate: null,
+            endDate: null
+          };
+        }
+        
         return {
-          startDate: startDate ? startDate.toISOString() : null,
-          endDate: endDate ? endDate.toISOString() : null
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString()
         };
       };
       
-      // Determinar fechas finales
-      let finalStartDate = startDate;
-      let finalEndDate = endDate;
+      // LÓGICA DE PRIORIDAD: Fechas específicas > Filtro de tiempo
+      let finalStartDate = null;
+      let finalEndDate = null;
+      let filterApplied = 'none';
       
-      // Si no hay fechas específicas, usar el filtro de tiempo
-      if (!startDate && !endDate) {
+      // 1. PRIORIDAD: Si hay fechas específicas, usarlas
+      if (startDate || endDate) {
+        finalStartDate = startDate;
+        finalEndDate = endDate;
+        filterApplied = 'specificDates';
+        console.log('📅 Usando fechas específicas:', { start: finalStartDate, end: finalEndDate });
+      }
+      // 2. Si NO hay fechas específicas, usar el filtro de tiempo
+      else if (timeFilter && timeFilter !== 'all') {
         const dateRange = getDateRangeFromFilter(timeFilter);
         finalStartDate = dateRange.startDate;
         finalEndDate = dateRange.endDate;
-        console.log('📅 Fechas del filtro de tiempo:', { 
+        filterApplied = timeFilter;
+        console.log('📅 Usando filtro de tiempo:', { 
           filter: timeFilter, 
           start: finalStartDate, 
           end: finalEndDate 
         });
-      } else {
-        console.log('📅 Usando fechas específicas:', { start: finalStartDate, end: finalEndDate });
+      }
+      // 3. Filtro "Todos" o sin filtro
+      else {
+        console.log('📅 Sin filtro de fechas (mostrando todos los procedimientos)');
+        filterApplied = 'all';
       }
       
       // Construir consulta
@@ -112,21 +141,26 @@ const procedureController = {
         .eq('is_orthodontics', false)
         .order('procedure_date', { ascending: false });
       
-      // Aplicar filtros de fecha SI Y SOLO SI hay fechas válidas
+      // Aplicar filtros de fecha SI existen
       if (finalStartDate && finalEndDate) {
-        // Convertir fechas a formato UTC para la consulta
-        const startUTC = toUTCString(finalStartDate);
-        const endUTC = toUTCString(finalEndDate);
-        
-        if (startUTC && endUTC) {
-          console.log('📅 Aplicando filtro de fechas UTC:', { start: startUTC, end: endUTC });
-          query = query.gte('procedure_date', startUTC);
-          query = query.lte('procedure_date', endUTC);
-        } else {
-          console.warn('⚠️ Fechas inválidas, no se aplicará filtro');
+        try {
+          // Convertir fechas a formato UTC para la consulta
+          const startUTC = safeToISOString(finalStartDate);
+          const endUTC = safeToISOString(finalEndDate);
+          
+          if (startUTC && endUTC) {
+            console.log('📅 Aplicando filtro de fechas UTC:', { 
+              start: startUTC, 
+              end: endUTC 
+            });
+            query = query.gte('procedure_date', startUTC);
+            query = query.lte('procedure_date', endUTC);
+          } else {
+            console.warn('⚠️ Fechas inválidas después de conversión, no se aplicará filtro');
+          }
+        } catch (dateError) {
+          console.error('❌ Error procesando fechas:', dateError.message);
         }
-      } else {
-        console.log('📅 Sin filtro de fechas (todas las fechas)');
       }
       
       // Otros filtros
@@ -137,7 +171,7 @@ const procedureController = {
       // Paginación
       query = query.range(from, to);
       
-      console.log('🔍 Ejecutando consulta...');
+      console.log('🔍 Ejecutando consulta a Supabase...');
       const { data, error, count: totalCount } = await query;
       
       if (error) {
@@ -145,14 +179,14 @@ const procedureController = {
         throw error;
       }
       
-      console.log(`✅ ${data?.length || 0} procedimientos encontrados`);
+      console.log(`✅ ${data?.length || 0} procedimientos normales encontrados`);
       
       // Transformar datos
       const transformedData = (data || []).map(item => {
         // Calcular ingresos
         const clinicIncome = item.total_procedure || item.total_cost || 0;
         const externalDoctorPayment = item.external_doctor_payment || 0;
-        const clinicNetIncome = clinicIncome - externalDoctorPayment;
+        const clinicNetIncome = Math.max(0, clinicIncome - externalDoctorPayment);
         
         // Formatear fechas para mostrar
         const procedureDateFormatted = item.procedure_date ? 
@@ -169,6 +203,7 @@ const procedureController = {
         const exchangeRate = item.exchange_rate_used || 36.5;
         const totalProcedureUSD = item.total_procedure_usd || (clinicIncome / exchangeRate);
         const clinicNetIncomeUSD = item.clinic_payment_dollars || (clinicNetIncome / exchangeRate);
+        const externalDoctorPaymentUSD = item.external_doctor_payment_usd || (externalDoctorPayment / exchangeRate);
         
         return {
           ...item,
@@ -179,11 +214,14 @@ const procedureController = {
           patient_identification: item.patients?.identification || 'N/A',
           original_query_type: item.clinical_appointments?.[0]?.query_type || item.procedure_description,
           original_appointment_date: originalAppointmentDateFormatted,
+          // Ingresos en córdobas
           clinic_income: clinicIncome,
           clinic_net_income: clinicNetIncome,
           external_doctor_payment: externalDoctorPayment,
+          // Ingresos en dólares
           total_procedure_usd: totalProcedureUSD,
           clinic_net_income_usd: clinicNetIncomeUSD,
+          external_doctor_payment_usd: externalDoctorPaymentUSD,
           // Asegurar que los campos de pago estén presentes
           amount_cordobas: item.amount_cordobas || 0,
           amount_dollars: item.amount_dollars || 0,
@@ -197,9 +235,18 @@ const procedureController = {
           net_amount_cordobas: item.net_amount_cordobas || clinicIncome,
           net_amount_dollars: item.net_amount_dollars || totalProcedureUSD,
           gross_amount_cordobas: item.gross_amount_cordobas || item.amount_cordobas || clinicIncome,
-          gross_amount_dollars: item.gross_amount_dollars || item.amount_dollars || totalProcedureUSD
+          gross_amount_dollars: item.gross_amount_dollars || item.amount_dollars || totalProcedureUSD,
+          // Información adicional
+          has_external_doctor: !!item.external_doctor || !!item.external_doctor_name || (item.external_doctor_payment > 0),
+          external_doctor_name: item.external_doctor_name || item.external_doctor || null,
+          external_doctor_specialty: item.external_doctor_specialty || null
         };
       });
+      
+      // Calcular estadísticas del filtro aplicado
+      const totalIncome = transformedData.reduce((sum, item) => sum + (item.clinic_income || 0), 0);
+      const totalNetIncome = transformedData.reduce((sum, item) => sum + (item.clinic_net_income || 0), 0);
+      const totalExternalPayments = transformedData.reduce((sum, item) => sum + (item.external_doctor_payment || 0), 0);
       
       res.json({ 
         success: true, 
@@ -209,9 +256,17 @@ const procedureController = {
         limit: parseInt(limit),
         totalPages: Math.ceil((totalCount || 0) / limit),
         filterApplied: {
-          timeFilter,
+          type: filterApplied,
           startDate: finalStartDate,
-          endDate: finalEndDate
+          endDate: finalEndDate,
+          hasDateFilter: !!(finalStartDate && finalEndDate)
+        },
+        stats: {
+          totalProcedures: transformedData.length,
+          totalIncome,
+          totalNetIncome,
+          totalExternalPayments,
+          averageIncomePerProcedure: transformedData.length > 0 ? totalIncome / transformedData.length : 0
         }
       });
       
@@ -221,23 +276,24 @@ const procedureController = {
         success: false, 
         error: 'Error al obtener procedimientos',
         details: error.message,
-        filter: req.query.timeFilter
+        filter: req.query.timeFilter || 'unknown'
       });
     }
   },
 
   // ============================================
   // OBTENER PROCEDIMIENTOS DE ORTODONCIA
+  // CON FILTROS DE TIEMPO Y FECHAS ESPECÍFICAS (ACTUALIZADO)
   // ============================================
   getAllOrthodontics: async (req, res) => {
     try {
       const { 
         page = 1, 
-        limit = 50, 
+        limit = 100, 
         startDate, 
         endDate,
         patientId,
-        timeFilter = 'thisMonth'
+        timeFilter = 'thisMonth'  // NUEVO PARÁMETRO
       } = req.query;
       
       console.log('📋 Parámetros recibidos (ortodoncia):', { 
@@ -247,13 +303,15 @@ const procedureController = {
       const from = (page - 1) * limit;
       const to = from + limit - 1;
       
-      // Misma función auxiliar para obtener fechas
+      // Función auxiliar para obtener fechas según filtro de tiempo (MISMA QUE getAllNormal)
       const getDateRangeFromFilter = (filter) => {
         const now = new Date();
         const year = now.getFullYear();
         const month = now.getMonth();
         const day = now.getDate();
         const dayOfWeek = now.getDay();
+        
+        console.log(`📅 [Ortodoncia] Calculando rango para filtro: ${filter}`);
         
         let startDate = null;
         let endDate = null;
@@ -284,26 +342,49 @@ const procedureController = {
             };
         }
         
+        // Asegurarse de que las fechas sean válidas
+        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+          console.error('❌ [Ortodoncia] Fechas calculadas inválidas');
+          return {
+            startDate: null,
+            endDate: null
+          };
+        }
+        
         return {
-          startDate: startDate ? startDate.toISOString() : null,
-          endDate: endDate ? endDate.toISOString() : null
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString()
         };
       };
       
-      // Determinar fechas finales
-      let finalStartDate = startDate;
-      let finalEndDate = endDate;
+      // LÓGICA DE PRIORIDAD UNIFICADA: Fechas específicas > Filtro de tiempo
+      let finalStartDate = null;
+      let finalEndDate = null;
+      let filterApplied = 'none';
       
-      // Si no hay fechas específicas, usar el filtro de tiempo
-      if (!startDate && !endDate) {
+      // 1. PRIORIDAD: Si hay fechas específicas, usarlas
+      if (startDate || endDate) {
+        finalStartDate = startDate;
+        finalEndDate = endDate;
+        filterApplied = 'specificDates';
+        console.log('📅 [Ortodoncia] Usando fechas específicas:', { start: finalStartDate, end: finalEndDate });
+      }
+      // 2. Si NO hay fechas específicas, usar el filtro de tiempo
+      else if (timeFilter && timeFilter !== 'all') {
         const dateRange = getDateRangeFromFilter(timeFilter);
         finalStartDate = dateRange.startDate;
         finalEndDate = dateRange.endDate;
-        console.log('📅 Fechas del filtro de tiempo (ortodoncia):', { 
+        filterApplied = timeFilter;
+        console.log('📅 [Ortodoncia] Usando filtro de tiempo:', { 
           filter: timeFilter, 
           start: finalStartDate, 
           end: finalEndDate 
         });
+      }
+      // 3. Filtro "Todos" o sin filtro
+      else {
+        console.log('📅 [Ortodoncia] Sin filtro de fechas (mostrando todas las ortodoncias)');
+        filterApplied = 'all';
       }
       
       // Construir consulta
@@ -324,25 +405,31 @@ const procedureController = {
         .eq('is_orthodontics', true)
         .order('procedure_date', { ascending: false });
       
-      // Aplicar filtros de fecha
+      // Aplicar filtros de fecha SI existen
       if (finalStartDate && finalEndDate) {
-        const startUTC = toUTCString(finalStartDate);
-        const endUTC = toUTCString(finalEndDate);
-        
-        if (startUTC && endUTC) {
-          console.log('📅 Aplicando filtro de fechas UTC (ortodoncia):', { start: startUTC, end: endUTC });
-          query = query.gte('procedure_date', startUTC);
-          query = query.lte('procedure_date', endUTC);
+        try {
+          const startUTC = safeToISOString(finalStartDate);
+          const endUTC = safeToISOString(finalEndDate);
+          
+          if (startUTC && endUTC) {
+            console.log('📅 [Ortodoncia] Aplicando filtro de fechas UTC:', { start: startUTC, end: endUTC });
+            query = query.gte('procedure_date', startUTC);
+            query = query.lte('procedure_date', endUTC);
+          }
+        } catch (dateError) {
+          console.error('❌ [Ortodoncia] Error procesando fechas:', dateError.message);
         }
       }
       
+      // Otros filtros
       if (patientId) {
         query = query.eq('Patient_ID', patientId);
       }
       
+      // Paginación
       query = query.range(from, to);
       
-      console.log('🔍 Ejecutando consulta de ortodoncia...');
+      console.log('🔍 [Ortodoncia] Ejecutando consulta a Supabase...');
       const { data, error, count: totalCount } = await query;
       
       if (error) {
@@ -352,7 +439,7 @@ const procedureController = {
       
       console.log(`✅ ${data?.length || 0} ortodoncias encontradas`);
       
-      // Transformar datos (similar a getAllNormal pero con cálculos específicos de ortodoncia)
+      // Transformar datos
       const transformedData = (data || []).map(item => {
         const clinicPercentage = item.clinic_payment_percentage || 40;
         const doctorPercentage = item.doctor_payment_percentage || 60;
@@ -363,14 +450,14 @@ const procedureController = {
         const clinicIncomeCordobas = total * (clinicPercentage / 100);
         const doctorIncomeCordobas = total * (doctorPercentage / 100);
         const externalDoctorPaymentCordobas = item.external_doctor_payment || 0;
-        const clinicNetIncomeCordobas = clinicIncomeCordobas - externalDoctorPaymentCordobas;
+        const clinicNetIncomeCordobas = Math.max(0, clinicIncomeCordobas - externalDoctorPaymentCordobas);
         
         // Calcular en dólares
         const totalUSD = item.total_procedure_usd || (total / exchangeRate);
         const clinicIncomeUSD = totalUSD * (clinicPercentage / 100);
         const doctorIncomeUSD = totalUSD * (doctorPercentage / 100);
         const externalDoctorPaymentUSD = item.external_doctor_payment_usd || (externalDoctorPaymentCordobas / exchangeRate);
-        const clinicNetIncomeUSD = clinicIncomeUSD - externalDoctorPaymentUSD;
+        const clinicNetIncomeUSD = Math.max(0, clinicIncomeUSD - externalDoctorPaymentUSD);
         
         // Formatear fechas
         const procedureDateFormatted = item.procedure_date ? 
@@ -418,9 +505,19 @@ const procedureController = {
           total_cost_USD: item.total_cost_USD || 0,
           // Porcentajes
           clinic_payment_percentage: clinicPercentage,
-          doctor_payment_percentage: doctorPercentage
+          doctor_payment_percentage: doctorPercentage,
+          // Información adicional
+          has_external_doctor: !!item.external_doctor || !!item.external_doctor_name || (item.external_doctor_payment > 0),
+          external_doctor_name: item.external_doctor_name || item.external_doctor || null,
+          external_doctor_specialty: item.external_doctor_specialty || null
         };
       });
+      
+      // Calcular estadísticas
+      const totalIncome = transformedData.reduce((sum, item) => sum + (item.clinic_income || 0), 0);
+      const totalNetIncome = transformedData.reduce((sum, item) => sum + (item.clinic_net_income || 0), 0);
+      const totalExternalPayments = transformedData.reduce((sum, item) => sum + (item.external_doctor_payment || 0), 0);
+      const totalDoctorIncome = transformedData.reduce((sum, item) => sum + (item.doctor_income || 0), 0);
       
       res.json({ 
         success: true, 
@@ -430,9 +527,21 @@ const procedureController = {
         limit: parseInt(limit),
         totalPages: Math.ceil((totalCount || 0) / limit),
         filterApplied: {
-          timeFilter,
+          type: filterApplied,
           startDate: finalStartDate,
-          endDate: finalEndDate
+          endDate: finalEndDate,
+          hasDateFilter: !!(finalStartDate && finalEndDate)
+        },
+        stats: {
+          totalProcedures: transformedData.length,
+          totalIncome,
+          totalNetIncome,
+          totalExternalPayments,
+          totalDoctorIncome,
+          clinicPercentage: transformedData.length > 0 ? 
+            transformedData[0].clinic_payment_percentage || 40 : 40,
+          doctorPercentage: transformedData.length > 0 ? 
+            transformedData[0].doctor_payment_percentage || 60 : 60
         }
       });
       
@@ -442,7 +551,7 @@ const procedureController = {
         success: false, 
         error: 'Error al obtener ortodoncias',
         details: error.message,
-        filter: req.query.timeFilter
+        filter: req.query.timeFilter || 'unknown'
       });
     }
   },
@@ -508,8 +617,8 @@ const procedureController = {
       
       const externalDoctorPayment = data.external_doctor_payment || 0;
       const externalDoctorPaymentUSD = data.external_doctor_payment_usd || (externalDoctorPayment / exchangeRate);
-      const clinicNetIncome = clinicIncome - externalDoctorPayment;
-      const clinicNetIncomeUSD = clinicIncomeUSD - externalDoctorPaymentUSD;
+      const clinicNetIncome = Math.max(0, clinicIncome - externalDoctorPayment);
+      const clinicNetIncomeUSD = Math.max(0, clinicIncomeUSD - externalDoctorPaymentUSD);
       
       // Formatear fechas
       const transformedData = {
@@ -603,8 +712,8 @@ const procedureController = {
       
       const externalDoctorPayment = data.external_doctor_payment || 0;
       const externalDoctorPaymentUSD = data.external_doctor_payment_usd || (externalDoctorPayment / exchangeRate);
-      const clinicNetIncome = clinicIncome - externalDoctorPayment;
-      const clinicNetIncomeUSD = clinicIncomeUSD - externalDoctorPaymentUSD;
+      const clinicNetIncome = Math.max(0, clinicIncome - externalDoctorPayment);
+      const clinicNetIncomeUSD = Math.max(0, clinicIncomeUSD - externalDoctorPaymentUSD);
       
       const responseData = {
         ...data,
@@ -792,40 +901,34 @@ const procedureController = {
       
       console.log('📊 Obteniendo estadísticas de ingresos:', { startDate, endDate, timeFilter });
       
-      let finalStartDate = startDate;
-      let finalEndDate = endDate;
-      
-      // Función auxiliar para obtener fechas según filtro de tiempo
+      // Usar la misma lógica de filtro de tiempo
       const getDateRangeFromFilter = (filter) => {
         const now = new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth();
+        const day = now.getDate();
+        const dayOfWeek = now.getDay();
+        
+        let startDate = null;
+        let endDate = null;
         
         switch(filter) {
           case 'today':
-            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            const tomorrow = new Date(today);
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            return {
-              startDate: today.toISOString().split('T')[0],
-              endDate: tomorrow.toISOString().split('T')[0]
-            };
+            startDate = new Date(year, month, day, 0, 0, 0, 0);
+            endDate = new Date(year, month, day, 23, 59, 59, 999);
+            break;
             
           case 'thisWeek':
-            const startOfWeek = new Date(now);
-            startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
-            const endOfWeek = new Date(startOfWeek);
-            endOfWeek.setDate(endOfWeek.getDate() + 7);
-            return {
-              startDate: startOfWeek.toISOString().split('T')[0],
-              endDate: endOfWeek.toISOString().split('T')[0]
-            };
+            const startOfWeek = new Date(year, month, day - dayOfWeek, 0, 0, 0, 0);
+            const endOfWeek = new Date(year, month, day + (6 - dayOfWeek), 23, 59, 59, 999);
+            startDate = startOfWeek;
+            endDate = endOfWeek;
+            break;
             
           case 'thisMonth':
-            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-            const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-            return {
-              startDate: startOfMonth.toISOString().split('T')[0],
-              endDate: endOfMonth.toISOString().split('T')[0]
-            };
+            startDate = new Date(year, month, 1, 0, 0, 0, 0);
+            endDate = new Date(year, month + 1, 0, 23, 59, 59, 999);
+            break;
             
           case 'all':
           default:
@@ -834,7 +937,15 @@ const procedureController = {
               endDate: null
             };
         }
+        
+        return {
+          startDate: startDate ? startDate.toISOString() : null,
+          endDate: endDate ? endDate.toISOString() : null
+        };
       };
+      
+      let finalStartDate = startDate;
+      let finalEndDate = endDate;
       
       // Aplicar filtro de tiempo si no hay fechas específicas
       if (!startDate && !endDate) {
@@ -850,8 +961,15 @@ const procedureController = {
         });
       }
       
-      const startUTC = convertDateStringToUTCStart(finalStartDate);
-      const endUTC = convertDateStringToUTCEnd(finalEndDate);
+      const startUTC = safeToISOString(finalStartDate);
+      const endUTC = safeToISOString(finalEndDate);
+      
+      if (!startUTC || !endUTC) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Fechas inválidas' 
+        });
+      }
       
       // Obtener todos los procedimientos en el período
       const { data, error } = await supabaseAdmin
@@ -894,7 +1012,7 @@ const procedureController = {
       });
       
       // Calcular ingresos netos de la clínica
-      const clinicNetIncomeOrtho = clinicOrthoIncome - externalDoctorPayments;
+      const clinicNetIncomeOrtho = Math.max(0, clinicOrthoIncome - externalDoctorPayments);
       const clinicNetIncomeGeneral = totalGeneral;
       const totalClinicNetIncome = clinicNetIncomeGeneral + clinicNetIncomeOrtho;
       

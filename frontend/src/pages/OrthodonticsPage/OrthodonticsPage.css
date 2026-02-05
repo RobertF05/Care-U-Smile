@@ -1496,3 +1496,45 @@
     font-size: 11px;
   }
 }
+
+/* time-filter-buttons - copiar de ProceduresPage.css a OrthodonticsPage.css */
+.time-filter-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 5px;
+}
+
+.time-filter-btn {
+  background-color: #F5F5F5;
+  color: #78909C;
+  border: 1px solid #E0E0E0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 120px;
+  justify-content: center;
+}
+
+.time-filter-btn:hover {
+  background-color: #E0E0E0;
+  transform: translateY(-2px);
+}
+
+.time-filter-btn.active {
+  background-color: #AB47BC;  /* Para OrthodonticsPage - usar color morado */
+  color: white;
+  border-color: #4DB6AC; /* O #AB47BC para ortodoncia */
+  font-weight: 600;
+}
+
+.time-filter-btn.active:hover {
+  background-color: #8E24AA; /* O #8E24AA para ortodoncia */
+  transform: translateY(-2px);
+}

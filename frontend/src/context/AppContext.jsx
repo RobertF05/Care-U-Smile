@@ -349,88 +349,109 @@ export const AppProvider = ({ children }) => {
   };
 
   // ========== PROCEDIMIENTOS ==========
-  // En AppContext.js, actualizar fetchProceduresNormal:
-const fetchProceduresNormal = async (filters = {}) => {
-  try {
-    console.log('🔍 Cargando procedimientos normales con filtros:', filters);
-    
-    // Construir parámetros de consulta
-    const queryParams = new URLSearchParams();
-    
-    // Agregar filtro de tiempo si existe
-    if (filters.timeFilter) {
-      queryParams.append('timeFilter', filters.timeFilter);
-    }
-    
-    // Agregar otras filtros si existen
-    if (filters.startDate) {
-      queryParams.append('startDate', filters.startDate);
-    }
-    
-    if (filters.endDate) {
-      queryParams.append('endDate', filters.endDate);
-    }
-    
-    if (filters.patientId) {
-      queryParams.append('patientId', filters.patientId);
-    }
-    
-    // Agregar paginación por defecto
-    queryParams.append('page', '1');
-    queryParams.append('limit', '50'); // Aumentar límite para mostrar más procedimientos
-    
-    const endpoint = `/procedures/normal?${queryParams.toString()}`;
-    console.log('📤 Endpoint:', endpoint);
-    
-    const data = await apiFetch(endpoint);
-    
-    console.log(`✅ ${data.data?.length || 0} procedimientos cargados`);
-    
-    setProcedures(data.data || []);
-    setStats(prev => ({ 
-      ...prev, 
-      totalProcedures: data.total || 0,
-      pendingProcedures: (data.data || []).filter(proc => !proc.state || proc.state !== 'COMPLETED').length
-    }));
-    
-    return data;
-  } catch (error) {
-    console.error('❌ Error cargando procedimientos normales:', error);
-    return { success: false, error: error.message };
-  }
-};
-
-  const fetchOrthodontics = async (filters = {}) => {
+  // Procedimientos normales con filtros unificados
+  const fetchProceduresNormal = async (filters = {}) => {
     try {
-      // Procesar filtros para fechas
-      const processedFilters = { ...filters };
+      console.log('🔍 Cargando procedimientos normales con filtros:', filters);
       
-      if (processedFilters.startDate) {
-        processedFilters.startDate = adjustDateForQuery(processedFilters.startDate);
+      // Construir parámetros de consulta
+      const queryParams = new URLSearchParams();
+      
+      // Agregar filtro de tiempo si existe
+      if (filters.timeFilter) {
+        queryParams.append('timeFilter', filters.timeFilter);
       }
       
-      if (processedFilters.endDate) {
-        processedFilters.endDate = adjustDateForQuery(processedFilters.endDate);
+      // Agregar fechas específicas si existen
+      if (filters.startDate) {
+        queryParams.append('startDate', filters.startDate);
       }
       
-      const queryParams = new URLSearchParams(processedFilters).toString();
-      const endpoint = queryParams ? `/procedures/orthodontics?${queryParams}` : '/procedures/orthodontics';
+      if (filters.endDate) {
+        queryParams.append('endDate', filters.endDate);
+      }
+      
+      if (filters.patientId) {
+        queryParams.append('patientId', filters.patientId);
+      }
+      
+      // Agregar paginación por defecto
+      queryParams.append('page', '1');
+      queryParams.append('limit', '50');
+      
+      const endpoint = `/procedures/normal?${queryParams.toString()}`;
+      console.log('📤 Endpoint:', endpoint);
+      
       const data = await apiFetch(endpoint);
       
-      setProcedures(data.data);
+      console.log(`✅ ${data.data?.length || 0} procedimientos cargados`);
+      
+      setProcedures(data.data || []);
       setStats(prev => ({ 
         ...prev, 
-        totalOrthodontics: data.total,
-        orthodonticsIncome: data.data.reduce((sum, ortho) => sum + (ortho.total_cost || 0), 0)
+        totalProcedures: data.total || 0,
+        pendingProcedures: (data.data || []).filter(proc => !proc.state || proc.state !== 'COMPLETED').length
       }));
       
       return data;
     } catch (error) {
-      console.error('Error cargando ortodoncias:', error);
+      console.error('❌ Error cargando procedimientos normales:', error);
       return { success: false, error: error.message };
     }
   };
 
+  // Ortodoncias con filtros unificados (ACTUALIZADO)
+  const fetchOrthodontics = async (filters = {}) => {
+    try {
+      console.log('🔍 Cargando ortodoncias con filtros:', filters);
+      
+      // Construir parámetros de consulta
+      const queryParams = new URLSearchParams();
+      
+      // Agregar filtro de tiempo si existe
+      if (filters.timeFilter) {
+        queryParams.append('timeFilter', filters.timeFilter);
+      }
+      
+      // Agregar fechas específicas si existen
+      if (filters.startDate) {
+        queryParams.append('startDate', filters.startDate);
+      }
+      
+      if (filters.endDate) {
+        queryParams.append('endDate', filters.endDate);
+      }
+      
+      if (filters.patientId) {
+        queryParams.append('patientId', filters.patientId);
+      }
+      
+      // Agregar paginación por defecto
+      queryParams.append('page', '1');
+      queryParams.append('limit', '50');
+      
+      const endpoint = `/procedures/orthodontics?${queryParams.toString()}`;
+      console.log('📤 Endpoint (ortodoncia):', endpoint);
+      
+      const data = await apiFetch(endpoint);
+      
+      console.log(`✅ ${data.data?.length || 0} ortodoncias cargadas`);
+      
+      setProcedures(data.data || []);
+      setStats(prev => ({ 
+        ...prev, 
+        totalProcedures: data.total || 0,
+        pendingProcedures: (data.data || []).filter(proc => !proc.state || proc.state !== 'COMPLETED').length
+      }));
+      
+      return data;
+    } catch (error) {
+      console.error('❌ Error cargando ortodoncias:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  // Función genérica (mantener para compatibilidad)
   const fetchProcedures = async (filters = {}) => {
     try {
       const queryParams = new URLSearchParams(filters).toString();

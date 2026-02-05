@@ -1,4 +1,4 @@
-// timezoneUtils.js - VERSIÓN ACTUALIZADA CON formatCurrency
+// timezoneUtils.js - VERSIÓN CORREGIDA
 /**
  * Utilidades para manejo de zona horaria de Nicaragua (UTC-6)
  */
@@ -137,16 +137,19 @@ export const createMonthlyDateRange = (year, month) => {
 };
 
 /**
- * Convierte fecha string a UTC (inicio del día)
+ * Convierte fecha string a UTC (inicio del día) - VERSIÓN MEJORADA
  */
 export const convertDateStringToUTCStart = (dateString) => {
   try {
-    if (!dateString) return null;
+    if (!dateString) {
+      console.log('🔄 convertDateStringToUTCStart: fecha vacía');
+      return null;
+    }
     
     console.log('🔄 convertDateStringToUTCStart recibió:', dateString);
     
     // Si ya es una fecha ISO completa con Z
-    if (dateString.includes('T') && dateString.includes('Z')) {
+    if (dateString.includes('T') && dateString.endsWith('Z')) {
       console.log('✅ Ya es fecha ISO UTC:', dateString);
       return dateString;
     }
@@ -157,45 +160,56 @@ export const convertDateStringToUTCStart = (dateString) => {
       const nicaraguaStart = new Date(`${dateString}T00:00:00`);
       
       if (isNaN(nicaraguaStart.getTime())) {
-        console.error('❌ Fecha inválida:', dateString);
+        console.error('❌ Fecha inválida (YYYY-MM-DD):', dateString);
         return null;
       }
       
       const utcStart = new Date(nicaraguaStart.getTime() - NICARAGUA_OFFSET);
       const result = utcStart.toISOString();
-      console.log('✅ Convertido a UTC:', result);
+      console.log('✅ Convertido YYYY-MM-DD a UTC:', result);
       return result;
     }
     
-    // Si es una fecha ISO sin Z
+    // Si es una fecha ISO sin Z (ej: 2024-01-15T00:00:00.000)
     if (dateString.includes('T')) {
-      const date = new Date(dateString);
-      if (!isNaN(date.getTime())) {
-        const result = date.toISOString();
-        console.log('✅ Convertido a ISO UTC:', result);
-        return result;
+      try {
+        const date = new Date(dateString);
+        if (!isNaN(date.getTime())) {
+          const result = date.toISOString();
+          console.log('✅ Convertido ISO a UTC:', result);
+          return result;
+        } else {
+          console.error('❌ Fecha ISO inválida:', dateString);
+          return null;
+        }
+      } catch (error) {
+        console.error('❌ Error parseando fecha ISO:', error.message);
+        return null;
       }
     }
     
     console.error('❌ Formato de fecha no reconocido:', dateString);
     return null;
   } catch (error) {
-    console.error('❌ Error en convertDateStringToUTCStart:', error.message);
+    console.error('❌ Error en convertDateStringToUTCStart:', error.message, error.stack);
     return null;
   }
 };
 
 /**
- * Convierte fecha string a UTC (fin del día)
+ * Convierte fecha string a UTC (fin del día) - VERSIÓN MEJORADA
  */
 export const convertDateStringToUTCEnd = (dateString) => {
   try {
-    if (!dateString) return null;
+    if (!dateString) {
+      console.log('🔄 convertDateStringToUTCEnd: fecha vacía');
+      return null;
+    }
     
     console.log('🔄 convertDateStringToUTCEnd recibió:', dateString);
     
     // Si ya es una fecha ISO completa con Z
-    if (dateString.includes('T') && dateString.includes('Z')) {
+    if (dateString.includes('T') && dateString.endsWith('Z')) {
       console.log('✅ Ya es fecha ISO UTC:', dateString);
       return dateString;
     }
@@ -206,30 +220,101 @@ export const convertDateStringToUTCEnd = (dateString) => {
       const nicaraguaEnd = new Date(`${dateString}T23:59:59.999`);
       
       if (isNaN(nicaraguaEnd.getTime())) {
-        console.error('❌ Fecha inválida:', dateString);
+        console.error('❌ Fecha inválida (YYYY-MM-DD):', dateString);
         return null;
       }
       
       const utcEnd = new Date(nicaraguaEnd.getTime() - NICARAGUA_OFFSET);
       const result = utcEnd.toISOString();
-      console.log('✅ Convertido a UTC:', result);
+      console.log('✅ Convertido YYYY-MM-DD a UTC (fin):', result);
       return result;
     }
     
     // Si es una fecha ISO sin Z
     if (dateString.includes('T')) {
-      const date = new Date(dateString);
-      if (!isNaN(date.getTime())) {
-        const result = date.toISOString();
-        console.log('✅ Convertido a ISO UTC:', result);
-        return result;
+      try {
+        const date = new Date(dateString);
+        if (!isNaN(date.getTime())) {
+          const result = date.toISOString();
+          console.log('✅ Convertido ISO a UTC (fin):', result);
+          return result;
+        } else {
+          console.error('❌ Fecha ISO inválida:', dateString);
+          return null;
+        }
+      } catch (error) {
+        console.error('❌ Error parseando fecha ISO:', error.message);
+        return null;
       }
     }
     
     console.error('❌ Formato de fecha no reconocido:', dateString);
     return null;
   } catch (error) {
-    console.error('❌ Error en convertDateStringToUTCEnd:', error.message);
+    console.error('❌ Error en convertDateStringToUTCEnd:', error.message, error.stack);
+    return null;
+  }
+};
+
+/**
+ * Función auxiliar mejorada para convertir cualquier fecha a UTC string
+ */
+export const toUTCString = (dateInput) => {
+  try {
+    if (!dateInput) {
+      console.log('🔄 toUTCString: entrada vacía');
+      return null;
+    }
+    
+    console.log('🔄 toUTCString recibió:', dateInput);
+    
+    // Si ya es string ISO
+    if (typeof dateInput === 'string' && dateInput.includes('T')) {
+      const date = new Date(dateInput);
+      if (isNaN(date.getTime())) {
+        console.error('❌ Fecha string inválida:', dateInput);
+        return null;
+      }
+      const result = date.toISOString();
+      console.log('✅ String convertido a UTC:', result);
+      return result;
+    }
+    
+    // Si es Date object
+    if (dateInput instanceof Date) {
+      if (isNaN(dateInput.getTime())) {
+        console.error('❌ Fecha Date inválida:', dateInput);
+        return null;
+      }
+      const result = dateInput.toISOString();
+      console.log('✅ Date convertido a UTC:', result);
+      return result;
+    }
+    
+    console.error('❌ Tipo de entrada no soportado:', typeof dateInput, dateInput);
+    return null;
+  } catch (error) {
+    console.error('❌ Error en toUTCString:', error.message, error.stack);
+    return null;
+  }
+};
+
+/**
+ * Convierte cualquier fecha a string ISO de manera segura
+ */
+export const safeToISOString = (dateInput) => {
+  try {
+    if (!dateInput) return null;
+    
+    const date = new Date(dateInput);
+    if (isNaN(date.getTime())) {
+      console.error('❌ safeToISOString: fecha inválida', dateInput);
+      return null;
+    }
+    
+    return date.toISOString();
+  } catch (error) {
+    console.error('❌ Error en safeToISOString:', error.message);
     return null;
   }
 };
@@ -361,34 +446,19 @@ export const adjustDateForNicaraguaQuery = (dateString) => {
   }
 };
 
-export const toUTCString = (dateInput) => {
-  try {
-    if (!dateInput) return null;
-    
-    const date = new Date(dateInput);
-    if (isNaN(date.getTime())) {
-      console.error('❌ Fecha inválida en toUTCString:', dateInput);
-      return null;
-    }
-    
-    return date.toISOString();
-  } catch (error) {
-    console.error('❌ Error en toUTCString:', error.message);
-    return null;
-  }
-};
-
 // Exportar todas las funciones necesarias
 export default {
   toUTCFromNicaragua,
   toNicaraguaTime,
   formatNicaraguaDateTime,
   formatNicaraguaDate,
-  formatCurrency, // ¡AGREGADA!
+  formatCurrency,
   createNicaraguaDateRange,
   createMonthlyDateRange,
   convertDateStringToUTCStart,
   convertDateStringToUTCEnd,
+  toUTCString,
+  safeToISOString,
   getCurrentNicaraguaDateString,
   adjustDateForQuery,
   createDateTimeInputFromUTC,
@@ -397,6 +467,5 @@ export default {
   getCurrentMonthRange,
   convertDateStringToNicaraguaStart,
   convertDateStringToNicaraguaEnd,
-  adjustDateForNicaraguaQuery,
-  toUTCString
+  adjustDateForNicaraguaQuery
 };

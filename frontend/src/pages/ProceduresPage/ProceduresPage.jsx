@@ -1,4 +1,3 @@
-// ProceduresPage.js - AGREGAR Y MODIFICAR
 import React, { useContext, useState, useEffect } from "react";
 import { AppContext } from "../../context/AppContext";
 import { AuthContext } from "../../context/AuthContext";
@@ -47,6 +46,10 @@ export default function ProceduresPage() {
   
   const [search, setSearch] = useState("");
   const [timeFilter, setTimeFilter] = useState(TIME_FILTERS.THIS_MONTH);
+  const [dateFilter, setDateFilter] = useState({
+    startDate: "",
+    endDate: ""
+  });
   const [expandedFilters, setExpandedFilters] = useState(false);
   const [expandedRows, setExpandedRows] = useState({});
   const [localError, setLocalError] = useState("");
@@ -61,7 +64,11 @@ export default function ProceduresPage() {
     try {
       setLocalError("");
       clearError();
-      await fetchProceduresNormal({ timeFilter });
+      await fetchProceduresNormal({ 
+        timeFilter,
+        startDate: dateFilter.startDate,
+        endDate: dateFilter.endDate
+      });
     } catch (error) {
       console.error('Error al cargar procedimientos:', error);
       setLocalError(error.message || 'Error al cargar procedimientos');
@@ -71,7 +78,24 @@ export default function ProceduresPage() {
   const applyFilters = async () => {
     try {
       setLocalError("");
-      await fetchProceduresNormal({ timeFilter });
+      
+      const filters = {};
+      
+      // Lógica de prioridad: fechas específicas > filtro de tiempo
+      if (dateFilter.startDate || dateFilter.endDate) {
+        // Usar fechas específicas
+        filters.startDate = dateFilter.startDate;
+        filters.endDate = dateFilter.endDate;
+        filters.timeFilter = 'all'; // Desactivar filtro de tiempo
+      } else if (timeFilter && timeFilter !== TIME_FILTERS.ALL) {
+        // Usar filtro de tiempo
+        filters.timeFilter = timeFilter;
+      } else {
+        // Por defecto: este mes
+        filters.timeFilter = TIME_FILTERS.THIS_MONTH;
+      }
+      
+      await fetchProceduresNormal(filters);
     } catch (error) {
       console.error('Error al aplicar filtros:', error);
       setLocalError(error.message || 'Error al aplicar filtros');
@@ -83,6 +107,7 @@ export default function ProceduresPage() {
       setLocalError("");
       setSearch("");
       setTimeFilter(TIME_FILTERS.THIS_MONTH);
+      setDateFilter({ startDate: "", endDate: "" });
       await fetchProceduresNormal({ timeFilter: TIME_FILTERS.THIS_MONTH });
     } catch (error) {
       console.error('Error al limpiar filtros:', error);
@@ -227,7 +252,7 @@ export default function ProceduresPage() {
         </div>
       </div>
 
-      {/* Filtros desplegables con filtro de tiempo */}
+      {/* Filtros desplegables con ambos tipos de filtros */}
       <div className={`filter-section ${expandedFilters ? 'expanded' : ''}`}>
         <div className="filter-header-mobile" onClick={() => setExpandedFilters(!expandedFilters)}>
           <div className="filter-header-content">
@@ -238,7 +263,8 @@ export default function ProceduresPage() {
             <span className="filter-summary">
               {timeFilter === TIME_FILTERS.TODAY ? 'Hoy' : 
                timeFilter === TIME_FILTERS.THIS_WEEK ? 'Esta semana' :
-               timeFilter === TIME_FILTERS.THIS_MONTH ? 'Este mes' : 'Todos'} • 
+               timeFilter === TIME_FILTERS.THIS_MONTH ? 'Este mes' : 
+               dateFilter.startDate || dateFilter.endDate ? 'Fechas específicas' : 'Todos'} • 
               {search ? ` Buscando: "${search}"` : ''}
             </span>
           </div>
@@ -253,37 +279,78 @@ export default function ProceduresPage() {
             <div className="filters-row">
               {/* Filtro de tiempo */}
               <div className="filter-group">
-                <label>Periodo:</label>
+                <label>Periodo rápido:</label>
                 <div className="time-filter-buttons">
                   <button 
                     className={`time-filter-btn ${timeFilter === TIME_FILTERS.TODAY ? 'active' : ''}`}
-                    onClick={() => setTimeFilter(TIME_FILTERS.TODAY)}
+                    onClick={() => {
+                      setTimeFilter(TIME_FILTERS.TODAY);
+                      setDateFilter({ startDate: "", endDate: "" }); // Limpiar fechas específicas
+                    }}
                   >
                     <FontAwesomeIcon icon={faCalendarDay} />
                     Hoy
                   </button>
                   <button 
                     className={`time-filter-btn ${timeFilter === TIME_FILTERS.THIS_WEEK ? 'active' : ''}`}
-                    onClick={() => setTimeFilter(TIME_FILTERS.THIS_WEEK)}
+                    onClick={() => {
+                      setTimeFilter(TIME_FILTERS.THIS_WEEK);
+                      setDateFilter({ startDate: "", endDate: "" });
+                    }}
                   >
                     <FontAwesomeIcon icon={faCalendarWeek} />
                     Esta semana
                   </button>
                   <button 
                     className={`time-filter-btn ${timeFilter === TIME_FILTERS.THIS_MONTH ? 'active' : ''}`}
-                    onClick={() => setTimeFilter(TIME_FILTERS.THIS_MONTH)}
+                    onClick={() => {
+                      setTimeFilter(TIME_FILTERS.THIS_MONTH);
+                      setDateFilter({ startDate: "", endDate: "" });
+                    }}
                   >
                     <FontAwesomeIcon icon={faCalendar} />
                     Este mes
                   </button>
                   <button 
                     className={`time-filter-btn ${timeFilter === TIME_FILTERS.ALL ? 'active' : ''}`}
-                    onClick={() => setTimeFilter(TIME_FILTERS.ALL)}
+                    onClick={() => {
+                      setTimeFilter(TIME_FILTERS.ALL);
+                      setDateFilter({ startDate: "", endDate: "" });
+                    }}
                   >
                     <FontAwesomeIcon icon={faCalendarAlt} />
                     Todos
                   </button>
                 </div>
+              </div>
+              
+              {/* Fechas específicas */}
+              <div className="filter-group">
+                <label>Fecha desde:</label>
+                <input
+                  type="date"
+                  value={dateFilter.startDate}
+                  onChange={(e) => {
+                    setDateFilter({...dateFilter, startDate: e.target.value});
+                    if (e.target.value || dateFilter.endDate) {
+                      setTimeFilter(TIME_FILTERS.ALL); // Cambiar a "Todos" cuando se usa fecha específica
+                    }
+                  }}
+                />
+              </div>
+              
+              <div className="filter-group">
+                <label>Fecha hasta:</label>
+                <input
+                  type="date"
+                  value={dateFilter.endDate}
+                  onChange={(e) => {
+                    setDateFilter({...dateFilter, endDate: e.target.value});
+                    if (dateFilter.startDate || e.target.value) {
+                      setTimeFilter(TIME_FILTERS.ALL); // Cambiar a "Todos" cuando se usa fecha específica
+                    }
+                  }}
+                />
               </div>
               
               <div className="filter-actions">
@@ -326,14 +393,14 @@ export default function ProceduresPage() {
         </div>
       </div>
 
-      {/* Tabla de procedimientos simplificada */}
+      {/* Tabla de procedimientos */}
       <div className="procedures-section">
         <h3>Lista de Procedimientos ({filteredProcedures.length})</h3>
         
         {filteredProcedures.length === 0 ? (
           <div className="no-results">
             <p>
-              {search || timeFilter !== TIME_FILTERS.THIS_MONTH
+              {search || timeFilter !== TIME_FILTERS.THIS_MONTH || dateFilter.startDate || dateFilter.endDate
                 ? "No se encontraron procedimientos con los filtros aplicados."
                 : "No hay procedimientos registrados."}
             </p>
@@ -464,7 +531,7 @@ export default function ProceduresPage() {
                         </td>
                       </tr>
                       
-                      {/* Fila expandida con LAYOUT HORIZONTAL */}
+                      {/* Fila expandida con detalles */}
                       {isExpanded && (
                         <tr className="details-row">
                           <td colSpan="7">
@@ -687,23 +754,6 @@ export default function ProceduresPage() {
                                             <span className="payment-value">{formatCurrencyUSD(procedure.external_doctor_payment_usd)}</span>
                                           </div>
                                         )}
-                                      </div>
-                                      
-                                      {/* Impacto en ingresos */}
-                                      <div className="doctor-impact-summary">
-                                        <h6>Impacto en ingresos:</h6>
-                                        <div className="impact-item">
-                                          <span className="impact-label">Ingreso original clínica:</span>
-                                          <span className="impact-value">{formatCurrency(procedure.clinic_income || procedure.total_cost || 0)}</span>
-                                        </div>
-                                        <div className="impact-item deduction">
-                                          <span className="impact-label">Menos pago doctor externo:</span>
-                                          <span className="impact-value">-{formatCurrency(procedure.external_doctor_payment || 0)}</span>
-                                        </div>
-                                        <div className="impact-item net">
-                                          <span className="impact-label">Ingreso neto clínica:</span>
-                                          <span className="impact-value">{formatCurrency(clinicNetIncome)}</span>
-                                        </div>
                                       </div>
                                     </div>
                                   </div>

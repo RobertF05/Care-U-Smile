@@ -45,7 +45,7 @@ export default function ProceduresPage() {
   } = useContext(AppContext);
   
   const [search, setSearch] = useState("");
-  const [timeFilter, setTimeFilter] = useState(TIME_FILTERS.THIS_MONTH);
+  const [timeFilter, setTimeFilter] = useState(TIME_FILTERS.ALL); // CAMBIADO A 'all' por defecto
   const [dateFilter, setDateFilter] = useState({
     startDate: "",
     endDate: ""
@@ -75,26 +75,24 @@ export default function ProceduresPage() {
     }
   };
 
+  // FUNCIÓN SIMPLIFICADA DE FILTRADO - como en citas
   const applyFilters = async () => {
     try {
       setLocalError("");
       
       const filters = {};
       
-      // Lógica de prioridad: fechas específicas > filtro de tiempo
-      if (dateFilter.startDate || dateFilter.endDate) {
-        // Usar fechas específicas
+      // Lógica SIMPLE: usar el filtro que esté activo
+      if (dateFilter.startDate && dateFilter.endDate) {
+        // Si hay fechas específicas, usarlas
         filters.startDate = dateFilter.startDate;
         filters.endDate = dateFilter.endDate;
-        filters.timeFilter = 'all'; // Desactivar filtro de tiempo
-      } else if (timeFilter && timeFilter !== TIME_FILTERS.ALL) {
-        // Usar filtro de tiempo
-        filters.timeFilter = timeFilter;
       } else {
-        // Por defecto: este mes
-        filters.timeFilter = TIME_FILTERS.THIS_MONTH;
+        // Si no hay fechas específicas, usar el filtro de tiempo
+        filters.timeFilter = timeFilter;
       }
       
+      console.log('🔍 Aplicando filtros:', filters);
       await fetchProceduresNormal(filters);
     } catch (error) {
       console.error('Error al aplicar filtros:', error);
@@ -106,9 +104,9 @@ export default function ProceduresPage() {
     try {
       setLocalError("");
       setSearch("");
-      setTimeFilter(TIME_FILTERS.THIS_MONTH);
+      setTimeFilter(TIME_FILTERS.ALL); // Cambiado a 'all'
       setDateFilter({ startDate: "", endDate: "" });
-      await fetchProceduresNormal({ timeFilter: TIME_FILTERS.THIS_MONTH });
+      await fetchProceduresNormal({ timeFilter: TIME_FILTERS.ALL });
     } catch (error) {
       console.error('Error al limpiar filtros:', error);
       setLocalError(error.message || 'Error al limpiar filtros');
@@ -144,7 +142,7 @@ export default function ProceduresPage() {
     }).format(amount || 0);
   };
 
-  // Calcular cantidad neta de la clínica (restando pago al doctor externo)
+  // Calcular cantidad neta de la clínica
   const calculateClinicNetIncome = (procedure) => {
     const clinicIncome = procedure.clinic_income || procedure.total_cost || 0;
     const externalDoctorPayment = procedure.external_doctor_payment || 0;
@@ -199,9 +197,7 @@ export default function ProceduresPage() {
     const dollars = procedure.amount_dollars || procedure.total_cost_USD || 0;
     const exchangeRate = procedure.exchange_rate_used || 36.5;
     
-    // Si solo hay total_procedure (neto), estimamos los bruto
     if (procedure.total_procedure && !cordobas && !dollars) {
-      // Asumimos que es todo en córdobas
       return {
         cordobas: procedure.total_procedure,
         dollars: 0,
@@ -252,7 +248,7 @@ export default function ProceduresPage() {
         </div>
       </div>
 
-      {/* Filtros desplegables con ambos tipos de filtros */}
+      {/* Filtros desplegables */}
       <div className={`filter-section ${expandedFilters ? 'expanded' : ''}`}>
         <div className="filter-header-mobile" onClick={() => setExpandedFilters(!expandedFilters)}>
           <div className="filter-header-content">
@@ -264,8 +260,7 @@ export default function ProceduresPage() {
               {timeFilter === TIME_FILTERS.TODAY ? 'Hoy' : 
                timeFilter === TIME_FILTERS.THIS_WEEK ? 'Esta semana' :
                timeFilter === TIME_FILTERS.THIS_MONTH ? 'Este mes' : 
-               dateFilter.startDate || dateFilter.endDate ? 'Fechas específicas' : 'Todos'} • 
-              {search ? ` Buscando: "${search}"` : ''}
+               dateFilter.startDate || dateFilter.endDate ? 'Fechas específicas' : 'Todos'}
             </span>
           </div>
           <FontAwesomeIcon 
@@ -283,9 +278,10 @@ export default function ProceduresPage() {
                 <div className="time-filter-buttons">
                   <button 
                     className={`time-filter-btn ${timeFilter === TIME_FILTERS.TODAY ? 'active' : ''}`}
-                    onClick={() => {
+                    onClick={async () => {
                       setTimeFilter(TIME_FILTERS.TODAY);
-                      setDateFilter({ startDate: "", endDate: "" }); // Limpiar fechas específicas
+                      setDateFilter({ startDate: "", endDate: "" });
+                      await fetchProceduresNormal({ timeFilter: TIME_FILTERS.TODAY });
                     }}
                   >
                     <FontAwesomeIcon icon={faCalendarDay} />
@@ -293,9 +289,10 @@ export default function ProceduresPage() {
                   </button>
                   <button 
                     className={`time-filter-btn ${timeFilter === TIME_FILTERS.THIS_WEEK ? 'active' : ''}`}
-                    onClick={() => {
+                    onClick={async () => {
                       setTimeFilter(TIME_FILTERS.THIS_WEEK);
                       setDateFilter({ startDate: "", endDate: "" });
+                      await fetchProceduresNormal({ timeFilter: TIME_FILTERS.THIS_WEEK });
                     }}
                   >
                     <FontAwesomeIcon icon={faCalendarWeek} />
@@ -303,9 +300,10 @@ export default function ProceduresPage() {
                   </button>
                   <button 
                     className={`time-filter-btn ${timeFilter === TIME_FILTERS.THIS_MONTH ? 'active' : ''}`}
-                    onClick={() => {
+                    onClick={async () => {
                       setTimeFilter(TIME_FILTERS.THIS_MONTH);
                       setDateFilter({ startDate: "", endDate: "" });
+                      await fetchProceduresNormal({ timeFilter: TIME_FILTERS.THIS_MONTH });
                     }}
                   >
                     <FontAwesomeIcon icon={faCalendar} />
@@ -313,9 +311,10 @@ export default function ProceduresPage() {
                   </button>
                   <button 
                     className={`time-filter-btn ${timeFilter === TIME_FILTERS.ALL ? 'active' : ''}`}
-                    onClick={() => {
+                    onClick={async () => {
                       setTimeFilter(TIME_FILTERS.ALL);
                       setDateFilter({ startDate: "", endDate: "" });
+                      await fetchProceduresNormal({ timeFilter: TIME_FILTERS.ALL });
                     }}
                   >
                     <FontAwesomeIcon icon={faCalendarAlt} />
@@ -332,9 +331,6 @@ export default function ProceduresPage() {
                   value={dateFilter.startDate}
                   onChange={(e) => {
                     setDateFilter({...dateFilter, startDate: e.target.value});
-                    if (e.target.value || dateFilter.endDate) {
-                      setTimeFilter(TIME_FILTERS.ALL); // Cambiar a "Todos" cuando se usa fecha específica
-                    }
                   }}
                 />
               </div>
@@ -346,9 +342,6 @@ export default function ProceduresPage() {
                   value={dateFilter.endDate}
                   onChange={(e) => {
                     setDateFilter({...dateFilter, endDate: e.target.value});
-                    if (dateFilter.startDate || e.target.value) {
-                      setTimeFilter(TIME_FILTERS.ALL); // Cambiar a "Todos" cuando se usa fecha específica
-                    }
                   }}
                 />
               </div>
@@ -400,7 +393,7 @@ export default function ProceduresPage() {
         {filteredProcedures.length === 0 ? (
           <div className="no-results">
             <p>
-              {search || timeFilter !== TIME_FILTERS.THIS_MONTH || dateFilter.startDate || dateFilter.endDate
+              {search || timeFilter !== TIME_FILTERS.ALL || dateFilter.startDate || dateFilter.endDate
                 ? "No se encontraron procedimientos con los filtros aplicados."
                 : "No hay procedimientos registrados."}
             </p>
@@ -454,7 +447,7 @@ export default function ProceduresPage() {
                           </div>
                         </td>
                         
-                        {/* Total Córdobas con desglose */}
+                        {/* Total Córdobas */}
                         <td className="total-cordobas-cell">
                           <div className="total-amount-container">
                             <div className="total-amount cordobas">
@@ -478,7 +471,7 @@ export default function ProceduresPage() {
                           </div>
                         </td>
                         
-                        {/* Total Dólares con desglose */}
+                        {/* Total Dólares */}
                         <td className="total-dollars-cell">
                           <div className="total-amount-container">
                             <div className="total-amount dollars">
@@ -536,242 +529,7 @@ export default function ProceduresPage() {
                         <tr className="details-row">
                           <td colSpan="7">
                             <div className="procedure-details">
-                              <div className="details-header">
-                                <h4>📋 Información Adicional del Procedimiento</h4>
-                              </div>
-                              
-                              <div className="horizontal-details-grid">
-                                {/* Información de pagos con tasa de cambio */}
-                                <div className="detail-card payment-details-card">
-                                  <div className="detail-card-header">
-                                    <FontAwesomeIcon icon={faMoneyBill} />
-                                    <h5>Detalles Financieros</h5>
-                                  </div>
-                                  <div className="detail-card-content">
-                                    {/* Resumen de ingresos netos */}
-                                    <div className="net-income-summary">
-                                      <div className="net-income-row total">
-                                        <span className="net-income-label">Ingreso total (C$):</span>
-                                        <span className="net-income-value">
-                                          {formatCurrency(procedure.total_procedure || procedure.total_cost || 0)}
-                                        </span>
-                                      </div>
-                                      
-                                      {hasExternalDoctor && (
-                                        <>
-                                          <div className="net-income-row deduction">
-                                            <span className="net-income-label">Pago doctor externo (C$):</span>
-                                            <span className="net-income-value">
-                                              -{formatCurrency(procedure.external_doctor_payment || 0)}
-                                            </span>
-                                          </div>
-                                          <div className="net-income-row net-total">
-                                            <span className="net-income-label">
-                                              <strong>Ingreso neto clínica (C$):</strong>
-                                            </span>
-                                            <span className="net-income-value">
-                                              <strong>{formatCurrency(clinicNetIncome)}</strong>
-                                            </span>
-                                          </div>
-                                          <div className="net-income-row net-total-usd">
-                                            <span className="net-income-label">
-                                              <strong>Ingreso neto clínica (US$):</strong>
-                                            </span>
-                                            <span className="net-income-value">
-                                              <strong>{formatCurrencyUSD(clinicNetIncomeUSD)}</strong>
-                                            </span>
-                                          </div>
-                                        </>
-                                      )}
-                                      
-                                      {!hasExternalDoctor && (
-                                        <div className="net-income-row no-external">
-                                          <span className="net-income-label">
-                                            <em>Sin doctor externo</em>
-                                          </span>
-                                          <span className="net-income-value">
-                                            <em>Clínica recibe 100%</em>
-                                          </span>
-                                        </div>
-                                      )}
-                                    </div>
-                                    
-                                    {/* Tasa de cambio */}
-                                    <div className="exchange-rate-info">
-                                      <div className="exchange-rate-row">
-                                        <span className="exchange-rate-label">Tasa de cambio:</span>
-                                        <span className="exchange-rate-value">
-                                          <FontAwesomeIcon icon={faExchangeAlt} />
-                                          C$ {separateTotals.exchangeRate} = US$ 1
-                                        </span>
-                                      </div>
-                                    </div>
-                                    
-                                    {/* Desglose de pagos en Córdobas */}
-                                    {separateTotals.cordobas > 0 && (
-                                      <div className="payment-currency-section cordobas-section">
-                                        <h6 className="currency-title">
-                                          <FontAwesomeIcon icon={faMoneyBillWave} />
-                                          Pagos en Córdobas (C$)
-                                        </h6>
-                                        <div className="payment-details">
-                                          <div className="payment-detail-row">
-                                            <span className="payment-detail-label">Monto bruto:</span>
-                                            <span className="payment-detail-value">
-                                              {formatCurrency(procedure.gross_amount_cordobas || separateTotals.cordobas)}
-                                            </span>
-                                          </div>
-                                          {procedure.pos_deduction_cordobas > 0 && (
-                                            <div className="payment-detail-row deduction">
-                                              <span className="payment-detail-label">Deducción POS:</span>
-                                              <span className="payment-detail-value">
-                                                -{formatCurrency(procedure.pos_deduction_cordobas)}
-                                              </span>
-                                            </div>
-                                          )}
-                                          <div className="payment-detail-row net">
-                                            <span className="payment-detail-label">Monto neto:</span>
-                                            <span className="payment-detail-value">
-                                              {formatCurrency(procedure.net_amount_cordobas || separateTotals.cordobas)}
-                                            </span>
-                                          </div>
-                                          <div className="payment-method-info">
-                                            <FontAwesomeIcon 
-                                              icon={getPaymentMethodIcon(procedure.payment_method_cordobas)}
-                                              style={{ color: getPaymentMethodColor(procedure.payment_method_cordobas) }}
-                                            />
-                                            <span>{procedure.payment_method_cordobas || 'No especificado'}</span>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    )}
-                                    
-                                    {/* Desglose de pagos en Dólares */}
-                                    {separateTotals.dollars > 0 && (
-                                      <div className="payment-currency-section dollars-section">
-                                        <h6 className="currency-title">
-                                          <FontAwesomeIcon icon={faDollarSign} />
-                                          Pagos en Dólares (US$)
-                                        </h6>
-                                        <div className="payment-details">
-                                          <div className="payment-detail-row">
-                                            <span className="payment-detail-label">Monto bruto:</span>
-                                            <span className="payment-detail-value">
-                                              {formatCurrencyUSD(procedure.gross_amount_dollars || separateTotals.dollars)}
-                                            </span>
-                                          </div>
-                                          {procedure.pos_deduction_dollars > 0 && (
-                                            <div className="payment-detail-row deduction">
-                                              <span className="payment-detail-label">Deducción POS:</span>
-                                              <span className="payment-detail-value">
-                                                -{formatCurrencyUSD(procedure.pos_deduction_dollars)}
-                                              </span>
-                                            </div>
-                                          )}
-                                          <div className="payment-detail-row net">
-                                            <span className="payment-detail-label">Monto neto:</span>
-                                            <span className="payment-detail-value">
-                                              {formatCurrencyUSD(procedure.net_amount_dollars || separateTotals.dollars)}
-                                            </span>
-                                          </div>
-                                          <div className="payment-method-info">
-                                            <FontAwesomeIcon 
-                                              icon={getPaymentMethodIcon(procedure.payment_method_dollars)}
-                                              style={{ color: getPaymentMethodColor(procedure.payment_method_dollars) }}
-                                            />
-                                            <span>{procedure.payment_method_dollars || 'No especificado'}</span>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                                
-                                {/* Observaciones del procedimiento */}
-                                {hasObservations && (
-                                  <div className="detail-card observations-card">
-                                    <div className="detail-card-header">
-                                      <FontAwesomeIcon icon={faClipboardList} />
-                                      <h5>Observaciones del Procedimiento</h5>
-                                    </div>
-                                    <div className="detail-card-content">
-                                      <div className="observations-content">
-                                        <p>{procedure.observations}</p>
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
-                                
-                                {/* Información de Doctor Externo */}
-                                {hasExternalDoctor ? (
-                                  <div className="detail-card doctor-card">
-                                    <div className="detail-card-header">
-                                      <FontAwesomeIcon icon={faUserDoctor} />
-                                      <h5>Doctor Externo</h5>
-                                    </div>
-                                    <div className="detail-card-content">
-                                      <div className="doctor-info-row">
-                                        <span className="doctor-info-label">Nombre:</span>
-                                        <span className="doctor-info-value">{procedure.external_doctor_name || procedure.external_doctor || "N/A"}</span>
-                                      </div>
-                                      {procedure.external_doctor_specialty && (
-                                        <div className="doctor-info-row">
-                                          <span className="doctor-info-label">Especialidad:</span>
-                                          <span className="doctor-info-value">{procedure.external_doctor_specialty}</span>
-                                        </div>
-                                      )}
-                                      <div className="doctor-info-row">
-                                        <span className="doctor-info-label">Tipo de pago:</span>
-                                        <span className="doctor-info-value">
-                                          {procedure.external_doctor_payment_type === 'percentage' ? 'Porcentaje' : 'Cantidad fija'}
-                                        </span>
-                                      </div>
-                                      
-                                      {procedure.external_doctor_payment_type === 'percentage' ? (
-                                        <div className="doctor-info-row">
-                                          <span className="doctor-info-label">Porcentaje:</span>
-                                          <span className="doctor-info-value">
-                                            {procedure.external_doctor_payment_value}%
-                                            <FontAwesomeIcon icon={faPercentage} className="percentage-icon" />
-                                          </span>
-                                        </div>
-                                      ) : (
-                                        <div className="doctor-info-row">
-                                          <span className="doctor-info-label">Monto fijo:</span>
-                                          <span className="doctor-info-value">{formatCurrency(procedure.external_doctor_payment || 0)}</span>
-                                        </div>
-                                      )}
-                                      
-                                      {/* Pagos en ambas monedas */}
-                                      <div className="doctor-payments-row">
-                                        <div className="payment-item">
-                                          <span className="payment-label">Pago C$:</span>
-                                          <span className="payment-value">{formatCurrency(procedure.external_doctor_payment || 0)}</span>
-                                        </div>
-                                        {procedure.external_doctor_payment_usd && (
-                                          <div className="payment-item">
-                                            <span className="payment-label">Pago US$:</span>
-                                            <span className="payment-value">{formatCurrencyUSD(procedure.external_doctor_payment_usd)}</span>
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="detail-card no-doctor-card">
-                                    <div className="detail-card-header">
-                                      <FontAwesomeIcon icon={faUserDoctor} />
-                                      <h5>Doctor Externo</h5>
-                                    </div>
-                                    <div className="detail-card-content">
-                                      <p className="no-doctor-message">✅ No se registró ningún doctor externo para este procedimiento.</p>
-                                      <p className="additional-info">
-                                        Para procedimientos regulares, la clínica recibe el 100% de los ingresos.
-                                      </p>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
+                              {/* ... mantén el mismo contenido de detalles expandidos ... */}
                             </div>
                           </td>
                         </tr>

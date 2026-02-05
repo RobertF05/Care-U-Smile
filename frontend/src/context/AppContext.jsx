@@ -20,6 +20,7 @@ export const AppProvider = ({ children }) => {
   // Estados globales
   const [patients, setPatients] = useState([]);
   const [procedures, setProcedures] = useState([]);
+  const [orthodonticProcedures, setOrthodonticProcedures] = useState([]); // NUEVO: estado separado para ortodoncias
   const [appointments, setAppointments] = useState([]);
   const [bills, setBills] = useState([]);
   const [monthlyClosings, setMonthlyClosings] = useState([]);
@@ -386,7 +387,7 @@ export const AppProvider = ({ children }) => {
       
       console.log(`✅ ${data.data?.length || 0} procedimientos cargados`);
       
-      setProcedures(data.data || []);
+      setProcedures(data.data || []); // ✅ Guarda en procedimientos normales
       setStats(prev => ({ 
         ...prev, 
         totalProcedures: data.total || 0,
@@ -400,7 +401,7 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  // Ortodoncias con filtros unificados (ACTUALIZADO)
+  // Ortodoncias con filtros unificados - MODIFICADO
   const fetchOrthodontics = async (filters = {}) => {
     try {
       console.log('🔍 Cargando ortodoncias con filtros:', filters);
@@ -437,12 +438,8 @@ export const AppProvider = ({ children }) => {
       
       console.log(`✅ ${data.data?.length || 0} ortodoncias cargadas`);
       
-      setProcedures(data.data || []);
-      setStats(prev => ({ 
-        ...prev, 
-        totalProcedures: data.total || 0,
-        pendingProcedures: (data.data || []).filter(proc => !proc.state || proc.state !== 'COMPLETED').length
-      }));
+      // ✅ MODIFICADO: Guardar en estado separado para ortodoncias
+      setOrthodonticProcedures(data.data || []);
       
       return data;
     } catch (error) {
@@ -988,6 +985,7 @@ export const AppProvider = ({ children }) => {
     // Estados
     patients,
     procedures,
+    orthodonticProcedures, // ✅ AÑADIDO: estado separado para ortodoncias
     appointments,
     bills,
     monthlyClosings,

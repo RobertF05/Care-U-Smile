@@ -1,4 +1,4 @@
-// controllers/procedureController.js - VERSIÓN UNIFICADA CON AMBOS FILTROS
+// controllers/procedureController.js - VERSIÓN CORREGIDA CON FILTRO "TODOS" FUNCIONAL
 import { supabaseAdmin } from '../config/supabase.js';
 import {
   formatNicaraguaDateTime,
@@ -10,8 +10,67 @@ import {
 
 const procedureController = {
   // ============================================
+  // FUNCIÓN AUXILIAR: getDateRangeFromFilter
+  // ============================================
+  getDateRangeFromFilter: (filter) => {
+    console.log(`📅 Calculando rango para filtro: ${filter}`);
+    
+    // Si es 'all', devolver null explícitamente
+    if (filter === 'all') {
+      console.log('📅 Filtro "Todos" - Sin rango de fechas');
+      return {
+        startDate: null,
+        endDate: null
+      };
+    }
+    
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const day = now.getDate();
+    const dayOfWeek = now.getDay();
+    
+    let startDate = null;
+    let endDate = null;
+    
+    switch(filter) {
+      case 'today':
+        startDate = new Date(year, month, day, 0, 0, 0, 0);
+        endDate = new Date(year, month, day, 23, 59, 59, 999);
+        console.log(`📅 Hoy: ${startDate.toISOString()} - ${endDate.toISOString()}`);
+        break;
+        
+      case 'thisWeek':
+        const startOfWeek = new Date(year, month, day - dayOfWeek, 0, 0, 0, 0);
+        const endOfWeek = new Date(year, month, day + (6 - dayOfWeek), 23, 59, 59, 999);
+        startDate = startOfWeek;
+        endDate = endOfWeek;
+        console.log(`📅 Esta semana: ${startDate.toISOString()} - ${endDate.toISOString()}`);
+        break;
+        
+      case 'thisMonth':
+        startDate = new Date(year, month, 1, 0, 0, 0, 0);
+        endDate = new Date(year, month + 1, 0, 23, 59, 59, 999);
+        console.log(`📅 Este mes: ${startDate.toISOString()} - ${endDate.toISOString()}`);
+        break;
+        
+      default:
+        console.log(`⚠️ Filtro no reconocido: ${filter} - Sin rango de fechas`);
+        return {
+          startDate: null,
+          endDate: null
+        };
+    }
+    
+    return {
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString()
+    };
+  },
+
+  // ============================================
   // OBTENER PROCEDIMIENTOS REGULARES (NO ORTODONCIA)
-  // CON FILTROS DE TIEMPO Y FECHAS ESPECÍFICAS
+  // CON FILTROS DE TIEMPO Y FECHAS ESPECÍFICAS - VERSIÓN CORREGIDA
   // ============================================
   getAllNormal: async (req, res) => {
     try {
@@ -21,109 +80,17 @@ const procedureController = {
         startDate, 
         endDate,
         patientId,
-        timeFilter = 'thisMonth'
+        timeFilter
       } = req.query;
       
-      console.log('📋 Parámetros recibidos (procedimientos normales):', { 
+      console.log('📋 Procedimientos normales - Parámetros:', { 
         page, limit, startDate, endDate, patientId, timeFilter 
       });
       
       const from = (page - 1) * limit;
       const to = from + limit - 1;
       
-      // Función auxiliar para obtener fechas según filtro de tiempo
-      const getDateRangeFromFilter = (filter) => {
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = now.getMonth();
-        const day = now.getDate();
-        const dayOfWeek = now.getDay();
-        
-        console.log(`📅 Calculando rango para filtro: ${filter}`);
-        
-        let startDate = null;
-        let endDate = null;
-        
-        switch(filter) {
-          case 'today':
-            // Hoy (desde inicio del día hasta fin del día)
-            startDate = new Date(year, month, day, 0, 0, 0, 0);
-            endDate = new Date(year, month, day, 23, 59, 59, 999);
-            console.log(`📅 Hoy: ${startDate.toISOString()} - ${endDate.toISOString()}`);
-            break;
-            
-          case 'thisWeek':
-            // Esta semana (desde domingo hasta sábado)
-            const startOfWeek = new Date(year, month, day - dayOfWeek, 0, 0, 0, 0);
-            const endOfWeek = new Date(year, month, day + (6 - dayOfWeek), 23, 59, 59, 999);
-            startDate = startOfWeek;
-            endDate = endOfWeek;
-            console.log(`📅 Esta semana: ${startDate.toISOString()} - ${endDate.toISOString()}`);
-            break;
-            
-          case 'thisMonth':
-            // Este mes (desde día 1 hasta último día del mes)
-            startDate = new Date(year, month, 1, 0, 0, 0, 0);
-            endDate = new Date(year, month + 1, 0, 23, 59, 59, 999);
-            console.log(`📅 Este mes: ${startDate.toISOString()} - ${endDate.toISOString()}`);
-            break;
-            
-          case 'all':
-          default:
-            // Sin filtro de fecha
-            console.log('📅 Sin filtro de fechas (todos)');
-            return {
-              startDate: null,
-              endDate: null
-            };
-        }
-        
-        // Asegurarse de que las fechas sean válidas
-        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-          console.error('❌ Fechas calculadas inválidas');
-          return {
-            startDate: null,
-            endDate: null
-          };
-        }
-        
-        return {
-          startDate: startDate.toISOString(),
-          endDate: endDate.toISOString()
-        };
-      };
-      
-      // LÓGICA DE PRIORIDAD: Fechas específicas > Filtro de tiempo
-      let finalStartDate = null;
-      let finalEndDate = null;
-      let filterApplied = 'none';
-      
-      // 1. PRIORIDAD: Si hay fechas específicas, usarlas
-      if (startDate || endDate) {
-        finalStartDate = startDate;
-        finalEndDate = endDate;
-        filterApplied = 'specificDates';
-        console.log('📅 Usando fechas específicas:', { start: finalStartDate, end: finalEndDate });
-      }
-      // 2. Si NO hay fechas específicas, usar el filtro de tiempo
-      else if (timeFilter && timeFilter !== 'all') {
-        const dateRange = getDateRangeFromFilter(timeFilter);
-        finalStartDate = dateRange.startDate;
-        finalEndDate = dateRange.endDate;
-        filterApplied = timeFilter;
-        console.log('📅 Usando filtro de tiempo:', { 
-          filter: timeFilter, 
-          start: finalStartDate, 
-          end: finalEndDate 
-        });
-      }
-      // 3. Filtro "Todos" o sin filtro
-      else {
-        console.log('📅 Sin filtro de fechas (mostrando todos los procedimientos)');
-        filterApplied = 'all';
-      }
-      
-      // Construir consulta
+      // Construir consulta base
       let query = supabaseAdmin
         .from('procedures')
         .select(`
@@ -141,37 +108,75 @@ const procedureController = {
         .eq('is_orthodontics', false)
         .order('procedure_date', { ascending: false });
       
-      // Aplicar filtros de fecha SI existen
-      if (finalStartDate && finalEndDate) {
-        try {
-          // Convertir fechas a formato UTC para la consulta
-          const startUTC = safeToISOString(finalStartDate);
-          const endUTC = safeToISOString(finalEndDate);
-          
-          if (startUTC && endUTC) {
-            console.log('📅 Aplicando filtro de fechas UTC:', { 
-              start: startUTC, 
-              end: endUTC 
-            });
-            query = query.gte('procedure_date', startUTC);
-            query = query.lte('procedure_date', endUTC);
-          } else {
-            console.warn('⚠️ Fechas inválidas después de conversión, no se aplicará filtro');
-          }
-        } catch (dateError) {
-          console.error('❌ Error procesando fechas:', dateError.message);
+      // 1. SI HAY FECHAS ESPECÍFICAS -> Usar esas fechas
+      if (startDate && endDate) {
+        const startUTC = safeToISOString(`${startDate}T00:00:00`);
+        const endUTC = safeToISOString(`${endDate}T23:59:59`);
+        
+        if (startUTC && endUTC) {
+          console.log('📅 Usando fechas específicas:', { startUTC, endUTC });
+          query = query.gte('procedure_date', startUTC);
+          query = query.lte('procedure_date', endUTC);
         }
+      } 
+      // 2. SI HAY FILTRO DE TIEMPO Y NO ES 'all' -> Calcular rango
+      else if (timeFilter && timeFilter !== 'all') {
+        console.log('📅 Calculando rango para filtro:', timeFilter);
+        
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth();
+        const day = now.getDate();
+        
+        let startDateObj, endDateObj;
+        
+        switch(timeFilter) {
+          case 'today':
+            startDateObj = new Date(year, month, day, 0, 0, 0, 0);
+            endDateObj = new Date(year, month, day, 23, 59, 59, 999);
+            break;
+            
+          case 'thisWeek':
+            const dayOfWeek = now.getDay();
+            const startOfWeek = new Date(year, month, day - dayOfWeek, 0, 0, 0, 0);
+            const endOfWeek = new Date(year, month, day + (6 - dayOfWeek), 23, 59, 59, 999);
+            startDateObj = startOfWeek;
+            endDateObj = endOfWeek;
+            break;
+            
+          case 'thisMonth':
+            startDateObj = new Date(year, month, 1, 0, 0, 0, 0);
+            endDateObj = new Date(year, month + 1, 0, 23, 59, 59, 999);
+            break;
+            
+          default:
+            console.log('⚠️ Filtro no reconocido, sin filtro de fecha');
+            break;
+        }
+        
+        if (startDateObj && endDateObj) {
+          query = query.gte('procedure_date', startDateObj.toISOString());
+          query = query.lte('procedure_date', endDateObj.toISOString());
+          console.log('📅 Rango aplicado:', { 
+            start: startDateObj.toISOString(), 
+            end: endDateObj.toISOString() 
+          });
+        }
+      } 
+      // 3. SI ES 'all' O NO HAY FILTROS -> NO aplicar filtro de fecha
+      else {
+        console.log('📅 Mostrando TODOS los procedimientos (sin filtro de fecha)');
       }
       
-      // Otros filtros
-      if (patientId) {
+      // Filtro por paciente
+      if (patientId && patientId.trim() !== "") {
         query = query.eq('Patient_ID', patientId);
       }
       
       // Paginación
       query = query.range(from, to);
       
-      console.log('🔍 Ejecutando consulta a Supabase...');
+      console.log('🔍 Ejecutando consulta...');
       const { data, error, count: totalCount } = await query;
       
       if (error) {
@@ -179,7 +184,7 @@ const procedureController = {
         throw error;
       }
       
-      console.log(`✅ ${data?.length || 0} procedimientos normales encontrados`);
+      console.log(`✅ ${data?.length || 0} procedimientos encontrados`);
       
       // Transformar datos
       const transformedData = (data || []).map(item => {
@@ -189,17 +194,35 @@ const procedureController = {
         const clinicNetIncome = Math.max(0, clinicIncome - externalDoctorPayment);
         
         // Formatear fechas para mostrar
-        const procedureDateFormatted = item.procedure_date ? 
-          formatNicaraguaDateTime(item.procedure_date) : 'N/A';
+        let procedureDateFormatted = 'N/A';
+        try {
+          if (item.procedure_date) {
+            procedureDateFormatted = formatNicaraguaDateTime(item.procedure_date);
+          }
+        } catch (error) {
+          console.error('Error formateando fecha:', error);
+        }
         
-        const creationDateFormatted = item.creation_date ? 
-          formatNicaraguaDateTime(item.creation_date) : 'N/A';
+        let creationDateFormatted = 'N/A';
+        try {
+          if (item.creation_date) {
+            creationDateFormatted = formatNicaraguaDateTime(item.creation_date);
+          }
+        } catch (error) {
+          console.error('Error formateando creación:', error);
+        }
         
         const originalAppointmentDate = item.clinical_appointments?.[0]?.appointment_date;
-        const originalAppointmentDateFormatted = originalAppointmentDate ? 
-          formatNicaraguaDateTime(originalAppointmentDate) : null;
+        let originalAppointmentDateFormatted = null;
+        try {
+          if (originalAppointmentDate) {
+            originalAppointmentDateFormatted = formatNicaraguaDateTime(originalAppointmentDate);
+          }
+        } catch (error) {
+          console.error('Error formateando cita original:', error);
+        }
         
-        // Calcular totales en dólares si hay tipo de cambio
+        // Calcular totales en dólares
         const exchangeRate = item.exchange_rate_used || 36.5;
         const totalProcedureUSD = item.total_procedure_usd || (clinicIncome / exchangeRate);
         const clinicNetIncomeUSD = item.clinic_payment_dollars || (clinicNetIncome / exchangeRate);
@@ -243,7 +266,7 @@ const procedureController = {
         };
       });
       
-      // Calcular estadísticas del filtro aplicado
+      // Calcular estadísticas
       const totalIncome = transformedData.reduce((sum, item) => sum + (item.clinic_income || 0), 0);
       const totalNetIncome = transformedData.reduce((sum, item) => sum + (item.clinic_net_income || 0), 0);
       const totalExternalPayments = transformedData.reduce((sum, item) => sum + (item.external_doctor_payment || 0), 0);
@@ -255,12 +278,7 @@ const procedureController = {
         page: parseInt(page),
         limit: parseInt(limit),
         totalPages: Math.ceil((totalCount || 0) / limit),
-        filterApplied: {
-          type: filterApplied,
-          startDate: finalStartDate,
-          endDate: finalEndDate,
-          hasDateFilter: !!(finalStartDate && finalEndDate)
-        },
+        filterApplied: timeFilter || 'all',
         stats: {
           totalProcedures: transformedData.length,
           totalIncome,
@@ -275,15 +293,14 @@ const procedureController = {
       res.status(500).json({ 
         success: false, 
         error: 'Error al obtener procedimientos',
-        details: error.message,
-        filter: req.query.timeFilter || 'unknown'
+        details: error.message
       });
     }
   },
 
   // ============================================
   // OBTENER PROCEDIMIENTOS DE ORTODONCIA
-  // CON FILTROS DE TIEMPO Y FECHAS ESPECÍFICAS (ACTUALIZADO)
+  // VERSIÓN SIMPLIFICADA - SOLO FILTROS DIRECTOS
   // ============================================
   getAllOrthodontics: async (req, res) => {
     try {
@@ -293,101 +310,17 @@ const procedureController = {
         startDate, 
         endDate,
         patientId,
-        timeFilter = 'thisMonth'  // NUEVO PARÁMETRO
+        timeFilter
       } = req.query;
       
-      console.log('📋 Parámetros recibidos (ortodoncia):', { 
+      console.log('📋 Ortodoncias - Parámetros:', { 
         page, limit, startDate, endDate, patientId, timeFilter 
       });
       
       const from = (page - 1) * limit;
       const to = from + limit - 1;
       
-      // Función auxiliar para obtener fechas según filtro de tiempo (MISMA QUE getAllNormal)
-      const getDateRangeFromFilter = (filter) => {
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = now.getMonth();
-        const day = now.getDate();
-        const dayOfWeek = now.getDay();
-        
-        console.log(`📅 [Ortodoncia] Calculando rango para filtro: ${filter}`);
-        
-        let startDate = null;
-        let endDate = null;
-        
-        switch(filter) {
-          case 'today':
-            startDate = new Date(year, month, day, 0, 0, 0, 0);
-            endDate = new Date(year, month, day, 23, 59, 59, 999);
-            break;
-            
-          case 'thisWeek':
-            const startOfWeek = new Date(year, month, day - dayOfWeek, 0, 0, 0, 0);
-            const endOfWeek = new Date(year, month, day + (6 - dayOfWeek), 23, 59, 59, 999);
-            startDate = startOfWeek;
-            endDate = endOfWeek;
-            break;
-            
-          case 'thisMonth':
-            startDate = new Date(year, month, 1, 0, 0, 0, 0);
-            endDate = new Date(year, month + 1, 0, 23, 59, 59, 999);
-            break;
-            
-          case 'all':
-          default:
-            return {
-              startDate: null,
-              endDate: null
-            };
-        }
-        
-        // Asegurarse de que las fechas sean válidas
-        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-          console.error('❌ [Ortodoncia] Fechas calculadas inválidas');
-          return {
-            startDate: null,
-            endDate: null
-          };
-        }
-        
-        return {
-          startDate: startDate.toISOString(),
-          endDate: endDate.toISOString()
-        };
-      };
-      
-      // LÓGICA DE PRIORIDAD UNIFICADA: Fechas específicas > Filtro de tiempo
-      let finalStartDate = null;
-      let finalEndDate = null;
-      let filterApplied = 'none';
-      
-      // 1. PRIORIDAD: Si hay fechas específicas, usarlas
-      if (startDate || endDate) {
-        finalStartDate = startDate;
-        finalEndDate = endDate;
-        filterApplied = 'specificDates';
-        console.log('📅 [Ortodoncia] Usando fechas específicas:', { start: finalStartDate, end: finalEndDate });
-      }
-      // 2. Si NO hay fechas específicas, usar el filtro de tiempo
-      else if (timeFilter && timeFilter !== 'all') {
-        const dateRange = getDateRangeFromFilter(timeFilter);
-        finalStartDate = dateRange.startDate;
-        finalEndDate = dateRange.endDate;
-        filterApplied = timeFilter;
-        console.log('📅 [Ortodoncia] Usando filtro de tiempo:', { 
-          filter: timeFilter, 
-          start: finalStartDate, 
-          end: finalEndDate 
-        });
-      }
-      // 3. Filtro "Todos" o sin filtro
-      else {
-        console.log('📅 [Ortodoncia] Sin filtro de fechas (mostrando todas las ortodoncias)');
-        filterApplied = 'all';
-      }
-      
-      // Construir consulta
+      // Construir consulta base
       let query = supabaseAdmin
         .from('procedures')
         .select(`
@@ -405,35 +338,79 @@ const procedureController = {
         .eq('is_orthodontics', true)
         .order('procedure_date', { ascending: false });
       
-      // Aplicar filtros de fecha SI existen
-      if (finalStartDate && finalEndDate) {
-        try {
-          const startUTC = safeToISOString(finalStartDate);
-          const endUTC = safeToISOString(finalEndDate);
-          
-          if (startUTC && endUTC) {
-            console.log('📅 [Ortodoncia] Aplicando filtro de fechas UTC:', { start: startUTC, end: endUTC });
-            query = query.gte('procedure_date', startUTC);
-            query = query.lte('procedure_date', endUTC);
-          }
-        } catch (dateError) {
-          console.error('❌ [Ortodoncia] Error procesando fechas:', dateError.message);
+      // 1. SI HAY FECHAS ESPECÍFICAS -> Usar esas fechas
+      if (startDate && endDate) {
+        const startUTC = safeToISOString(`${startDate}T00:00:00`);
+        const endUTC = safeToISOString(`${endDate}T23:59:59`);
+        
+        if (startUTC && endUTC) {
+          console.log('📅 Ortodoncias - Usando fechas específicas:', { startUTC, endUTC });
+          query = query.gte('procedure_date', startUTC);
+          query = query.lte('procedure_date', endUTC);
         }
+      } 
+      // 2. SI HAY FILTRO DE TIEMPO Y NO ES 'all' -> Calcular rango
+      else if (timeFilter && timeFilter !== 'all') {
+        console.log('📅 Ortodoncias - Calculando rango para filtro:', timeFilter);
+        
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth();
+        const day = now.getDate();
+        
+        let startDateObj, endDateObj;
+        
+        switch(timeFilter) {
+          case 'today':
+            startDateObj = new Date(year, month, day, 0, 0, 0, 0);
+            endDateObj = new Date(year, month, day, 23, 59, 59, 999);
+            break;
+            
+          case 'thisWeek':
+            const dayOfWeek = now.getDay();
+            const startOfWeek = new Date(year, month, day - dayOfWeek, 0, 0, 0, 0);
+            const endOfWeek = new Date(year, month, day + (6 - dayOfWeek), 23, 59, 59, 999);
+            startDateObj = startOfWeek;
+            endDateObj = endOfWeek;
+            break;
+            
+          case 'thisMonth':
+            startDateObj = new Date(year, month, 1, 0, 0, 0, 0);
+            endDateObj = new Date(year, month + 1, 0, 23, 59, 59, 999);
+            break;
+            
+          default:
+            console.log('⚠️ Ortodoncias - Filtro no reconocido, sin filtro de fecha');
+            break;
+        }
+        
+        if (startDateObj && endDateObj) {
+          query = query.gte('procedure_date', startDateObj.toISOString());
+          query = query.lte('procedure_date', endDateObj.toISOString());
+          console.log('📅 Ortodoncias - Rango aplicado:', { 
+            start: startDateObj.toISOString(), 
+            end: endDateObj.toISOString() 
+          });
+        }
+      } 
+      // 3. SI ES 'all' O NO HAY FILTROS -> NO aplicar filtro de fecha
+      else {
+        console.log('📅 Ortodoncias - Mostrando TODAS las ortodoncias (sin filtro de fecha)');
       }
       
-      // Otros filtros
-      if (patientId) {
+      // Filtro por paciente
+      if (patientId && patientId.trim() !== "") {
         query = query.eq('Patient_ID', patientId);
       }
       
       // Paginación
       query = query.range(from, to);
       
-      console.log('🔍 [Ortodoncia] Ejecutando consulta a Supabase...');
+      console.log('🔍 Ortodoncias - Ejecutando consulta...');
       const { data, error, count: totalCount } = await query;
       
       if (error) {
-        console.error('❌ Error en Supabase (ortodoncia):', error);
+        console.error('❌ Error en Supabase (ortodoncias):', error);
         throw error;
       }
       
@@ -460,15 +437,33 @@ const procedureController = {
         const clinicNetIncomeUSD = Math.max(0, clinicIncomeUSD - externalDoctorPaymentUSD);
         
         // Formatear fechas
-        const procedureDateFormatted = item.procedure_date ? 
-          formatNicaraguaDateTime(item.procedure_date) : 'N/A';
+        let procedureDateFormatted = 'N/A';
+        try {
+          if (item.procedure_date) {
+            procedureDateFormatted = formatNicaraguaDateTime(item.procedure_date);
+          }
+        } catch (error) {
+          console.error('Error formateando fecha:', error);
+        }
         
-        const creationDateFormatted = item.creation_date ? 
-          formatNicaraguaDateTime(item.creation_date) : 'N/A';
+        let creationDateFormatted = 'N/A';
+        try {
+          if (item.creation_date) {
+            creationDateFormatted = formatNicaraguaDateTime(item.creation_date);
+          }
+        } catch (error) {
+          console.error('Error formateando creación:', error);
+        }
         
         const originalAppointmentDate = item.clinical_appointments?.[0]?.appointment_date;
-        const originalAppointmentDateFormatted = originalAppointmentDate ? 
-          formatNicaraguaDateTime(originalAppointmentDate) : null;
+        let originalAppointmentDateFormatted = null;
+        try {
+          if (originalAppointmentDate) {
+            originalAppointmentDateFormatted = formatNicaraguaDateTime(originalAppointmentDate);
+          }
+        } catch (error) {
+          console.error('Error formateando cita original:', error);
+        }
         
         return {
           ...item,
@@ -526,12 +521,7 @@ const procedureController = {
         page: parseInt(page),
         limit: parseInt(limit),
         totalPages: Math.ceil((totalCount || 0) / limit),
-        filterApplied: {
-          type: filterApplied,
-          startDate: finalStartDate,
-          endDate: finalEndDate,
-          hasDateFilter: !!(finalStartDate && finalEndDate)
-        },
+        filterApplied: timeFilter || 'all',
         stats: {
           totalProcedures: transformedData.length,
           totalIncome,
@@ -550,8 +540,7 @@ const procedureController = {
       res.status(500).json({ 
         success: false, 
         error: 'Error al obtener ortodoncias',
-        details: error.message,
-        filter: req.query.timeFilter || 'unknown'
+        details: error.message
       });
     }
   },
@@ -897,86 +886,37 @@ const procedureController = {
   // ============================================
   getIncomeStats: async (req, res) => {
     try {
-      const { startDate, endDate, timeFilter = 'thisMonth' } = req.query;
+      const { startDate, endDate, timeFilter = 'all' } = req.query;
       
       console.log('📊 Obteniendo estadísticas de ingresos:', { startDate, endDate, timeFilter });
-      
-      // Usar la misma lógica de filtro de tiempo
-      const getDateRangeFromFilter = (filter) => {
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = now.getMonth();
-        const day = now.getDate();
-        const dayOfWeek = now.getDay();
-        
-        let startDate = null;
-        let endDate = null;
-        
-        switch(filter) {
-          case 'today':
-            startDate = new Date(year, month, day, 0, 0, 0, 0);
-            endDate = new Date(year, month, day, 23, 59, 59, 999);
-            break;
-            
-          case 'thisWeek':
-            const startOfWeek = new Date(year, month, day - dayOfWeek, 0, 0, 0, 0);
-            const endOfWeek = new Date(year, month, day + (6 - dayOfWeek), 23, 59, 59, 999);
-            startDate = startOfWeek;
-            endDate = endOfWeek;
-            break;
-            
-          case 'thisMonth':
-            startDate = new Date(year, month, 1, 0, 0, 0, 0);
-            endDate = new Date(year, month + 1, 0, 23, 59, 59, 999);
-            break;
-            
-          case 'all':
-          default:
-            return {
-              startDate: null,
-              endDate: null
-            };
-        }
-        
-        return {
-          startDate: startDate ? startDate.toISOString() : null,
-          endDate: endDate ? endDate.toISOString() : null
-        };
-      };
       
       let finalStartDate = startDate;
       let finalEndDate = endDate;
       
-      // Aplicar filtro de tiempo si no hay fechas específicas
-      if (!startDate && !endDate) {
-        const dateRange = getDateRangeFromFilter(timeFilter);
+      // Si no hay fechas específicas y no es 'all', calcular rango
+      if (!startDate && !endDate && timeFilter !== 'all') {
+        const dateRange = procedureController.getDateRangeFromFilter(timeFilter);
         finalStartDate = dateRange.startDate;
         finalEndDate = dateRange.endDate;
       }
       
-      if (!finalStartDate || !finalEndDate) {
-        return res.status(400).json({ 
-          success: false, 
-          error: 'Fecha inicio y fin son requeridas' 
-        });
-      }
-      
-      const startUTC = safeToISOString(finalStartDate);
-      const endUTC = safeToISOString(finalEndDate);
-      
-      if (!startUTC || !endUTC) {
-        return res.status(400).json({ 
-          success: false, 
-          error: 'Fechas inválidas' 
-        });
-      }
-      
-      // Obtener todos los procedimientos en el período
-      const { data, error } = await supabaseAdmin
+      // Si es 'all' o no hay fechas, obtener todos los procedimientos
+      let query = supabaseAdmin
         .from('procedures')
-        .select('total_procedure, is_orthodontics, external_doctor_payment, clinic_payment_percentage, doctor_payment_percentage')
-        .gte('procedure_date', startUTC)
-        .lte('procedure_date', endUTC);
+        .select('total_procedure, is_orthodontics, external_doctor_payment, clinic_payment_percentage, doctor_payment_percentage');
+      
+      // Aplicar filtro de fecha solo si hay fechas
+      if (finalStartDate && finalEndDate) {
+        const startUTC = safeToISOString(finalStartDate);
+        const endUTC = safeToISOString(finalEndDate);
+        
+        if (startUTC && endUTC) {
+          query = query.gte('procedure_date', startUTC);
+          query = query.lte('procedure_date', endUTC);
+        }
+      }
+      
+      const { data, error } = await query;
       
       if (error) {
         console.error('❌ Error en Supabase:', error);

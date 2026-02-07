@@ -4,13 +4,10 @@ import { AuthContext } from "../../context/AuthContext";
 import { formatDate, formatCurrency } from "../../utils/formatters";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
-  faChevronDown,
-  faChevronUp,
   faFilter,
   faTimes,
   faSearch,
   faEye,
-  faEyeSlash,
   faUserDoctor,
   faClipboardList,
   faMoneyBillWave,
@@ -22,7 +19,13 @@ import {
   faCalendarDay,
   faCalendarWeek,
   faCalendar,
-  faCalendarAlt
+  faCalendarAlt,
+  faFileMedical,
+  faNotesMedical,
+  faHospitalUser,
+  faFileInvoiceDollar,
+  faChartLine,
+  faCalculator
 } from '@fortawesome/free-solid-svg-icons';
 import "./ProceduresPage.css";
 
@@ -45,14 +48,14 @@ export default function ProceduresPage() {
   } = useContext(AppContext);
   
   const [search, setSearch] = useState("");
-  const [timeFilter, setTimeFilter] = useState(TIME_FILTERS.ALL); // CAMBIADO A 'all' por defecto
+  const [timeFilter, setTimeFilter] = useState(TIME_FILTERS.ALL);
   const [dateFilter, setDateFilter] = useState({
     startDate: "",
     endDate: ""
   });
-  const [expandedFilters, setExpandedFilters] = useState(false);
-  const [expandedRows, setExpandedRows] = useState({});
   const [localError, setLocalError] = useState("");
+  const [viewModalOpen, setViewModalOpen] = useState(false);
+  const [selectedProcedure, setSelectedProcedure] = useState(null);
 
   useEffect(() => {
     if (user) {
@@ -75,20 +78,17 @@ export default function ProceduresPage() {
     }
   };
 
-  // FUNCIÓN SIMPLIFICADA DE FILTRADO - como en citas
+  // FUNCIÓN SIMPLIFICADA DE FILTRADO
   const applyFilters = async () => {
     try {
       setLocalError("");
       
       const filters = {};
       
-      // Lógica SIMPLE: usar el filtro que esté activo
       if (dateFilter.startDate && dateFilter.endDate) {
-        // Si hay fechas específicas, usarlas
         filters.startDate = dateFilter.startDate;
         filters.endDate = dateFilter.endDate;
       } else {
-        // Si no hay fechas específicas, usar el filtro de tiempo
         filters.timeFilter = timeFilter;
       }
       
@@ -104,7 +104,7 @@ export default function ProceduresPage() {
     try {
       setLocalError("");
       setSearch("");
-      setTimeFilter(TIME_FILTERS.ALL); // Cambiado a 'all'
+      setTimeFilter(TIME_FILTERS.ALL);
       setDateFilter({ startDate: "", endDate: "" });
       await fetchProceduresNormal({ timeFilter: TIME_FILTERS.ALL });
     } catch (error) {
@@ -113,11 +113,44 @@ export default function ProceduresPage() {
     }
   };
 
-  const toggleRow = (id) => {
-    setExpandedRows(prev => ({
-      ...prev,
-      [id]: !prev[id]
-    }));
+  // Abrir modal para ver procedimiento
+  const openViewModal = (procedure) => {
+    setSelectedProcedure(procedure);
+    setViewModalOpen(true);
+  };
+
+  // Cerrar modal de vista
+  const closeViewModal = () => {
+    setViewModalOpen(false);
+    setSelectedProcedure(null);
+  };
+
+  // Calcular cantidad neta de la clínica (CORREGIDO)
+  const calculateClinicNetIncome = (procedure) => {
+    // Monto bruto (total pagado por el paciente)
+    const grossAmount = procedure.gross_amount_cordobas || 
+                       procedure.total_procedure || 
+                       procedure.total_cost || 0;
+    
+    // Pago al doctor externo
+    const externalDoctorPayment = procedure.external_doctor_payment || 0;
+    
+    // Monto neto = Monto bruto - Pago al doctor externo
+    return Math.max(0, grossAmount - externalDoctorPayment);
+  };
+
+  // Calcular cantidad neta en dólares (CORREGIDO)
+  const calculateClinicNetIncomeUSD = (procedure) => {
+    // Monto bruto en dólares
+    const grossAmountUSD = procedure.gross_amount_dollars || 
+                          procedure.total_procedure_usd || 
+                          procedure.total_cost_USD || 0;
+    
+    // Pago al doctor externo en dólares
+    const externalDoctorPaymentUSD = procedure.external_doctor_payment_usd || 0;
+    
+    // Monto neto en dólares
+    return Math.max(0, grossAmountUSD - externalDoctorPaymentUSD);
   };
 
   const filteredProcedures = procedures
@@ -142,74 +175,15 @@ export default function ProceduresPage() {
     }).format(amount || 0);
   };
 
-  // Calcular cantidad neta de la clínica
-  const calculateClinicNetIncome = (procedure) => {
-    const clinicIncome = procedure.clinic_income || procedure.total_cost || 0;
-    const externalDoctorPayment = procedure.external_doctor_payment || 0;
-    return Math.max(0, clinicIncome - externalDoctorPayment);
-  };
-
-  // Calcular cantidad neta en dólares
-  const calculateClinicNetIncomeUSD = (procedure) => {
-    const clinicIncomeUSD = procedure.clinic_payment_dollars || 
-                           (procedure.total_procedure_usd || procedure.total_cost_USD || 0);
-    const externalDoctorPaymentUSD = procedure.external_doctor_payment_usd || 0;
-    return Math.max(0, clinicIncomeUSD - externalDoctorPaymentUSD);
-  };
-
-  // Obtener método de pago principal
-  const getMainPaymentMethod = (procedure) => {
-    if (procedure.payment_method_cordobas && procedure.payment_method_dollars) {
-      return 'Mixto';
+  // Formatear fecha para mostrar
+  const formatDisplayDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    try {
+      return formatDate(dateString);
+    } catch (error) {
+      console.error('Error formateando fecha:', error);
+      return dateString;
     }
-    return procedure.payment_method_cordobas || procedure.payment_method_dollars || procedure.payment_method || 'No especificado';
-  };
-
-  // Obtener icono según método de pago
-  const getPaymentMethodIcon = (method) => {
-    if (!method) return faMoneyBillWave;
-    
-    const methodLower = method.toLowerCase();
-    if (methodLower.includes('efectivo')) return faMoneyBillWave;
-    if (methodLower.includes('pos') || methodLower.includes('tarjeta')) return faCreditCard;
-    if (methodLower.includes('transferencia')) return faExchangeAlt;
-    if (methodLower.includes('mixto')) return faExchangeAlt;
-    if (methodLower.includes('cheque')) return faMoneyBillWave;
-    return faMoneyBillWave;
-  };
-
-  // Obtener color según método de pago
-  const getPaymentMethodColor = (method) => {
-    if (!method) return '#78909C';
-    
-    const methodLower = method.toLowerCase();
-    if (methodLower.includes('efectivo')) return '#4CAF50';
-    if (methodLower.includes('pos') || methodLower.includes('tarjeta')) return '#2196F3';
-    if (methodLower.includes('transferencia')) return '#9C27B0';
-    if (methodLower.includes('mixto')) return '#FF5722';
-    if (methodLower.includes('cheque')) return '#FF9800';
-    return '#78909C';
-  };
-
-  // Calcular totales separados
-  const calculateSeparateTotals = (procedure) => {
-    const cordobas = procedure.amount_cordobas || procedure.total_cost || 0;
-    const dollars = procedure.amount_dollars || procedure.total_cost_USD || 0;
-    const exchangeRate = procedure.exchange_rate_used || 36.5;
-    
-    if (procedure.total_procedure && !cordobas && !dollars) {
-      return {
-        cordobas: procedure.total_procedure,
-        dollars: 0,
-        exchangeRate
-      };
-    }
-    
-    return {
-      cordobas,
-      dollars,
-      exchangeRate
-    };
   };
 
   if (loading && procedures.length === 0) {
@@ -239,8 +213,280 @@ export default function ProceduresPage() {
 
   return (
     <div className="procedures-container">
+      {/* Modal para VER procedimiento (solo lectura) */}
+      {viewModalOpen && selectedProcedure && (
+        <div className="modal-backdrop" onClick={closeViewModal}>
+          <div className="modal-content view-modal" onClick={e => e.stopPropagation()}>
+            <h3><FontAwesomeIcon icon={faFileMedical} /> Información Completa del Procedimiento</h3>
+            
+            <div className="procedure-view-container">
+              {/* Información básica */}
+              <div className="view-section">
+                <h4><FontAwesomeIcon icon={faFileMedical} /> Información del Procedimiento</h4>
+                <div className="view-grid">
+                  <div className="view-item">
+                    <span className="view-label">ID:</span>
+                    <span className="view-value">{selectedProcedure.procedure_ID}</span>
+                  </div>
+                  <div className="view-item">
+                    <span className="view-label">Fecha del Procedimiento:</span>
+                    <span className="view-value">{formatDisplayDate(selectedProcedure.procedure_date)}</span>
+                  </div>
+                  <div className="view-item">
+                    <span className="view-label">Fecha de Creación:</span>
+                    <span className="view-value">{formatDisplayDate(selectedProcedure.creation_date)}</span>
+                  </div>
+                  <div className="view-item full-width">
+                    <span className="view-label">Descripción:</span>
+                    <span className="view-value">{selectedProcedure.procedure_description || "Sin descripción"}</span>
+                  </div>
+                  <div className="view-item">
+                    <span className="view-label">Tipo de Consulta Original:</span>
+                    <span className="view-value">{selectedProcedure.original_query_type || selectedProcedure.procedure_description}</span>
+                  </div>
+                  {selectedProcedure.original_appointment_date && (
+                    <div className="view-item">
+                      <span className="view-label">Fecha Cita Original:</span>
+                      <span className="view-value">{formatDisplayDate(selectedProcedure.original_appointment_date)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Información del paciente */}
+              <div className="view-section">
+                <h4><FontAwesomeIcon icon={faHospitalUser} /> Información del Paciente</h4>
+                <div className="view-grid">
+                  <div className="view-item">
+                    <span className="view-label">Nombre:</span>
+                    <span className="view-value">{selectedProcedure.patient_name || "Paciente no especificado"}</span>
+                  </div>
+                  <div className="view-item">
+                    <span className="view-label">Cédula:</span>
+                    <span className="view-value">{selectedProcedure.patient_identification || "N/A"}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Detalles financieros */}
+              <div className="view-section">
+                <h4><FontAwesomeIcon icon={faMoneyBillWave} /> Detalles Financieros</h4>
+                
+                {/* Totales principales */}
+                <div className="financial-summary">
+                  <div className="total-card">
+                    <div className="total-header">
+                      <FontAwesomeIcon icon={faMoneyBill} />
+                      <span>Total del Procedimiento</span>
+                    </div>
+                    <div className="total-amounts">
+                      <div className="amount-cordobas">{formatCurrency(selectedProcedure.total_procedure || selectedProcedure.total_cost || 0)}</div>
+                      <div className="amount-dollars">{formatCurrencyUSD(selectedProcedure.total_procedure_usd || selectedProcedure.total_cost_USD || 0)}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Métodos de pago */}
+                {(selectedProcedure.amount_cordobas > 0 || selectedProcedure.amount_dollars > 0) && (
+                  <div className="payment-methods-section">
+                    <h5><FontAwesomeIcon icon={faCreditCard} /> Métodos de Pago</h5>
+                    
+                    {/* Pago en córdobas */}
+                    {selectedProcedure.amount_cordobas > 0 && (
+                      <div className="payment-method-card">
+                        <div className="method-header">
+                          <FontAwesomeIcon icon={faMoneyBill} />
+                          <span className="method-name">Córdobas</span>
+                        </div>
+                        <div className="method-details">
+                          <div className="method-row">
+                            <span className="method-label">Monto:</span>
+                            <span className="method-value">{formatCurrency(selectedProcedure.amount_cordobas)}</span>
+                          </div>
+                          <div className="method-row">
+                            <span className="method-label">Método:</span>
+                            <span className="method-value">{selectedProcedure.payment_method_cordobas || 'No especificado'}</span>
+                          </div>
+                          {selectedProcedure.pos_deduction_cordobas > 0 && (
+                            <div className="method-row deduction">
+                              <span className="method-label">Deducción POS:</span>
+                              <span className="method-value">-{formatCurrency(selectedProcedure.pos_deduction_cordobas)}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Pago en dólares */}
+                    {selectedProcedure.amount_dollars > 0 && (
+                      <div className="payment-method-card">
+                        <div className="method-header">
+                          <FontAwesomeIcon icon={faDollarSign} />
+                          <span className="method-name">Dólares</span>
+                        </div>
+                        <div className="method-details">
+                          <div className="method-row">
+                            <span className="method-label">Monto:</span>
+                            <span className="method-value">{formatCurrencyUSD(selectedProcedure.amount_dollars)}</span>
+                          </div>
+                          <div className="method-row">
+                            <span className="method-label">Método:</span>
+                            <span className="method-value">{selectedProcedure.payment_method_dollars || 'No especificado'}</span>
+                          </div>
+                          {selectedProcedure.pos_deduction_dollars > 0 && (
+                            <div className="method-row deduction">
+                              <span className="method-label">Deducción POS:</span>
+                              <span className="method-value">-{formatCurrencyUSD(selectedProcedure.pos_deduction_dollars)}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Montos brutos y netos - CORREGIDO */}
+                <div className="net-amounts-section">
+                  <h5><FontAwesomeIcon icon={faChartLine} /> Montos Brutos y Netos</h5>
+                  <div className="net-grid">
+                    {/* Monto bruto - Total que pagó el paciente */}
+                    <div className="net-item gross-amount">
+                      <div className="net-header">
+                        <FontAwesomeIcon icon={faMoneyBillWave} />
+                        <span className="net-label">Monto Bruto (Total pagado por paciente)</span>
+                      </div>
+                      <div className="net-values">
+                        <span className="net-cordobas">{formatCurrency(selectedProcedure.gross_amount_cordobas || selectedProcedure.total_procedure || selectedProcedure.total_cost || 0)}</span>
+                        <span className="net-dollars">{formatCurrencyUSD(selectedProcedure.gross_amount_dollars || selectedProcedure.total_procedure_usd || selectedProcedure.total_cost_USD || 0)}</span>
+                      </div>
+                      <div className="net-description">
+                        Total pagado por el paciente
+                      </div>
+                    </div>
+                    
+                    {/* Monto neto - Después de pagar al doctor externo */}
+                    <div className="net-item net-amount">
+                      <div className="net-header">
+                        <FontAwesomeIcon icon={faCalculator} />
+                        <span className="net-label">Monto Neto (Ganancia de la clínica)</span>
+                      </div>
+                      <div className="net-values">
+                        <span className="net-cordobas">{formatCurrency(selectedProcedure.net_amount_cordobas || calculateClinicNetIncome(selectedProcedure))}</span>
+                        <span className="net-dollars">{formatCurrencyUSD(selectedProcedure.net_amount_dollars || calculateClinicNetIncomeUSD(selectedProcedure))}</span>
+                      </div>
+                      <div className="net-description">
+                        {selectedProcedure.external_doctor_payment > 0 ? (
+                          <>
+                            Monto bruto - Pago al doctor externo
+                            <div className="deduction-breakdown">
+                              <span>Pago doctor: {formatCurrency(selectedProcedure.external_doctor_payment)}</span>
+                            </div>
+                          </>
+                        ) : (
+                          'Sin deducciones de doctor externo'
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Desglose del cálculo - Solo si hay doctor externo */}
+                {selectedProcedure.external_doctor_payment > 0 && (
+                  <div className="breakdown-section">
+                    <h5><FontAwesomeIcon icon={faCalculator} /> Desglose del Cálculo</h5>
+                    <div className="breakdown-steps">
+                      <div className="breakdown-step">
+                        <div className="step-number">1</div>
+                        <div className="step-content">
+                          <span className="step-label">Monto bruto (pago del paciente):</span>
+                          <span className="step-value">{formatCurrency(selectedProcedure.gross_amount_cordobas || selectedProcedure.total_procedure || selectedProcedure.total_cost || 0)}</span>
+                        </div>
+                      </div>
+                      
+                      <div className="breakdown-step deduction-step">
+                        <div className="step-number">2</div>
+                        <div className="step-content">
+                          <span className="step-label">- Pago al doctor externo:</span>
+                          <span className="step-value">-{formatCurrency(selectedProcedure.external_doctor_payment)}</span>
+                        </div>
+                      </div>
+                      
+                      <div className="breakdown-step result-step">
+                        <div className="step-number">=</div>
+                        <div className="step-content">
+                          <span className="step-label">Monto neto (ganancia clínica):</span>
+                          <span className="step-value">{formatCurrency(selectedProcedure.net_amount_cordobas || calculateClinicNetIncome(selectedProcedure))}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Tasa de cambio */}
+                <div className="exchange-rate-section">
+                  <FontAwesomeIcon icon={faExchangeAlt} />
+                  <span>Tasa de cambio utilizada: {selectedProcedure.exchange_rate_used || 36.5} C$/US$</span>
+                </div>
+              </div>
+
+              {/* Doctor externo */}
+              {(selectedProcedure.external_doctor_name || selectedProcedure.external_doctor_payment > 0) && (
+                <div className="view-section">
+                  <h4><FontAwesomeIcon icon={faUserDoctor} /> Doctor Externo</h4>
+                  <div className="view-grid">
+                    {selectedProcedure.external_doctor_name && (
+                      <div className="view-item">
+                        <span className="view-label">Nombre:</span>
+                        <span className="view-value">{selectedProcedure.external_doctor_name}</span>
+                      </div>
+                    )}
+                    {selectedProcedure.external_doctor_specialty && (
+                      <div className="view-item">
+                        <span className="view-label">Especialidad:</span>
+                        <span className="view-value">{selectedProcedure.external_doctor_specialty}</span>
+                      </div>
+                    )}
+                    {selectedProcedure.external_doctor_payment > 0 && (
+                      <div className="view-item">
+                        <span className="view-label">Pago al doctor:</span>
+                        <span className="view-value">{formatCurrency(selectedProcedure.external_doctor_payment)}</span>
+                      </div>
+                    )}
+                    {selectedProcedure.external_doctor_payment_type && (
+                      <div className="view-item">
+                        <span className="view-label">Tipo de pago:</span>
+                        <span className="view-value">
+                          {selectedProcedure.external_doctor_payment_type === 'fixed' ? 'Monto fijo' : 'Porcentaje'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Observaciones */}
+              {selectedProcedure.observations && (
+                <div className="view-section">
+                  <h4><FontAwesomeIcon icon={faNotesMedical} /> Observaciones</h4>
+                  <div className="observations-content">
+                    <p>{selectedProcedure.observations}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="modal-actions">
+              <button className="btn-cancel" onClick={closeViewModal}>
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Encabezado de la página */}
       <div className="procedures-header">
-        <h2>🦷 Procedimientos Regulares</h2>
+        <h2><FontAwesomeIcon icon={faFileMedical} /> Procedimientos Regulares</h2>
         <div className="procedures-tools">
           <div className="procedures-count">
             <span>{filteredProcedures.length}</span>
@@ -248,113 +494,82 @@ export default function ProceduresPage() {
         </div>
       </div>
 
-      {/* Filtros desplegables */}
-      <div className={`filter-section ${expandedFilters ? 'expanded' : ''}`}>
-        <div className="filter-header-mobile" onClick={() => setExpandedFilters(!expandedFilters)}>
-          <div className="filter-header-content">
-            <h3>
-              <FontAwesomeIcon icon={faFilter} />
-              Filtros
-            </h3>
-            <span className="filter-summary">
-              {timeFilter === TIME_FILTERS.TODAY ? 'Hoy' : 
-               timeFilter === TIME_FILTERS.THIS_WEEK ? 'Esta semana' :
-               timeFilter === TIME_FILTERS.THIS_MONTH ? 'Este mes' : 
-               dateFilter.startDate || dateFilter.endDate ? 'Fechas específicas' : 'Todos'}
-            </span>
+      {/* Filtros */}
+      <div className="filters-container">
+        <div className="filter-group">
+          <label>Periodo rápido:</label>
+          <div className="time-filter-buttons">
+            <button 
+              className={`time-filter-btn ${timeFilter === TIME_FILTERS.TODAY ? 'active' : ''}`}
+              onClick={async () => {
+                setTimeFilter(TIME_FILTERS.TODAY);
+                setDateFilter({ startDate: "", endDate: "" });
+                await fetchProceduresNormal({ timeFilter: TIME_FILTERS.TODAY });
+              }}
+            >
+              <FontAwesomeIcon icon={faCalendarDay} />
+              Hoy
+            </button>
+            <button 
+              className={`time-filter-btn ${timeFilter === TIME_FILTERS.THIS_WEEK ? 'active' : ''}`}
+              onClick={async () => {
+                setTimeFilter(TIME_FILTERS.THIS_WEEK);
+                setDateFilter({ startDate: "", endDate: "" });
+                await fetchProceduresNormal({ timeFilter: TIME_FILTERS.THIS_WEEK });
+              }}
+            >
+              <FontAwesomeIcon icon={faCalendarWeek} />
+              Esta semana
+            </button>
+            <button 
+              className={`time-filter-btn ${timeFilter === TIME_FILTERS.THIS_MONTH ? 'active' : ''}`}
+              onClick={async () => {
+                setTimeFilter(TIME_FILTERS.THIS_MONTH);
+                setDateFilter({ startDate: "", endDate: "" });
+                await fetchProceduresNormal({ timeFilter: TIME_FILTERS.THIS_MONTH });
+              }}
+            >
+              <FontAwesomeIcon icon={faCalendar} />
+              Este mes
+            </button>
+            <button 
+              className={`time-filter-btn ${timeFilter === TIME_FILTERS.ALL ? 'active' : ''}`}
+              onClick={async () => {
+                setTimeFilter(TIME_FILTERS.ALL);
+                setDateFilter({ startDate: "", endDate: "" });
+                await fetchProceduresNormal({ timeFilter: TIME_FILTERS.ALL });
+              }}
+            >
+              <FontAwesomeIcon icon={faCalendarAlt} />
+              Todos
+            </button>
           </div>
-          <FontAwesomeIcon 
-            icon={expandedFilters ? faChevronUp : faChevronDown} 
-            className="filter-toggle-icon"
-          />
         </div>
         
-        <div className="filter-content-container">
-          <div className="filters-section">
-            <div className="filters-row">
-              {/* Filtro de tiempo */}
-              <div className="filter-group">
-                <label>Periodo rápido:</label>
-                <div className="time-filter-buttons">
-                  <button 
-                    className={`time-filter-btn ${timeFilter === TIME_FILTERS.TODAY ? 'active' : ''}`}
-                    onClick={async () => {
-                      setTimeFilter(TIME_FILTERS.TODAY);
-                      setDateFilter({ startDate: "", endDate: "" });
-                      await fetchProceduresNormal({ timeFilter: TIME_FILTERS.TODAY });
-                    }}
-                  >
-                    <FontAwesomeIcon icon={faCalendarDay} />
-                    Hoy
-                  </button>
-                  <button 
-                    className={`time-filter-btn ${timeFilter === TIME_FILTERS.THIS_WEEK ? 'active' : ''}`}
-                    onClick={async () => {
-                      setTimeFilter(TIME_FILTERS.THIS_WEEK);
-                      setDateFilter({ startDate: "", endDate: "" });
-                      await fetchProceduresNormal({ timeFilter: TIME_FILTERS.THIS_WEEK });
-                    }}
-                  >
-                    <FontAwesomeIcon icon={faCalendarWeek} />
-                    Esta semana
-                  </button>
-                  <button 
-                    className={`time-filter-btn ${timeFilter === TIME_FILTERS.THIS_MONTH ? 'active' : ''}`}
-                    onClick={async () => {
-                      setTimeFilter(TIME_FILTERS.THIS_MONTH);
-                      setDateFilter({ startDate: "", endDate: "" });
-                      await fetchProceduresNormal({ timeFilter: TIME_FILTERS.THIS_MONTH });
-                    }}
-                  >
-                    <FontAwesomeIcon icon={faCalendar} />
-                    Este mes
-                  </button>
-                  <button 
-                    className={`time-filter-btn ${timeFilter === TIME_FILTERS.ALL ? 'active' : ''}`}
-                    onClick={async () => {
-                      setTimeFilter(TIME_FILTERS.ALL);
-                      setDateFilter({ startDate: "", endDate: "" });
-                      await fetchProceduresNormal({ timeFilter: TIME_FILTERS.ALL });
-                    }}
-                  >
-                    <FontAwesomeIcon icon={faCalendarAlt} />
-                    Todos
-                  </button>
-                </div>
-              </div>
-              
-              {/* Fechas específicas */}
-              <div className="filter-group">
-                <label>Fecha desde:</label>
-                <input
-                  type="date"
-                  value={dateFilter.startDate}
-                  onChange={(e) => {
-                    setDateFilter({...dateFilter, startDate: e.target.value});
-                  }}
-                />
-              </div>
-              
-              <div className="filter-group">
-                <label>Fecha hasta:</label>
-                <input
-                  type="date"
-                  value={dateFilter.endDate}
-                  onChange={(e) => {
-                    setDateFilter({...dateFilter, endDate: e.target.value});
-                  }}
-                />
-              </div>
-              
-              <div className="filter-actions">
-                <button className="btn-apply-filters" onClick={applyFilters}>
-                  Aplicar Filtros
-                </button>
-                <button className="btn-clear-filters" onClick={clearFilters}>
-                  Limpiar Filtros
-                </button>
-              </div>
-            </div>
+        <div className="date-filters">
+          <div className="filter-group">
+            <label>Desde:</label>
+            <input
+              type="date"
+              value={dateFilter.startDate}
+              onChange={(e) => setDateFilter({...dateFilter, startDate: e.target.value})}
+            />
+          </div>
+          <div className="filter-group">
+            <label>Hasta:</label>
+            <input
+              type="date"
+              value={dateFilter.endDate}
+              onChange={(e) => setDateFilter({...dateFilter, endDate: e.target.value})}
+            />
+          </div>
+          <div className="filter-actions">
+            <button className="btn-apply-filters" onClick={applyFilters}>
+              Aplicar Filtros
+            </button>
+            <button className="btn-clear-filters" onClick={clearFilters}>
+              Limpiar Filtros
+            </button>
           </div>
         </div>
       </div>
@@ -380,9 +595,6 @@ export default function ProceduresPage() {
               </button>
             )}
           </div>
-          <small className="search-help-text">
-            Busca por descripción del procedimiento, nombre del paciente, cédula o nombre del doctor externo
-          </small>
         </div>
       </div>
 
@@ -397,9 +609,6 @@ export default function ProceduresPage() {
                 ? "No se encontraron procedimientos con los filtros aplicados."
                 : "No hay procedimientos registrados."}
             </p>
-            <p className="no-results-help">
-              Los procedimientos regulares se crean al completar una cita NO de ortodoncia y registrar los detalles del servicio.
-            </p>
           </div>
         ) : (
           <div className="table-responsive-container">
@@ -411,130 +620,61 @@ export default function ProceduresPage() {
                   <th>Descripción</th>
                   <th>Total C$</th>
                   <th>Total US$</th>
-                  <th>Clínica Neto C$</th>
+                  <th>Clínica Neto</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredProcedures.map((procedure) => {
-                  const isExpanded = expandedRows[procedure.procedure_ID];
-                  const hasExternalDoctor = procedure.theres_external_doctor || procedure.external_doctor;
-                  const hasObservations = procedure.observations && procedure.observations.trim() !== "";
-                  const mainPaymentMethod = getMainPaymentMethod(procedure);
-                  
-                  // Calcular totales separados
-                  const separateTotals = calculateSeparateTotals(procedure);
-                  
-                  // Calcular cantidad neta de la clínica
                   const clinicNetIncome = calculateClinicNetIncome(procedure);
-                  const clinicNetIncomeUSD = calculateClinicNetIncomeUSD(procedure);
                   
                   return (
-                    <React.Fragment key={procedure.procedure_ID}>
-                      <tr className={isExpanded ? "expanded-row" : ""}>
-                        <td>
-                          {procedure.procedure_date ? formatDate(procedure.procedure_date) : "N/A"}
-                        </td>
-                        <td className="patient-cell">
-                          <div className="patient-info-compact">
-                            <strong>{procedure.patient_name || "Paciente no especificado"}</strong>
-                            <small>{procedure.patient_identification || "N/A"}</small>
-                          </div>
-                        </td>
-                        <td className="description-cell">
-                          <div className="description-content">
-                            <strong>{procedure.procedure_description || "Sin descripción"}</strong>
-                          </div>
-                        </td>
-                        
-                        {/* Total Córdobas */}
-                        <td className="total-cordobas-cell">
-                          <div className="total-amount-container">
-                            <div className="total-amount cordobas">
-                              {formatCurrency(procedure.total_procedure || procedure.total_cost || 0)}
-                            </div>
-                            {separateTotals.cordobas > 0 && (
-                              <div className="payment-breakdown">
-                                <div className="breakdown-row">
-                                  <span className="breakdown-label">Abono C$:</span>
-                                  <span className="breakdown-value">{formatCurrency(separateTotals.cordobas)}</span>
-                                </div>
-                                <div className="breakdown-row method">
-                                  <FontAwesomeIcon 
-                                    icon={getPaymentMethodIcon(procedure.payment_method_cordobas)}
-                                    style={{ color: getPaymentMethodColor(procedure.payment_method_cordobas) }}
-                                  />
-                                  <span>{procedure.payment_method_cordobas || 'No especificado'}</span>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                        
-                        {/* Total Dólares */}
-                        <td className="total-dollars-cell">
-                          <div className="total-amount-container">
-                            <div className="total-amount dollars">
-                              {formatCurrencyUSD(procedure.total_procedure_usd || procedure.total_cost_USD || 0)}
-                            </div>
-                            {separateTotals.dollars > 0 && (
-                              <div className="payment-breakdown">
-                                <div className="breakdown-row">
-                                  <span className="breakdown-label">Abono US$:</span>
-                                  <span className="breakdown-value">{formatCurrencyUSD(separateTotals.dollars)}</span>
-                                </div>
-                                <div className="breakdown-row method">
-                                  <FontAwesomeIcon 
-                                    icon={getPaymentMethodIcon(procedure.payment_method_dollars)}
-                                    style={{ color: getPaymentMethodColor(procedure.payment_method_dollars) }}
-                                  />
-                                  <span>{procedure.payment_method_dollars || 'No especificado'}</span>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                        
-                        {/* Cantidad neta de la clínica */}
-                        <td className="clinic-net-cell">
-                          <div className="net-amount-container">
-                            <div className="net-amount clinic-net">
-                              {formatCurrency(clinicNetIncome)}
-                            </div>
-                            {hasExternalDoctor && (
-                              <div className="external-doctor-impact">
-                                <small>
-                                  -{formatCurrency(procedure.external_doctor_payment || 0)} doctor externo
-                                </small>
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                        
-                        {/* Botón Ver/Detalles */}
-                        <td className="actions-cell">
-                          <button 
-                            className="btn-view-details"
-                            onClick={() => toggleRow(procedure.procedure_ID)}
-                            title={isExpanded ? "Ocultar detalles" : "Ver detalles"}
-                          >
-                            <FontAwesomeIcon icon={isExpanded ? faEyeSlash : faEye} />
-                            <span>{isExpanded ? "Ocultar" : "Ver"}</span>
-                          </button>
-                        </td>
-                      </tr>
+                    <tr key={procedure.procedure_ID}>
+                      <td>
+                        {formatDisplayDate(procedure.procedure_date)}
+                      </td>
+                      <td className="patient-cell">
+                        <div className="patient-info-compact">
+                          <strong>{procedure.patient_name || "Paciente no especificado"}</strong>
+                          <small>{procedure.patient_identification || "N/A"}</small>
+                        </div>
+                      </td>
+                      <td className="description-cell">
+                        <div className="description-content">
+                          <strong>{procedure.procedure_description || "Sin descripción"}</strong>
+                        </div>
+                      </td>
                       
-                      {/* Fila expandida con detalles */}
-                      {isExpanded && (
-                        <tr className="details-row">
-                          <td colSpan="7">
-                            <div className="procedure-details">
-                              {/* ... mantén el mismo contenido de detalles expandidos ... */}
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
+                      <td className="total-cordobas-cell">
+                        {formatCurrency(procedure.total_procedure || procedure.total_cost || 0)}
+                      </td>
+                      
+                      <td className="total-dollars-cell">
+                        {formatCurrencyUSD(procedure.total_procedure_usd || procedure.total_cost_USD || 0)}
+                      </td>
+                      
+                      <td className="clinic-net-cell">
+                        <div className="net-amount-display">
+                          {formatCurrency(clinicNetIncome)}
+                          {procedure.external_doctor_payment > 0 && (
+                            <small className="net-indicator has-deduction">
+                              -{formatCurrency(procedure.external_doctor_payment)} doctor
+                            </small>
+                          )}
+                        </div>
+                      </td>
+                      
+                      <td className="actions-cell">
+                        <button 
+                          className="btn-view"
+                          onClick={() => openViewModal(procedure)}
+                          title="Ver información completa"
+                        >
+                          <FontAwesomeIcon icon={faEye} />
+                          Ver
+                        </button>
+                      </td>
+                    </tr>
                   );
                 })}
               </tbody>

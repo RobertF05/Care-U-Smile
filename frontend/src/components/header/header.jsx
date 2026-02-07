@@ -1,16 +1,68 @@
-// En src/components/Header.jsx
-import React from 'react';
+// src/components/Header.jsx
+import React, { useContext } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faBars, faUser } from '@fortawesome/free-solid-svg-icons';
+import { AuthContext } from '../../context/AuthContext'; // ✅ Importar AuthContext
 import './header.css';
 
 const Header = ({ toggleSidebar, sidebarActive }) => {
+  const { user } = useContext(AuthContext); // ✅ Obtener usuario del contexto
+
   const handleLogoError = (e) => {
     e.target.style.display = 'none';
     const fallback = document.querySelector('.logo-fallback');
     if (fallback) {
       fallback.style.display = 'flex';
     }
+  };
+
+  // ✅ Función para formatear el nombre del usuario
+  const getFormattedUsername = () => {
+    if (!user) return 'Usuario';
+    
+    // Priorizar username, luego name, luego email
+    if (user.username) {
+      return user.username;
+    }
+    if (user.name) {
+      return user.name;
+    }
+    if (user.email) {
+      return user.email.split('@')[0]; // Tomar solo la parte antes del @
+    }
+    
+    return 'Usuario';
+  };
+
+  // ✅ Función para formatear el tipo de usuario
+  const getFormattedUserType = () => {
+    if (!user || !user.user_type) return 'Odontólogo';
+    
+    // Mapear tipos de usuario a nombres más amigables
+    const typeMap = {
+      'ADMIN': 'Administrador',
+      'DOCTOR': 'Odontólogo',
+      'ASSISTANT': 'Asistente',
+      'USER': 'Usuario',
+      'admin': 'Administrador',
+      'doctor': 'Odontólogo',
+      'assistant': 'Asistente',
+      'user': 'Usuario'
+    };
+    
+    return typeMap[user.user_type] || user.user_type;
+  };
+
+  // ✅ Función para mostrar título (Dr./Dra.) según el tipo
+  const getUserTitle = () => {
+    const formattedType = getFormattedUserType().toLowerCase();
+    
+    if (formattedType.includes('odontólogo') || formattedType.includes('doctor')) {
+      // Aquí podrías añadir lógica para determinar género si lo tienes en el usuario
+      return 'Dr. ';
+    }
+    
+    return '';
   };
 
   return (
@@ -51,8 +103,12 @@ const Header = ({ toggleSidebar, sidebarActive }) => {
             <FontAwesomeIcon icon={faUser} />
           </div>
           <div className="user-details">
-            <span className="username">Dr. Administrador</span>
-            <span className="user-role">Odontólogo</span>
+            <span className="username">
+              {getUserTitle()}{getFormattedUsername()}
+            </span>
+            <span className="user-role">
+              {getFormattedUserType()}
+            </span>
           </div>
         </div>
       </div>

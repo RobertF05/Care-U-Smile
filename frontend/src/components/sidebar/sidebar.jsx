@@ -1,4 +1,5 @@
-import React from 'react';
+// src/components/Sidebar.jsx
+import React, { useContext } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
   faHome,
@@ -11,9 +12,12 @@ import {
   faCog,
   faSignOutAlt
 } from '@fortawesome/free-solid-svg-icons';
+import { AuthContext } from '../../context/AuthContext'; // ✅ Importar AuthContext
 import './sidebar.css';
 
 const Sidebar = ({ setPage, active, setActive, currentPage }) => {
+  const { logout } = useContext(AuthContext); // ✅ Obtener función de logout
+
   const menuItems = [
     { 
       id: 'dashboard', 
@@ -64,9 +68,26 @@ const Sidebar = ({ setPage, active, setActive, currentPage }) => {
     }
   };
 
-  const handleLogout = () => {
-    console.log('Cerrando sesión...');
-    // Aquí agregarás la lógica de logout
+  // ✅ Función de logout mejorada
+  const handleLogout = async () => {
+    try {
+      console.log('Cerrando sesión...');
+      
+      // Llamar a la función de logout del contexto
+      logout();
+      
+      // Cerrar sidebar en móviles
+      if (window.innerWidth <= 768) {
+        setActive(false);
+      }
+      
+      // Redirigir al login automáticamente (el App.jsx se encargará de esto)
+      // No necesitas hacer window.location.reload() porque React
+      // re-renderizará automáticamente cuando el estado de user cambie
+      
+    } catch (error) {
+      console.error('Error al cerrar sesión:', error);
+    }
   };
 
   return (
@@ -109,10 +130,23 @@ const Sidebar = ({ setPage, active, setActive, currentPage }) => {
           </ul>
           
           <div className="sidebar-footer">
-            <button className="logout-button" onClick={handleLogout}>
+            <button 
+              className="logout-button" 
+              onClick={handleLogout}
+              aria-label="Cerrar sesión"
+            >
               <FontAwesomeIcon icon={faSignOutAlt} />
               <span>Cerrar Sesión</span>
             </button>
+            
+            {/* ✅ Info adicional del usuario (opcional) */}
+            <div className="user-sidebar-info">
+              <small>Sesión activa</small>
+              <div className="session-status">
+                <div className="status-dot active"></div>
+                <span>Conectado</span>
+              </div>
+            </div>
           </div>
         </nav>
       </aside>

@@ -10,7 +10,7 @@ import MonthlyClosingsPage from './pages/MonthlyClosingsPage/MonthlyClosingsPage
 import BillsPage from './pages/BillsPage/BillsPage.jsx';
 import SettingsPage from './pages/SettingsPage/SettingsPage.jsx';
 import Login from './pages/LoginPage/LoginPage.jsx';
-import { AuthContext } from './context/AuthContext' // ✅ Importar el contexto
+import { AuthContext } from './context/AuthContext.jsx'
 import './App.css'
 
 function App() {
@@ -35,7 +35,7 @@ function App() {
     )
   }
 
-  // Si no hay usuario, mostrar login
+  // ✅ MODIFICADO: Forzar login siempre si no hay usuario
   if (!user) {
     return <Login />
   }

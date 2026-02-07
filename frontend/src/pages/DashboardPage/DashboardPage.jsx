@@ -260,7 +260,8 @@ const DashboardPage = () => {
     <div className="page-content">
       <div className="dashboard-header">
         <div className="welcome-section">
-          <h1>Bienvenido, {user?.name || user?.email || 'Doctor'}</h1>
+          {/* ✅ Mostrar username si existe, de lo contrario email */}
+          <h1>Bienvenido, {user?.username || user?.name || user?.email || 'Doctor'}</h1>
           <p className="dashboard-subtitle">
             <FontAwesomeIcon icon={faSmile} style={{ marginRight: '8px' }} />
             Hoy es {new Date().toLocaleDateString('es-NI', { 

@@ -17,8 +17,20 @@ const User = {
   async findById(id) {
     const { data, error } = await supabaseAdmin
       .from('users')
-      .select('id, email, name, user_type, created_at')
-      .eq('id', id)
+      .select('user_id, email, username, user_type, created_at') // ✅ Añadir username
+      .eq('user_id', id)
+      .single();
+    
+    if (error && error.code !== 'PGRST116') throw error;
+    return data;
+  },
+
+  // Buscar usuario por username (nuevo método)
+  async findByUsername(username) {
+    const { data, error } = await supabaseAdmin
+      .from('users')
+      .select('*')
+      .eq('username', username)
       .single();
     
     if (error && error.code !== 'PGRST116') throw error;
@@ -33,7 +45,7 @@ const User = {
         ...userData,
         created_at: new Date().toISOString()
       }])
-      .select('id, email, name, user_type, created_at')
+      .select('user_id, email, username, user_type, created_at') // ✅ Añadir username
       .single();
     
     if (error) throw error;

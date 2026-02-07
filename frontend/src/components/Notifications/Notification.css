@@ -1,0 +1,103 @@
+/* frontend/src/components/Notifications/Notification.css */
+.notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  min-width: 300px;
+  max-width: 400px;
+  padding: 16px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 9999;
+  animation: slideIn 0.3s ease-out;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.notification.exiting {
+  animation: slideOut 0.3s ease-in forwards;
+}
+
+.notification-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.notification-icon {
+  font-size: 1.2rem;
+  margin-top: 2px;
+}
+
+.notification-message {
+  flex: 1;
+}
+
+.notification-message strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.notification-message p {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  color: var(--text-color);
+}
+
+.notification-close {
+  background: none;
+  border: none;
+  color: var(--text-light);
+  cursor: pointer;
+  padding: 4px;
+  font-size: 0.9rem;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.notification-close:hover {
+  opacity: 1;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOut {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+/* Tipos de notificación */
+.notification.success {
+  background: linear-gradient(135deg, #4CAF5010, #4CAF5005);
+}
+
+.notification.error {
+  background: linear-gradient(135deg, #F4433610, #F4433605);
+}
+
+.notification.warning {
+  background: linear-gradient(135deg, #FF980010, #FF980005);
+}
+
+.notification.info {
+  background: linear-gradient(135deg, #2196F310, #2196F305);
+}

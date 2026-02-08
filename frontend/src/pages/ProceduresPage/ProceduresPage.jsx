@@ -125,32 +125,64 @@ export default function ProceduresPage() {
     setSelectedProcedure(null);
   };
 
-  // Calcular cantidad neta de la clínica (CORREGIDO)
+  // CALCULO CORREGIDO PARA PROCEDIMIENTOS GENERALES
   const calculateClinicNetIncome = (procedure) => {
-    // Monto bruto (total pagado por el paciente)
-    const grossAmount = procedure.gross_amount_cordobas || 
-                       procedure.total_procedure || 
-                       procedure.total_cost || 0;
+    // Usar total_procedure que YA incluye la deducción del POS
+    // total_procedure = Monto bruto - deducción POS (si aplica)
+    const totalProcedure = procedure.total_procedure || 0;
     
-    // Pago al doctor externo
+    // Restar pago al doctor externo si existe
     const externalDoctorPayment = procedure.external_doctor_payment || 0;
     
-    // Monto neto = Monto bruto - Pago al doctor externo
-    return Math.max(0, grossAmount - externalDoctorPayment);
+    // Monto neto = Total del procedimiento - Pago doctor externo
+    const netIncome = Math.max(0, totalProcedure - externalDoctorPayment);
+    
+    return netIncome;
   };
 
-  // Calcular cantidad neta en dólares (CORREGIDO)
   const calculateClinicNetIncomeUSD = (procedure) => {
-    // Monto bruto en dólares
-    const grossAmountUSD = procedure.gross_amount_dollars || 
-                          procedure.total_procedure_usd || 
-                          procedure.total_cost_USD || 0;
-    
-    // Pago al doctor externo en dólares
+    const totalProcedureUSD = procedure.total_procedure_usd || 0;
     const externalDoctorPaymentUSD = procedure.external_doctor_payment_usd || 0;
     
-    // Monto neto en dólares
-    return Math.max(0, grossAmountUSD - externalDoctorPaymentUSD);
+    const netIncomeUSD = Math.max(0, totalProcedureUSD - externalDoctorPaymentUSD);
+    
+    return netIncomeUSD;
+  };
+
+  // Calcular desglose completo para modal
+  const calculateBreakdown = (procedure) => {
+    const grossCordobas = procedure.gross_amount_cordobas || 
+                         procedure.total_cost || 
+                         procedure.total_procedure || 0;
+    
+    const grossDollars = procedure.gross_amount_dollars || 
+                        procedure.total_cost_USD || 
+                        procedure.total_procedure_usd || 0;
+    
+    const posDeductionCordobas = procedure.pos_deduction_cordobas || 0;
+    const posDeductionDollars = procedure.pos_deduction_dollars || 0;
+    
+    const totalProcedureCordobas = procedure.total_procedure || 0;
+    const totalProcedureDollars = procedure.total_procedure_usd || 0;
+    
+    const externalDoctorCordobas = procedure.external_doctor_payment || 0;
+    const externalDoctorDollars = procedure.external_doctor_payment_usd || 0;
+    
+    const clinicNetCordobas = calculateClinicNetIncome(procedure);
+    const clinicNetDollars = calculateClinicNetIncomeUSD(procedure);
+    
+    return {
+      grossCordobas,
+      grossDollars,
+      posDeductionCordobas,
+      posDeductionDollars,
+      totalProcedureCordobas,
+      totalProcedureDollars,
+      externalDoctorCordobas,
+      externalDoctorDollars,
+      clinicNetCordobas,
+      clinicNetDollars
+    };
   };
 
   const filteredProcedures = procedures
@@ -272,155 +304,186 @@ export default function ProceduresPage() {
               <div className="view-section">
                 <h4><FontAwesomeIcon icon={faMoneyBillWave} /> Detalles Financieros</h4>
                 
-                {/* Totales principales */}
-                <div className="financial-summary">
-                  <div className="total-card">
-                    <div className="total-header">
-                      <FontAwesomeIcon icon={faMoneyBill} />
-                      <span>Total del Procedimiento</span>
-                    </div>
-                    <div className="total-amounts">
-                      <div className="amount-cordobas">{formatCurrency(selectedProcedure.total_procedure || selectedProcedure.total_cost || 0)}</div>
-                      <div className="amount-dollars">{formatCurrencyUSD(selectedProcedure.total_procedure_usd || selectedProcedure.total_cost_USD || 0)}</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Métodos de pago */}
-                {(selectedProcedure.amount_cordobas > 0 || selectedProcedure.amount_dollars > 0) && (
-                  <div className="payment-methods-section">
-                    <h5><FontAwesomeIcon icon={faCreditCard} /> Métodos de Pago</h5>
-                    
-                    {/* Pago en córdobas */}
-                    {selectedProcedure.amount_cordobas > 0 && (
-                      <div className="payment-method-card">
-                        <div className="method-header">
-                          <FontAwesomeIcon icon={faMoneyBill} />
-                          <span className="method-name">Córdobas</span>
+                {(() => {
+                  const breakdown = calculateBreakdown(selectedProcedure);
+                  return (
+                    <>
+                      {/* Resumen financiero */}
+                      <div className="financial-summary">
+                        <div className="total-card">
+                          <div className="total-header">
+                            <FontAwesomeIcon icon={faMoneyBill} />
+                            <span>Total del Procedimiento</span>
+                          </div>
+                          <div className="total-amounts">
+                            <div className="amount-cordobas">{formatCurrency(breakdown.totalProcedureCordobas)}</div>
+                            <div className="amount-dollars">{formatCurrencyUSD(breakdown.totalProcedureDollars)}</div>
+                          </div>
+                          <div className="total-subtitle">
+                            Ya incluye deducción POS si aplica
+                          </div>
                         </div>
-                        <div className="method-details">
-                          <div className="method-row">
-                            <span className="method-label">Monto:</span>
-                            <span className="method-value">{formatCurrency(selectedProcedure.amount_cordobas)}</span>
-                          </div>
-                          <div className="method-row">
-                            <span className="method-label">Método:</span>
-                            <span className="method-value">{selectedProcedure.payment_method_cordobas || 'No especificado'}</span>
-                          </div>
-                          {selectedProcedure.pos_deduction_cordobas > 0 && (
-                            <div className="method-row deduction">
-                              <span className="method-label">Deducción POS:</span>
-                              <span className="method-value">-{formatCurrency(selectedProcedure.pos_deduction_cordobas)}</span>
+                      </div>
+
+                      {/* Métodos de pago */}
+                      {(selectedProcedure.amount_cordobas > 0 || selectedProcedure.amount_dollars > 0) && (
+                        <div className="payment-methods-section">
+                          <h5><FontAwesomeIcon icon={faCreditCard} /> Métodos de Pago</h5>
+                          
+                          {/* Pago en córdobas */}
+                          {selectedProcedure.amount_cordobas > 0 && (
+                            <div className="payment-method-card">
+                              <div className="method-header">
+                                <FontAwesomeIcon icon={faMoneyBill} />
+                                <span className="method-name">Córdobas</span>
+                              </div>
+                              <div className="method-details">
+                                <div className="method-row">
+                                  <span className="method-label">Monto bruto:</span>
+                                  <span className="method-value">{formatCurrency(breakdown.grossCordobas)}</span>
+                                </div>
+                                <div className="method-row">
+                                  <span className="method-label">Método:</span>
+                                  <span className="method-value">{selectedProcedure.payment_method_cordobas || 'No especificado'}</span>
+                                </div>
+                                {breakdown.posDeductionCordobas > 0 && (
+                                  <div className="method-row deduction">
+                                    <span className="method-label">Deducción POS:</span>
+                                    <span className="method-value">-{formatCurrency(breakdown.posDeductionCordobas)}</span>
+                                  </div>
+                                )}
+                                <div className="method-row net-amount">
+                                  <span className="method-label">Neto después de POS:</span>
+                                  <span className="method-value">{formatCurrency(breakdown.totalProcedureCordobas)}</span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Pago en dólares */}
+                          {selectedProcedure.amount_dollars > 0 && (
+                            <div className="payment-method-card">
+                              <div className="method-header">
+                                <FontAwesomeIcon icon={faDollarSign} />
+                                <span className="method-name">Dólares</span>
+                              </div>
+                              <div className="method-details">
+                                <div className="method-row">
+                                  <span className="method-label">Monto bruto:</span>
+                                  <span className="method-value">{formatCurrencyUSD(breakdown.grossDollars)}</span>
+                                </div>
+                                <div className="method-row">
+                                  <span className="method-label">Método:</span>
+                                  <span className="method-value">{selectedProcedure.payment_method_dollars || 'No especificado'}</span>
+                                </div>
+                                {breakdown.posDeductionDollars > 0 && (
+                                  <div className="method-row deduction">
+                                    <span className="method-label">Deducción POS:</span>
+                                    <span className="method-value">-{formatCurrencyUSD(breakdown.posDeductionDollars)}</span>
+                                  </div>
+                                )}
+                                <div className="method-row net-amount">
+                                  <span className="method-label">Neto después de POS:</span>
+                                  <span className="method-value">{formatCurrencyUSD(breakdown.totalProcedureDollars)}</span>
+                                </div>
+                              </div>
                             </div>
                           )}
                         </div>
-                      </div>
-                    )}
-                    
-                    {/* Pago en dólares */}
-                    {selectedProcedure.amount_dollars > 0 && (
-                      <div className="payment-method-card">
-                        <div className="method-header">
-                          <FontAwesomeIcon icon={faDollarSign} />
-                          <span className="method-name">Dólares</span>
-                        </div>
-                        <div className="method-details">
-                          <div className="method-row">
-                            <span className="method-label">Monto:</span>
-                            <span className="method-value">{formatCurrencyUSD(selectedProcedure.amount_dollars)}</span>
+                      )}
+
+                      {/* Desglose de cálculo - NUEVO Y MEJORADO */}
+                      <div className="breakdown-section">
+                        <h5><FontAwesomeIcon icon={faCalculator} /> Desglose del Cálculo</h5>
+                        <div className="breakdown-steps">
+                          {/* Paso 1: Monto bruto */}
+                          <div className="breakdown-step">
+                            <div className="step-number">1</div>
+                            <div className="step-content">
+                              <span className="step-label">Monto bruto (pago del paciente):</span>
+                              <div className="step-values">
+                                <span className="step-value-cordobas">{formatCurrency(breakdown.grossCordobas)}</span>
+                                <span className="step-value-dollars">{formatCurrencyUSD(breakdown.grossDollars)}</span>
+                              </div>
+                            </div>
                           </div>
-                          <div className="method-row">
-                            <span className="method-label">Método:</span>
-                            <span className="method-value">{selectedProcedure.payment_method_dollars || 'No especificado'}</span>
-                          </div>
-                          {selectedProcedure.pos_deduction_dollars > 0 && (
-                            <div className="method-row deduction">
-                              <span className="method-label">Deducción POS:</span>
-                              <span className="method-value">-{formatCurrencyUSD(selectedProcedure.pos_deduction_dollars)}</span>
+                          
+                          {/* Paso 2: Deducción POS */}
+                          {breakdown.posDeductionCordobas > 0 && (
+                            <div className="breakdown-step deduction-step">
+                              <div className="step-number">2</div>
+                              <div className="step-content">
+                                <span className="step-label">- Deducción del POS:</span>
+                                <div className="step-values">
+                                  <span className="step-value-cordobas">-{formatCurrency(breakdown.posDeductionCordobas)}</span>
+                                  <span className="step-value-dollars">-{formatCurrencyUSD(breakdown.posDeductionDollars)}</span>
+                                </div>
+                              </div>
                             </div>
                           )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Montos brutos y netos - CORREGIDO */}
-                <div className="net-amounts-section">
-                  <h5><FontAwesomeIcon icon={faChartLine} /> Montos Brutos y Netos</h5>
-                  <div className="net-grid">
-                    {/* Monto bruto - Total que pagó el paciente */}
-                    <div className="net-item gross-amount">
-                      <div className="net-header">
-                        <FontAwesomeIcon icon={faMoneyBillWave} />
-                        <span className="net-label">Monto Bruto (Total pagado por paciente)</span>
-                      </div>
-                      <div className="net-values">
-                        <span className="net-cordobas">{formatCurrency(selectedProcedure.gross_amount_cordobas || selectedProcedure.total_procedure || selectedProcedure.total_cost || 0)}</span>
-                        <span className="net-dollars">{formatCurrencyUSD(selectedProcedure.gross_amount_dollars || selectedProcedure.total_procedure_usd || selectedProcedure.total_cost_USD || 0)}</span>
-                      </div>
-                      <div className="net-description">
-                        Total pagado por el paciente
-                      </div>
-                    </div>
-                    
-                    {/* Monto neto - Después de pagar al doctor externo */}
-                    <div className="net-item net-amount">
-                      <div className="net-header">
-                        <FontAwesomeIcon icon={faCalculator} />
-                        <span className="net-label">Monto Neto (Ganancia de la clínica)</span>
-                      </div>
-                      <div className="net-values">
-                        <span className="net-cordobas">{formatCurrency(selectedProcedure.net_amount_cordobas || calculateClinicNetIncome(selectedProcedure))}</span>
-                        <span className="net-dollars">{formatCurrencyUSD(selectedProcedure.net_amount_dollars || calculateClinicNetIncomeUSD(selectedProcedure))}</span>
-                      </div>
-                      <div className="net-description">
-                        {selectedProcedure.external_doctor_payment > 0 ? (
-                          <>
-                            Monto bruto - Pago al doctor externo
-                            <div className="deduction-breakdown">
-                              <span>Pago doctor: {formatCurrency(selectedProcedure.external_doctor_payment)}</span>
+                          
+                          {/* Paso 3: Total después de POS */}
+                          <div className="breakdown-step result-step">
+                            <div className="step-number">=</div>
+                            <div className="step-content">
+                              <span className="step-label">Total del procedimiento (después de POS):</span>
+                              <div className="step-values">
+                                <span className="step-value-cordobas">{formatCurrency(breakdown.totalProcedureCordobas)}</span>
+                                <span className="step-value-dollars">{formatCurrencyUSD(breakdown.totalProcedureDollars)}</span>
+                              </div>
                             </div>
-                          </>
-                        ) : (
-                          'Sin deducciones de doctor externo'
-                        )}
+                          </div>
+                          
+                          {/* Paso 4: Pago doctor externo */}
+                          {breakdown.externalDoctorCordobas > 0 && (
+                            <div className="breakdown-step deduction-step">
+                              <div className="step-number">3</div>
+                              <div className="step-content">
+                                <span className="step-label">- Pago al doctor externo:</span>
+                                <div className="step-values">
+                                  <span className="step-value-cordobas">-{formatCurrency(breakdown.externalDoctorCordobas)}</span>
+                                  <span className="step-value-dollars">-{formatCurrencyUSD(breakdown.externalDoctorDollars)}</span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Paso 5: Ganancia neta clínica */}
+                          <div className="breakdown-step final-step">
+                            <div className="step-number">=</div>
+                            <div className="step-content">
+                              <span className="step-label final-label">GANANCIA NETA DE LA CLÍNICA:</span>
+                              <div className="step-values final-values">
+                                <span className="step-value-cordobas final-cordobas">{formatCurrency(breakdown.clinicNetCordobas)}</span>
+                                <span className="step-value-dollars final-dollars">{formatCurrencyUSD(breakdown.clinicNetDollars)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                </div>
 
-                {/* Desglose del cálculo - Solo si hay doctor externo */}
-                {selectedProcedure.external_doctor_payment > 0 && (
-                  <div className="breakdown-section">
-                    <h5><FontAwesomeIcon icon={faCalculator} /> Desglose del Cálculo</h5>
-                    <div className="breakdown-steps">
-                      <div className="breakdown-step">
-                        <div className="step-number">1</div>
-                        <div className="step-content">
-                          <span className="step-label">Monto bruto (pago del paciente):</span>
-                          <span className="step-value">{formatCurrency(selectedProcedure.gross_amount_cordobas || selectedProcedure.total_procedure || selectedProcedure.total_cost || 0)}</span>
+                      {/* Resumen final */}
+                      <div className="final-summary">
+                        <div className="summary-card net-summary">
+                          <div className="summary-header">
+                            <FontAwesomeIcon icon={faChartLine} />
+                            <span>Ganancia neta de la clínica</span>
+                          </div>
+                          <div className="summary-amounts">
+                            <div className="summary-amount cordobas">
+                              <span className="amount-label">Córdobas:</span>
+                              <span className="amount-value">{formatCurrency(breakdown.clinicNetCordobas)}</span>
+                            </div>
+                            <div className="summary-amount dollars">
+                              <span className="amount-label">Dólares:</span>
+                              <span className="amount-value">{formatCurrencyUSD(breakdown.clinicNetDollars)}</span>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                      
-                      <div className="breakdown-step deduction-step">
-                        <div className="step-number">2</div>
-                        <div className="step-content">
-                          <span className="step-label">- Pago al doctor externo:</span>
-                          <span className="step-value">-{formatCurrency(selectedProcedure.external_doctor_payment)}</span>
-                        </div>
-                      </div>
-                      
-                      <div className="breakdown-step result-step">
-                        <div className="step-number">=</div>
-                        <div className="step-content">
-                          <span className="step-label">Monto neto (ganancia clínica):</span>
-                          <span className="step-value">{formatCurrency(selectedProcedure.net_amount_cordobas || calculateClinicNetIncome(selectedProcedure))}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                    </>
+                  );
+                })()}
 
                 {/* Tasa de cambio */}
                 <div className="exchange-rate-section">
@@ -458,6 +521,12 @@ export default function ProceduresPage() {
                         <span className="view-value">
                           {selectedProcedure.external_doctor_payment_type === 'fixed' ? 'Monto fijo' : 'Porcentaje'}
                         </span>
+                      </div>
+                    )}
+                    {selectedProcedure.external_doctor_percentage && (
+                      <div className="view-item">
+                        <span className="view-label">Porcentaje:</span>
+                        <span className="view-value">{selectedProcedure.external_doctor_percentage}%</span>
                       </div>
                     )}
                   </div>
@@ -627,6 +696,8 @@ export default function ProceduresPage() {
               <tbody>
                 {filteredProcedures.map((procedure) => {
                   const clinicNetIncome = calculateClinicNetIncome(procedure);
+                  const hasPOS = (procedure.pos_deduction_cordobas || 0) > 0;
+                  const hasExternalDoctor = (procedure.external_doctor_payment || 0) > 0;
                   
                   return (
                     <tr key={procedure.procedure_ID}>
@@ -655,12 +726,21 @@ export default function ProceduresPage() {
                       
                       <td className="clinic-net-cell">
                         <div className="net-amount-display">
-                          {formatCurrency(clinicNetIncome)}
-                          {procedure.external_doctor_payment > 0 && (
-                            <small className="net-indicator has-deduction">
-                              -{formatCurrency(procedure.external_doctor_payment)} doctor
-                            </small>
-                          )}
+                          <div className="net-main-amount">
+                            {formatCurrency(clinicNetIncome)}
+                          </div>
+                          <div className="net-details">
+                            {hasPOS && (
+                              <small className="net-indicator has-pos">
+                                <FontAwesomeIcon icon={faCreditCard} /> POS
+                              </small>
+                            )}
+                            {hasExternalDoctor && (
+                              <small className="net-indicator has-doctor">
+                                <FontAwesomeIcon icon={faUserDoctor} /> Dr. Ext.
+                              </small>
+                            )}
+                          </div>
                         </div>
                       </td>
                       

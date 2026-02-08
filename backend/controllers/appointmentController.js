@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '../config/supabase.js';
+import Procedure from '../models/procedureModel.js'; // Ajusta la ruta según tu estructura
 
 const appointmentController = {
   getAll: async (req, res) => {
@@ -366,248 +367,279 @@ const appointmentController = {
     }
   },
 
-  // Convertir cita en procedimiento - VERSIÓN CORREGIDA CON NOMBRES DE CAMPOS EXACTOS
-  convertToProcedure: async (req, res) => {
-    try {
-      const { id } = req.params;
-      const procedureData = req.body;
-      
-      console.log('🔄 Iniciando conversión de cita a procedimiento:', {
-        appointmentId: id,
-        procedureData: JSON.stringify(procedureData, null, 2)
-      });
-      
-      // 1. Obtener la cita
-      const { data: appointment, error: appointmentError } = await supabaseAdmin
-        .from('clinical_appointments')
-        .select('*')
-        .eq('appointment_ID', id)
-        .single();
-      
-      if (appointmentError || !appointment) {
-        console.error('❌ Cita no encontrada:', appointmentError);
-        return res.status(404).json({ 
-          success: false, 
-          error: 'Cita no encontrada' 
-        });
-      }
-      
-      console.log('📅 Cita encontrada:', {
-        appointment_ID: appointment.appointment_ID,
-        is_registered: appointment.is_registered,
-        state: appointment.state,
-        is_orthodontics: appointment.is_orthodontics
-      });
-      
-      // Verificar si ya está registrada
-      if (appointment.is_registered) {
-        return res.status(400).json({ 
-          success: false, 
-          error: 'Esta cita ya ha sido registrada como procedimiento' 
-        });
-      }
-      
-      // Validar datos mínimos
-      if (!procedureData.procedure_description) {
-        return res.status(400).json({ 
-          success: false, 
-          error: 'Descripción del procedimiento es requerida' 
-        });
-      }
-      
-      console.log('📅 Fecha del procedimiento:', appointment.appointment_date);
-      
-      // Calcular montos si no vienen del frontend (como respaldo)
-      const exchange_rate = procedureData.exchange_rate || 36.5;
-      const total_procedure_USD = procedureData.total_procedure_USD || 
-        (procedureData.total_procedure ? procedureData.total_procedure / exchange_rate : 0);
-      
-      console.log('💰 Valores recibidos del frontend:', {
-        total_procedure_USD_from_frontend: procedureData.total_procedure_USD,
-        total_procedure: procedureData.total_procedure,
-        exchange_rate: exchange_rate,
-        amount_dollars: procedureData.amount_dollars,
-        clinic_payment_cordobas: procedureData.clinic_payment_cordobas,
-        clinic_payment_dollars: procedureData.clinic_payment_dollars,
-        doctor_payment_cordobas: procedureData.doctor_payment_cordobas,
-        doctor_payment_dollars: procedureData.doctor_payment_dollars
-      });
-      
-      // Preparar datos para insertar - USANDO LOS NOMBRES EXACTOS DE LA BD
-      const procedureToInsert = {
-        appointment_ID: id,
-        Patient_ID: appointment.Patient_ID,
-        procedure_date: appointment.appointment_date,
-        procedure_description: procedureData.procedure_description,
-        
-        // Campos en CÓRDOBAS - NOMBRES EXACTOS DE LA BD
-        total_cost: procedureData.total_cost || 0, // Bruto en córdobas
-        total_procedure: procedureData.total_procedure || 0, // Neto después de deducciones en C$
-        
-        // Campos en DÓLARES - ¡NOMBRE CORRECTO DE LA BD!
-        total_cost_USD: procedureData.total_cost_USD || 0, // Bruto en dólares (con guión bajo y mayúsculas)
-        total_procedure_usd: total_procedure_USD, // Neto después de deducciones en US$ (en minúsculas)
-        
-        payment_method: procedureData.payment_method || 'Mixto',
-        is_orthodontics: appointment.is_orthodontics,
-        observations: procedureData.observations || appointment.observations,
-        creation_date: new Date().toISOString().replace('Z', ''),
-        
-        // Campos de pagos múltiples
-        amount_cordobas: procedureData.amount_cordobas || 0,
-        amount_dollars: procedureData.amount_dollars || 0,
-        payment_method_cordobas: procedureData.payment_method_cordobas || null,
-        payment_method_dollars: procedureData.payment_method_dollars || null,
-        
-        // CAMPOS DE DEDUCCIÓN POS
-        pos_deduction_cordobas: procedureData.pos_deduction_cordobas || 0,
-        pos_deduction_dollars: procedureData.pos_deduction_dollars || 0,
-        total_pos_deduction: procedureData.total_pos_deduction || 0,
-        net_amount_cordobas: procedureData.net_amount_cordobas || 0,
-        net_amount_dollars: procedureData.net_amount_dollars || 0,
-        gross_amount_cordobas: procedureData.gross_amount_cordobas || 0,
-        gross_amount_dollars: procedureData.gross_amount_dollars || 0,
-        
-        // Campos de doctor externo
-        external_doctor: procedureData.external_doctor || null,
-        external_doctor_payment: procedureData.external_doctor_payment || null,
-        external_doctor_payment_usd: procedureData.external_doctor_payment_usd || null,
-        theres_external_doctor: procedureData.theres_external_doctor || false,
-        external_doctor_name: procedureData.external_doctor_name || null,
-        external_doctor_specialty: procedureData.external_doctor_specialty || null,
-        external_doctor_payment_type: procedureData.external_doctor_payment_type || 'fixed',
-        external_doctor_payment_value: procedureData.external_doctor_payment_value || null,
-        external_doctor_payment_currency: procedureData.external_doctor_payment_currency || 'C$',
-        
-        // Campos de porcentajes
-        clinic_payment_percentage: procedureData.clinic_payment_percentage || 
-          (appointment.is_orthodontics ? 40 : 100),
-        doctor_payment_percentage: procedureData.doctor_payment_percentage || 
-          (appointment.is_orthodontics ? 60 : 0),
-        
-        // NUEVOS CAMPOS: Montos específicos para clínica y doctora en ambas monedas
-        clinic_payment_cordobas: procedureData.clinic_payment_cordobas || 0,
-        clinic_payment_dollars: procedureData.clinic_payment_dollars || 0,
-        doctor_payment_cordobas: procedureData.doctor_payment_cordobas || 0,
-        doctor_payment_dollars: procedureData.doctor_payment_dollars || 0,
-        
-        // Tipo de cambio usado en el cálculo
-        exchange_rate_used: exchange_rate
-      };
-      
-      console.log('📊 Insertando procedimiento con montos completos:', {
-        total_cost_USD: procedureToInsert.total_cost_USD, // ¡Nombre correcto!
-        total_procedure_usd: procedureToInsert.total_procedure_usd, // ¡Nombre correcto!
-        total_procedure: procedureToInsert.total_procedure,
-        clinic_payment_cordobas: procedureToInsert.clinic_payment_cordobas,
-        clinic_payment_dollars: procedureToInsert.clinic_payment_dollars,
-        doctor_payment_cordobas: procedureToInsert.doctor_payment_cordobas,
-        doctor_payment_dollars: procedureToInsert.doctor_payment_dollars
-      });
-      
-      // 2. Crear el procedimiento
-      const { data: procedure, error: procedureError } = await supabaseAdmin
-        .from('procedures')
-        .insert([procedureToInsert])
-        .select()
-        .single();
-      
-      if (procedureError) {
-        console.error('❌ Error detallado al crear procedimiento:', procedureError);
-        throw new Error(`Error al crear procedimiento: ${procedureError.message}`);
-      }
-      
-      console.log('✅ Procedimiento creado:', {
-        procedure_ID: procedure.procedure_ID,
-        total_procedure: procedure.total_procedure,
-        total_procedure_usd: procedure.total_procedure_usd,
-        total_cost_USD: procedure.total_cost_USD,
-        clinic_payment_cordobas: procedure.clinic_payment_cordobas,
-        clinic_payment_dollars: procedure.clinic_payment_dollars,
-        doctor_payment_cordobas: procedure.doctor_payment_cordobas,
-        doctor_payment_dollars: procedure.doctor_payment_dollars
-      });
-      
-      // 3. Actualizar estado de la cita a "completed" y marcar como registrada
-      const { data: updatedAppointment, error: updateError } = await supabaseAdmin
-        .from('clinical_appointments')
-        .update({ 
-          state: 'completed',
-          is_registered: true 
-        })
-        .eq('appointment_ID', id)
-        .select()
-        .single();
-      
-      if (updateError) {
-        console.error('❌ Error al actualizar cita:', updateError);
-        // Revertir la creación del procedimiento
-        await supabaseAdmin
-          .from('procedures')
-          .delete()
-          .eq('procedure_ID', procedure.procedure_ID);
-        
-        throw new Error(`Error al actualizar cita: ${updateError.message}`);
-      }
-      
-      console.log('✅ Cita actualizada:', {
-        appointment_ID: updatedAppointment.appointment_ID,
-        state: updatedAppointment.state,
-        is_registered: updatedAppointment.is_registered
-      });
-      
-      // Formatear fechas para respuesta
-      const updatedDate = new Date(updatedAppointment.appointment_date);
-      const formattedUpdatedDate = updatedDate.toLocaleString('es-NI', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: true
-      });
-      
-      const procedureDate = new Date(procedure.procedure_date);
-      const formattedProcedureDate = procedureDate.toLocaleString('es-NI', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: true
-      });
-      
-      const formattedAppointment = {
-        ...updatedAppointment,
-        appointment_date: formattedUpdatedDate,
-        is_registered: true
-      };
-      
-      const formattedProcedure = {
-        ...procedure,
-        procedure_date: formattedProcedureDate
-      };
-      
-      res.json({ 
-        success: true, 
-        message: appointment.is_orthodontics ? 
-          'Tratamiento de ortodoncia registrado exitosamente' : 
-          'Procedimiento registrado exitosamente',
-        data: {
-          appointment: formattedAppointment,
-          procedure: formattedProcedure
-        }
-      });
-    } catch (error) {
-      console.error('❌ Error completo al convertir cita en procedimiento:', error);
-      res.status(500).json({ 
+  // ============================================
+// CONVERTIR CITA EN PROCEDIMIENTO - VERSIÓN COMPLETA CORREGIDA
+// ============================================
+convertToProcedure: async (req, res) => {
+  try {
+    const { id } = req.params;
+    const procedureData = req.body;
+    
+    console.log('🔄 Iniciando conversión de cita a procedimiento:', {
+      appointmentId: id,
+      procedureData: JSON.stringify(procedureData, null, 2)
+    });
+    
+    // 1. Obtener la cita
+    const { data: appointment, error: appointmentError } = await supabaseAdmin
+      .from('clinical_appointments')
+      .select('*')
+      .eq('appointment_ID', id)
+      .single();
+    
+    if (appointmentError || !appointment) {
+      console.error('❌ Cita no encontrada:', appointmentError);
+      return res.status(404).json({ 
         success: false, 
-        error: error.message || 'Error al registrar procedimiento' 
+        error: 'Cita no encontrada' 
       });
     }
-  },
+    
+    console.log('📅 Cita encontrada:', {
+      appointment_ID: appointment.appointment_ID,
+      is_registered: appointment.is_registered,
+      state: appointment.state,
+      is_orthodontics: appointment.is_orthodontics,
+      Patient_ID: appointment.Patient_ID
+    });
+    
+    // Verificar si ya está registrada
+    if (appointment.is_registered) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Esta cita ya ha sido registrada como procedimiento' 
+      });
+    }
+    
+    // Validar datos mínimos
+    if (!procedureData.procedure_description) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Descripción del procedimiento es requerida' 
+      });
+    }
+    
+    // Cargar configuración para valores por defecto
+    let defaultExchangeRate = 36.5;
+    try {
+      const response = await supabaseAdmin
+        .from('settings')
+        .select('exchange_rate')
+        .limit(1)
+        .single();
+      
+      if (response.data && response.data.exchange_rate) {
+        defaultExchangeRate = response.data.exchange_rate;
+      }
+    } catch (error) {
+      console.log('⚠️ No se pudo cargar configuración, usando valor por defecto:', defaultExchangeRate);
+    }
+    
+    // Preparar datos para el procedimiento - COMPLETAMENTE CORREGIDO
+    const procedureToCreate = {
+      // Información básica
+      appointment_ID: id,
+      Patient_ID: appointment.Patient_ID,
+      procedure_date: appointment.appointment_date,
+      is_orthodontics: appointment.is_orthodontics,
+      creation_date: new Date().toISOString().replace('Z', ''),
+      procedure_description: procedureData.procedure_description || appointment.query_type,
+      observations: procedureData.observations || appointment.observations || null,
+      
+      // ===== CANTIDADES ABONADAS =====
+      // Guardar lo abonado en cada moneda
+      total_cost: procedureData.total_cost || procedureData.amount_cordobas || 0,
+      total_cost_USD: procedureData.total_cost_USD || procedureData.amount_dollars || 0,
+      amount_cordobas: procedureData.amount_cordobas || procedureData.total_cost || 0,
+      amount_dollars: procedureData.amount_dollars || procedureData.total_cost_USD || 0,
+      
+      // Métodos de pago
+      payment_method_cordobas: procedureData.payment_method_cordobas || 'Efectivo',
+      payment_method_dollars: procedureData.payment_method_dollars || 'Efectivo',
+      
+      // ===== DEDUCCIONES POS =====
+      pos_deduction_cordobas: procedureData.pos_deduction_cordobas || 0,
+      pos_deduction_dollars: procedureData.pos_deduction_dollars || 0,
+      total_pos_deduction: procedureData.total_pos_deduction || 0,
+      
+      // ===== MONTOS NETOS (después de POS) =====
+      net_amount_cordobas: procedureData.net_amount_cordobas || 
+        ((procedureData.total_cost || 0) - (procedureData.pos_deduction_cordobas || 0)),
+      net_amount_dollars: procedureData.net_amount_dollars || 
+        ((procedureData.total_cost_USD || 0) - (procedureData.pos_deduction_dollars || 0)),
+      
+      // ===== MONTOS BRUTOS (igual a abonado) =====
+      gross_amount_cordobas: procedureData.gross_amount_cordobas || procedureData.total_cost || 0,
+      gross_amount_dollars: procedureData.gross_amount_dollars || procedureData.total_cost_USD || 0,
+      
+      // ===== TOTAL DE LA CONSULTA (después de POS) =====
+      total_procedure: procedureData.total_procedure || 0,
+      total_procedure_usd: procedureData.total_procedure_usd || 0,
+      
+      // ===== TIPO DE CAMBIO =====
+      exchange_rate_used: procedureData.exchange_rate_used || defaultExchangeRate,
+      
+      // ===== DOCTOR EXTERNO =====
+      external_doctor: procedureData.external_doctor_name || null,
+      theres_external_doctor: procedureData.theres_external_doctor || false,
+      external_doctor_name: procedureData.external_doctor_name || null,
+      external_doctor_specialty: procedureData.external_doctor_specialty || null,
+      external_doctor_payment_type: procedureData.external_doctor_payment_type || 'fixed',
+      external_doctor_payment_value: procedureData.external_doctor_payment_value || 0,
+      external_doctor_payment_currency: procedureData.external_doctor_payment_currency || 'C$',
+      external_doctor_payment: procedureData.external_doctor_payment || 0,
+      external_doctor_payment_usd: procedureData.external_doctor_payment_usd || 0,
+      
+      // ===== PORCENTAJES =====
+      clinic_payment_percentage: procedureData.clinic_payment_percentage || 
+        (appointment.is_orthodontics ? 40 : 100),
+      doctor_payment_percentage: procedureData.doctor_payment_percentage || 
+        (appointment.is_orthodontics ? 60 : 0),
+      
+      // ===== GANANCIAS CALCULADAS =====
+      clinic_payment_cordobas: procedureData.clinic_payment_cordobas || 0,
+      clinic_payment_dollars: procedureData.clinic_payment_dollars || 0,
+      doctor_payment_cordobas: procedureData.doctor_payment_cordobas || 0,
+      doctor_payment_dollars: procedureData.doctor_payment_dollars || 0,
+      
+      // ===== NUEVOS CAMPOS ORTODONCIA =====
+      ortho_doctor_percentage: procedureData.ortho_doctor_percentage || null,
+      external_doctor_percentage: procedureData.external_doctor_percentage || 0,
+      external_doctor_split_type: procedureData.external_doctor_split_type || 'from_clinic',
+      
+      // Campo de compatibilidad (antiguo)
+      payment_method: `${procedureData.payment_method_cordobas || 'Efectivo'} (C$), ${procedureData.payment_method_dollars || 'Efectivo'} (USD)`,
+      total_cost: procedureData.total_cost || 0, // Para compatibilidad
+      total_cost_USD: procedureData.total_cost_USD || 0 // Para compatibilidad
+    };
+    
+    // Validar que los cálculos sean consistentes
+    if (procedureToCreate.total_procedure === 0) {
+      // Calcular total si no se proporcionó
+      const cordobas = procedureToCreate.total_cost || 0;
+      const dollars = procedureToCreate.total_cost_USD || 0;
+      const exchangeRate = procedureToCreate.exchange_rate_used;
+      
+      // Restar deducciones POS
+      const netCordobas = cordobas - procedureToCreate.pos_deduction_cordobas;
+      const netDollars = dollars - procedureToCreate.pos_deduction_dollars;
+      
+      procedureToCreate.total_procedure = netCordobas + (netDollars * exchangeRate);
+      procedureToCreate.total_procedure_usd = netDollars + (netCordobas / exchangeRate);
+    }
+    
+    console.log('📊 Creando procedimiento con datos validados:', {
+      abonadoCordobas: procedureToCreate.total_cost,
+      abonadoDolares: procedureToCreate.total_cost_USD,
+      totalConsultaCordobas: procedureToCreate.total_procedure,
+      totalConsultaDolares: procedureToCreate.total_procedure_usd,
+      gananciaClinica: procedureToCreate.clinic_payment_cordobas,
+      gananciaDoctora: procedureToCreate.doctor_payment_cordobas,
+      pagoDoctorExterno: procedureToCreate.external_doctor_payment,
+      deduccionPOS: procedureToCreate.total_pos_deduction
+    });
+    
+    // 2. Crear el procedimiento en la base de datos
+    const { data: procedure, error: procedureError } = await supabaseAdmin
+      .from('procedures')
+      .insert([procedureToCreate])
+      .select()
+      .single();
+    
+    if (procedureError) {
+      console.error('❌ Error al crear procedimiento:', procedureError);
+      throw procedureError;
+    }
+    
+    console.log('✅ Procedimiento creado:', {
+      procedure_ID: procedure.procedure_ID,
+      total_cost: procedure.total_cost,
+      total_cost_USD: procedure.total_cost_USD,
+      total_procedure: procedure.total_procedure,
+      clinic_payment_cordobas: procedure.clinic_payment_cordobas,
+      external_doctor_payment: procedure.external_doctor_payment
+    });
+    
+    // 3. Actualizar estado de la cita a "completed" y marcar como registrada
+    const { data: updatedAppointment, error: updateError } = await supabaseAdmin
+      .from('clinical_appointments')
+      .update({ 
+        state: 'completed',
+        is_registered: true 
+      })
+      .eq('appointment_ID', id)
+      .select()
+      .single();
+    
+    if (updateError) {
+      console.error('❌ Error al actualizar cita:', updateError);
+      // Revertir la creación del procedimiento
+      await supabaseAdmin
+        .from('procedures')
+        .delete()
+        .eq('procedure_ID', procedure.procedure_ID);
+      
+      throw new Error(`Error al actualizar cita: ${updateError.message}`);
+    }
+    
+    console.log('✅ Cita actualizada:', {
+      appointment_ID: updatedAppointment.appointment_ID,
+      state: updatedAppointment.state,
+      is_registered: updatedAppointment.is_registered
+    });
+    
+    // Formatear fechas para respuesta
+    const fechaBD = new Date(updatedAppointment.appointment_date);
+    const formattedUpdatedDate = fechaBD.toLocaleString('es-NI', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
+    
+    const procedureDate = new Date(procedure.procedure_date);
+    const formattedProcedureDate = procedureDate.toLocaleString('es-NI', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
+    
+    const formattedAppointment = {
+      ...updatedAppointment,
+      appointment_date: formattedUpdatedDate,
+      is_registered: true
+    };
+    
+    const formattedProcedure = {
+      ...procedure,
+      procedure_date: formattedProcedureDate
+    };
+    
+    res.json({ 
+      success: true, 
+      message: appointment.is_orthodontics ? 
+        'Tratamiento de ortodoncia registrado exitosamente' : 
+        'Procedimiento registrado exitosamente',
+      data: {
+        appointment: formattedAppointment,
+        procedure: formattedProcedure
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error completo al convertir cita en procedimiento:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Error al registrar procedimiento' 
+    });
+  }
+},
 
   delete: async (req, res) => {
     try {

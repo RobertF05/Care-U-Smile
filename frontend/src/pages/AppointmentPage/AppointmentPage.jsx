@@ -369,7 +369,7 @@ const AppointmentPage = () => {
     // NUEVOS CAMPOS PARA ORTODONCIA CON DOCTOR EXTERNO
     ortho_doctor_percentage: 60,
     external_doctor_percentage: 0,
-    external_doctor_split_type: 'from_clinic',
+    external_doctor_split_type: 'from_total', 
     observations: ''
   });
 
@@ -1107,7 +1107,7 @@ const validateOrthoPercentages = () => {
             doctor_payment_percentage: updatedAppointment.is_orthodontics ? currentSettings.doctor_payment : 0,
             ortho_doctor_percentage: updatedAppointment.is_orthodontics ? currentSettings.doctor_payment : 0,
             external_doctor_percentage: 0,
-            external_doctor_split_type: 'from_clinic',
+            external_doctor_split_type: 'from_total',
             observations: updatedAppointment.observations || ''
           });
           
@@ -1243,7 +1243,7 @@ const validateOrthoPercentages = () => {
       // NUEVOS CAMPOS
       ortho_doctor_percentage: appointment.is_orthodontics ? currentSettings.doctor_payment : 0,
       external_doctor_percentage: 0,
-      external_doctor_split_type: 'from_clinic',
+      external_doctor_split_type: 'from_total',
       observations: appointment.observations || ''
     });
     setExternalDoctorPaymentCordobas(0);
@@ -1327,7 +1327,7 @@ const handleConvertToProcedure = async (e) => {
       // ===== NUEVOS CAMPOS PARA ORTODONCIA =====
       ortho_doctor_percentage: selectedAppointment.is_orthodontics ? procedureForm.ortho_doctor_percentage : null,
       external_doctor_percentage: procedureForm.external_doctor ? procedureForm.external_doctor_percentage : 0,
-      external_doctor_split_type: procedureForm.external_doctor_split_type || 'from_clinic',
+      external_doctor_split_type: procedureForm.external_doctor_split_type || 'from_total',
     };
     
     // ===== CÁLCULOS ESPECÍFICOS SEGÚN TIPO DE PROCEDIMIENTO =====
@@ -1450,7 +1450,7 @@ const handleConvertToProcedure = async (e) => {
       doctor_payment_percentage: selectedAppointment.is_orthodontics ? currentSettings.doctor_payment : 0,
       ortho_doctor_percentage: selectedAppointment.is_orthodontics ? currentSettings.doctor_payment : 0,
       external_doctor_percentage: 0,
-      external_doctor_split_type: 'from_clinic',
+      external_doctor_split_type: 'from_total',
       observations: ''
     });
     
@@ -2903,18 +2903,6 @@ const handleConvertToProcedure = async (e) => {
                       <div className="form-group">
                         <label className="form-label">Tipo de división:</label>
                         <div className="split-type-buttons">
-                          <button
-                            type="button"
-                            className={`split-type-btn ${procedureForm.external_doctor_split_type === 'from_clinic' ? 'active' : ''}`}
-                            onClick={() => setProcedureForm(prev => ({
-                              ...prev,
-                              external_doctor_split_type: 'from_clinic'
-                            }))}
-                          >
-                            <FontAwesomeIcon icon={faBuilding} />
-                            Del porcentaje de la clínica
-                            <small>El doctor externo recibe del porcentaje que le toca a la clínica</small>
-                          </button>
                           <button
                             type="button"
                             className={`split-type-btn ${procedureForm.external_doctor_split_type === 'from_total' ? 'active' : ''}`}

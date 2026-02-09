@@ -158,82 +158,130 @@ const MonthlyClosing = {
     return data;
   },
 
-  // Obtener estadísticas de procedimientos generales - USANDO total_procedure
-  async getGeneralProceduresStats(startDate, endDate) {
-    const { data, error } = await supabaseAdmin
-      .from('procedures')
-      .select('total_procedure, total_procedure_usd, exchange_rate_used')
-      .eq('is_orthodontics', false)
-      .gte('procedure_date', startDate + 'T00:00:00')
-      .lte('procedure_date', endDate + 'T23:59:59');
-    
-    if (error) throw error;
-    
-    // Usar total_procedure y total_procedure_usd que ya están calculados
-    const totalCordobas = data.reduce((sum, proc) => sum + (proc.total_procedure || 0), 0);
-    const totalDollars = data.reduce((sum, proc) => sum + (proc.total_procedure_usd || 0), 0);
-    
-    console.log('📊 Estadísticas generales:', {
-      totalCordobas,
-      totalDollars,
-      count: data.length,
-      procedimientos: data.map(p => ({ 
-        total_procedure: p.total_procedure, 
-        total_procedure_usd: p.total_procedure_usd 
-      }))
-    });
-    
-    return {
-      general_income: totalCordobas,
-      general_income_usd: totalDollars,
-      clinic_income: totalCordobas,  // 100% para clínica en procedimientos generales
-      procedure_count: data.length
-    };
-  },
+  // models/monthlyClosingModel.js - getGeneralProceduresStats actualizado CORRECTAMENTE
+async getGeneralProceduresStats(startDate, endDate) {
+  const { data, error } = await supabaseAdmin
+    .from('procedures')
+    .select(`
+      total_procedure,
+      total_procedure_usd,
+      clinic_payment_cordobas,
+      clinic_payment_dollars,
+      external_doctor_payment,
+      exchange_rate_used,
+      is_orthodontics
+    `)
+    .eq('is_orthodontics', false)
+    .gte('procedure_date', startDate + 'T00:00:00')
+    .lte('procedure_date', endDate + 'T23:59:59');
+  
+  if (error) throw error;
+  
+  // Usar los campos CORRECTOS: clinic_payment_cordobas y clinic_payment_dollars
+  const clinicIncomeCordobas = data.reduce((sum, proc) => 
+    sum + (parseFloat(proc.clinic_payment_cordobas) || 0), 0);
+  
+  const clinicIncomeDollars = data.reduce((sum, proc) => 
+    sum + (parseFloat(proc.clinic_payment_dollars) || 0), 0);
+  
+  // Calcular pagos a doctores externos
+  const totalExternalDoctorPaymentsCordobas = data.reduce((sum, proc) => {
+    const payment = parseFloat(proc.external_doctor_payment) || 0;
+    return sum + payment;
+  }, 0);
+  
+  // Lo que pagó el paciente (solo para referencia)
+  const totalPatientPaymentCordobas = data.reduce((sum, proc) => 
+    sum + (proc.total_procedure || 0), 0);
+  
+  console.log('📊 Estadísticas generales CORRECTAS:', {
+    count: data.length,
+    clinicIncomeCordobas,
+    clinicIncomeDollars,
+    totalExternalDoctorPaymentsCordobas,
+    totalPatientPaymentCordobas,
+    procedimientos_con_doctor_externo: data.filter(p => p.external_doctor_payment > 0).length
+  });
+  
+  return {
+    general_income: clinicIncomeCordobas, // ¡IMPORTANTE! Usar ganancia de clínica
+    general_income_usd: clinicIncomeDollars,
+    clinic_income: clinicIncomeCordobas,
+    total_external_doctor_payments: totalExternalDoctorPaymentsCordobas,
+    total_patient_payment: totalPatientPaymentCordobas, // Para referencia
+    procedure_count: data.length
+  };
+},
 
-  // Obtener estadísticas de ortodoncia - USANDO total_procedure y aplicando porcentajes
-  async getOrthodonticsProceduresStats(startDate, endDate, clinicPercentage, doctorPercentage) {
-    const { data, error } = await supabaseAdmin
-      .from('procedures')
-      .select('total_procedure, total_procedure_usd, exchange_rate_used')
-      .eq('is_orthodontics', true)
-      .gte('procedure_date', startDate + 'T00:00:00')
-      .lte('procedure_date', endDate + 'T23:59:59');
-    
-    if (error) throw error;
-    
-    // Usar total_procedure y total_procedure_usd que ya están calculados
-    const totalCordobas = data.reduce((sum, proc) => sum + (proc.total_procedure || 0), 0);
-    const totalDollars = data.reduce((sum, proc) => sum + (proc.total_procedure_usd || 0), 0);
-    
-    // Aplicar porcentajes
-    const clinicPortionCordobas = totalCordobas * (clinicPercentage / 100);
-    const doctorPortionCordobas = totalCordobas * (doctorPercentage / 100);
-    const clinicPortionDollars = totalDollars * (clinicPercentage / 100);
-    const doctorPortionDollars = totalDollars * (doctorPercentage / 100);
-    
-    console.log('📊 Estadísticas ortodoncia:', {
-      totalCordobas,
-      totalDollars,
-      clinicPercentage,
-      doctorPercentage,
-      clinicPortionCordobas,
-      doctorPortionCordobas,
-      count: data.length
-    });
-    
-    return {
-      orthodontic_income: totalCordobas,
-      orthodontic_income_usd: totalDollars,
-      clinic_orthodontic_income: clinicPortionCordobas,
-      doctor_orthodontic_income: doctorPortionCordobas,
-      clinic_orthodontic_income_usd: clinicPortionDollars,
-      doctor_orthodontic_income_usd: doctorPortionDollars,
-      clinic_income: clinicPortionCordobas,
-      clinic_income_usd: clinicPortionDollars,
-      procedure_count: data.length
-    };
-  },
+  // models/monthlyClosingModel.js - getOrthodonticsProceduresStats actualizado CORRECTAMENTE
+async getOrthodonticsProceduresStats(startDate, endDate, clinicPercentage, doctorPercentage) {
+  const { data, error } = await supabaseAdmin
+    .from('procedures')
+    .select(`
+      total_procedure,
+      total_procedure_usd,
+      clinic_payment_cordobas,
+      clinic_payment_dollars,
+      doctor_payment_cordobas,
+      doctor_payment_dollars,
+      external_doctor_payment,
+      exchange_rate_used,
+      is_orthodontics
+    `)
+    .eq('is_orthodontics', true)
+    .gte('procedure_date', startDate + 'T00:00:00')
+    .lte('procedure_date', endDate + 'T23:59:59');
+  
+  if (error) throw error;
+  
+  // Usar los campos CORRECTOS ya calculados
+  const clinicIncomeCordobas = data.reduce((sum, proc) => 
+    sum + (parseFloat(proc.clinic_payment_cordobas) || 0), 0);
+  
+  const clinicIncomeDollars = data.reduce((sum, proc) => 
+    sum + (parseFloat(proc.clinic_payment_dollars) || 0), 0);
+  
+  const doctorIncomeCordobas = data.reduce((sum, proc) => 
+    sum + (parseFloat(proc.doctor_payment_cordobas) || 0), 0);
+  
+  const doctorIncomeDollars = data.reduce((sum, proc) => 
+    sum + (parseFloat(proc.doctor_payment_dollars) || 0), 0);
+  
+  // Calcular pagos a doctores externos
+  const totalExternalDoctorPaymentsCordobas = data.reduce((sum, proc) => {
+    const payment = parseFloat(proc.external_doctor_payment) || 0;
+    return sum + payment;
+  }, 0);
+  
+  // Lo que pagó el paciente (solo para referencia)
+  const totalPatientPaymentCordobas = data.reduce((sum, proc) => 
+    sum + (proc.total_procedure || 0), 0);
+  
+  console.log('📊 Estadísticas ortodoncia CORRECTAS:', {
+    count: data.length,
+    clinicIncomeCordobas,
+    clinicIncomeDollars,
+    doctorIncomeCordobas,
+    doctorIncomeDollars,
+    totalExternalDoctorPaymentsCordobas,
+    totalPatientPaymentCordobas,
+    procedimientos_con_doctor_externo: data.filter(p => p.external_doctor_payment > 0).length
+  });
+  
+  return {
+    orthodontic_income: clinicIncomeCordobas + doctorIncomeCordobas, // Total ganancias
+    orthodontic_income_usd: clinicIncomeDollars + doctorIncomeDollars,
+    clinic_orthodontic_income: clinicIncomeCordobas,
+    doctor_orthodontic_income: doctorIncomeCordobas,
+    clinic_orthodontic_income_usd: clinicIncomeDollars,
+    doctor_orthodontic_income_usd: doctorIncomeDollars,
+    total_external_doctor_payments: totalExternalDoctorPaymentsCordobas,
+    clinic_income: clinicIncomeCordobas,
+    clinic_income_usd: clinicIncomeDollars,
+    total_patient_payment: totalPatientPaymentCordobas, // Para referencia
+    procedure_count: data.length
+  };
+},
 
   // Obtener todas las estadísticas
   async getAllProceduresStats(startDate, endDate, clinicPercentage, doctorPercentage) {
@@ -262,113 +310,340 @@ const MonthlyClosing = {
     };
   },
 
-  // Obtener estadísticas de gastos - USANDO amount (ya está en córdobas)
-  async getExpenseStats(startDate, endDate) {
-    const { data: fixedBills, error: fixedError } = await supabaseAdmin
+  // models/monthlyClosingModel.js - getExpenseStats CORREGIDO
+async getExpenseStats(startDate, endDate) {
+  console.log('📊 Obteniendo estadísticas de gastos:', { startDate, endDate });
+  
+  try {
+    // Obtener configuración para conversiones
+    const settings = await this.getSystemSettings();
+    const defaultExchangeRate = settings?.exchange_rate || 36.5;
+    
+    // ============================================
+    // 1. GASTOS FIJOS: TODOS los que existen en la BD
+    // ============================================
+    console.log('💰 BUSCANDO GASTOS FIJOS (todos los existentes)...');
+    
+    const { data: allFixedBills, error: fixedError } = await supabaseAdmin
       .from('bills')
-      .select('amount')
-      .eq('is_recurrent', true)
-      .eq('is_processed_in_closing', false)
-      .gte('bill_date', startDate)
-      .lte('bill_date', endDate);
+      .select('bill_ID, description, amount, amount_usd, currency_used, exchange_rate_bill, is_recurrent, bill_date')
+      .eq('is_recurrent', true); // Solo gastos fijos
+    
+    if (fixedError) {
+      console.error('❌ Error obteniendo gastos fijos:', fixedError);
+      throw fixedError;
+    }
+    
+    console.log(`📋 Total gastos fijos en BD: ${allFixedBills?.length || 0}`);
+    
+    // Filtrar solo los activos (sin fecha de fin o con fecha futura)
+    const activeFixedBills = allFixedBills?.filter(bill => {
+      // Si el gasto tiene fecha de creación (bill_date), verificar si está activo
+      if (bill.bill_date) {
+        const billDate = new Date(bill.bill_date);
+        const periodEnd = new Date(endDate);
+        // Considerar gasto activo si su fecha es anterior o igual al fin del período
+        return billDate <= periodEnd;
+      }
+      // Si no tiene fecha, siempre está activo
+      return true;
+    }) || [];
+    
+    console.log(`📋 Gastos fijos activos: ${activeFixedBills.length}`);
+    
+    // ============================================
+    // 2. GASTOS VARIABLES: Solo del período específico
+    // ============================================
+    console.log('💰 BUSCANDO GASTOS VARIABLES (del período específico)...');
     
     const { data: variableBills, error: variableError } = await supabaseAdmin
       .from('bills')
-      .select('amount')
-      .eq('is_recurrent', false)
-      .eq('is_processed_in_closing', false)
+      .select('bill_ID, description, amount, amount_usd, currency_used, exchange_rate_bill, is_recurrent, bill_date')
+      .eq('is_recurrent', false) // Solo gastos variables
       .gte('bill_date', startDate)
       .lte('bill_date', endDate);
     
-    if (fixedError || variableError) {
-      console.error('Error obteniendo gastos:', fixedError || variableError);
-      return { fixed_expenses: 0, variable_expenses: 0, total_expenses: 0 };
+    if (variableError) {
+      console.error('❌ Error obteniendo gastos variables:', variableError);
+      throw variableError;
     }
     
-    // Calcular gastos fijos - amount ya está en córdobas
-    const fixedExpenses = fixedBills?.reduce((sum, bill) => sum + (bill.amount || 0), 0) || 0;
+    console.log(`📋 Gastos variables del período: ${variableBills?.length || 0}`);
     
-    // Calcular gastos variables - amount ya está en córdobas
-    const variableExpenses = variableBills?.reduce((sum, bill) => sum + (bill.amount || 0), 0) || 0;
+    // Función para calcular monto en córdobas
+    const calculateAmountInCordobas = (bill) => {
+      if (!bill) return 0;
+      
+      // DEBUG: Ver estructura del bill
+      console.log('💰 Calculando monto para bill:', {
+        id: bill.bill_ID,
+        desc: bill.description,
+        amount: bill.amount,
+        amount_usd: bill.amount_usd,
+        currency: bill.currency_used,
+        exchange: bill.exchange_rate_bill
+      });
+      
+      // Si hay amount directo en córdobas, usarlo
+      if (bill.amount && parseFloat(bill.amount) > 0) {
+        return parseFloat(bill.amount) || 0;
+      }
+      
+      // Si es USD, convertir
+      if (bill.currency_used === 'USD') {
+        const amountUSD = parseFloat(bill.amount_usd) || 0;
+        const exchangeRate = parseFloat(bill.exchange_rate_bill) || defaultExchangeRate;
+        const amountCordobas = amountUSD * exchangeRate;
+        console.log(`   USD → C$: ${amountUSD} * ${exchangeRate} = ${amountCordobas}`);
+        return amountCordobas;
+      }
+      
+      // Si no tiene amount ni es USD, es 0
+      console.log('   ⚠️ Bill sin monto válido, usando 0');
+      return 0;
+    };
     
-    console.log('📊 Gastos obtenidos:', {
-      fixedBills: fixedBills?.length || 0,
-      variableBills: variableBills?.length || 0,
-      fixedExpenses,
-      variableExpenses,
-      total: fixedExpenses + variableExpenses
+    // Calcular total de gastos fijos
+    const fixedExpenses = activeFixedBills.reduce((sum, bill) => {
+      const amount = calculateAmountInCordobas(bill);
+      console.log(`💰 Gasto fijo "${bill.description?.substring(0, 30)}...": ${amount} C$`);
+      return sum + amount;
+    }, 0);
+    
+    // Calcular total de gastos variables
+    const variableExpenses = variableBills?.reduce((sum, bill) => {
+      const amount = calculateAmountInCordobas(bill);
+      console.log(`💰 Gasto variable "${bill.description?.substring(0, 30)}...": ${amount} C$`);
+      return sum + amount;
+    }, 0) || 0;
+    
+    const totalExpenses = fixedExpenses + variableExpenses;
+    
+    console.log('📊 RESUMEN COMPLETO DE GASTOS:', {
+      gastosFijos: {
+        totalEnBD: allFixedBills?.length || 0,
+        activos: activeFixedBills.length,
+        totalCordobas: fixedExpenses
+      },
+      gastosVariables: {
+        delPeriodo: variableBills?.length || 0,
+        totalCordobas: variableExpenses
+      },
+      totalGastos: totalExpenses,
+      formula: `Total = Fijos(${fixedExpenses}) + Variables(${variableExpenses}) = ${totalExpenses}`
     });
+    
+    // Mostrar detalle de gastos fijos
+    console.log('📋 DETALLE GASTOS FIJOS:');
+    activeFixedBills.forEach((bill, index) => {
+      const amount = calculateAmountInCordobas(bill);
+      console.log(`  ${index + 1}. ${bill.description} - ${amount} C$ (${bill.bill_date || 'sin fecha'})`);
+    });
+    
+    // Mostrar detalle de gastos variables
+    if (variableBills?.length > 0) {
+      console.log('📋 DETALLE GASTOS VARIABLES:');
+      variableBills.forEach((bill, index) => {
+        const amount = calculateAmountInCordobas(bill);
+        console.log(`  ${index + 1}. ${bill.description} - ${amount} C$ (${bill.bill_date})`);
+      });
+    }
     
     return {
       fixed_expenses: fixedExpenses,
       variable_expenses: variableExpenses,
-      total_expenses: fixedExpenses + variableExpenses
+      total_expenses: totalExpenses,
+      fixed_bills: activeFixedBills,
+      variable_bills: variableBills || [],
+      metadata: {
+        total_fixed_bills_in_db: allFixedBills?.length || 0,
+        active_fixed_bills: activeFixedBills.length,
+        variable_bills_in_period: variableBills?.length || 0,
+        calculation_date: new Date().toISOString()
+      }
     };
-  },
+  } catch (error) {
+    console.error('❌ Error completo en getExpenseStats:', error);
+    return { 
+      fixed_expenses: 0, 
+      variable_expenses: 0, 
+      total_expenses: 0,
+      fixed_bills: [],
+      variable_bills: [],
+      metadata: { error: error.message }
+    };
+  }
+},
 
-  // Obtener resumen financiero principal
-  async getFinancialSummary(startDate, endDate, closingType = 'all') {
-    console.log('Obteniendo resumen financiero:', {
-      inicio: startDate,
-      fin: endDate,
-      tipo: closingType
-    });
+// En monthlyClosingModel.js, agregar:
+async verifyDateRange(startDate, endDate) {
+  console.log('📅 Verificando rango de fechas:', { startDate, endDate });
+  
+  // Convertir a objetos Date para verificación
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  
+  console.log('📅 Fechas convertidas:', {
+    startDate: start.toISOString(),
+    endDate: end.toISOString(),
+    startIsValid: !isNaN(start.getTime()),
+    endIsValid: !isNaN(end.getTime())
+  });
+  
+  return {
+    startDate: startDate,
+    endDate: endDate,
+    startISO: start.toISOString(),
+    endISO: end.toISOString(),
+    isValid: !isNaN(start.getTime()) && !isNaN(end.getTime())
+  };
+},
+
+  // models/monthlyClosingModel.js - getFinancialSummary actualizado
+async getFinancialSummary(startDate, endDate, closingType = 'all') {
+  console.log('Obteniendo resumen financiero:', {
+    inicio: startDate,
+    fin: endDate,
+    tipo: closingType
+  });
+  
+  // Obtener configuración del sistema
+  const settings = await this.getSystemSettings();
+  const clinicPercentage = settings.clinic_payment || 40;
+  const doctorPercentage = settings.doctor_payment || 60;
+  
+  // Obtener estadísticas según el tipo de cierre
+  let incomeStats;
+  let expenseStats = { 
+    fixed_expenses: 0, 
+    variable_expenses: 0, 
+    total_expenses: 0,
+    fixed_bills: [],
+    variable_bills: [] 
+  };
+  
+  if (closingType === 'general') {
+    incomeStats = await this.getGeneralProceduresStats(startDate, endDate);
+  } else if (closingType === 'orthodontics') {
+    incomeStats = await this.getOrthodonticsProceduresStats(startDate, endDate, clinicPercentage, doctorPercentage);
+  } else {
+    // 'all' - ambos tipos
+    incomeStats = await this.getAllProceduresStats(startDate, endDate, clinicPercentage, doctorPercentage);
     
-    // Obtener configuración del sistema
-    const settings = await this.getSystemSettings();
-    const clinicPercentage = settings.clinic_payment || 40;
-    const doctorPercentage = settings.doctor_payment || 60;
-    
-    // Obtener estadísticas según el tipo de cierre
-    let incomeStats;
-    let expenseStats = { fixed_expenses: 0, variable_expenses: 0, total_expenses: 0 };
-    
-    if (closingType === 'general') {
-      incomeStats = await this.getGeneralProceduresStats(startDate, endDate);
-    } else if (closingType === 'orthodontics') {
-      incomeStats = await this.getOrthodonticsProceduresStats(startDate, endDate, clinicPercentage, doctorPercentage);
-    } else {
-      // 'all' - ambos tipos
-      incomeStats = await this.getAllProceduresStats(startDate, endDate, clinicPercentage, doctorPercentage);
+    // Obtener gastos - IMPORTANTE: esto sí se ejecuta para 'all'
+    try {
       expenseStats = await this.getExpenseStats(startDate, endDate);
+      console.log('💰 Gastos obtenidos para el cierre:', expenseStats);
+    } catch (expenseError) {
+      console.error('❌ Error obteniendo gastos, usando valores por defecto:', expenseError);
+    }
+  }
+  
+  console.log('📊 Estadísticas obtenidas:', {
+    incomeStats,
+    expenseStats,
+    closingType
+  });
+  
+  const generalIncome = incomeStats.general_income || 0;
+  const clinicOrthodonticIncome = incomeStats.clinic_orthodontic_income || 0;
+  const doctorOrthodonticIncome = incomeStats.doctor_orthodontic_income || 0;
+  const clinicIncome = incomeStats.clinic_income || generalIncome + clinicOrthodonticIncome;
+  
+  let totalExpenses = 0;
+  
+  if (closingType === 'all') {
+    totalExpenses = expenseStats.total_expenses || 0;
+  }
+  
+  const netProfit = clinicIncome - totalExpenses;
+  
+  console.log('🧮 Cálculos finales:', {
+    generalIncome,
+    clinicOrthodonticIncome,
+    doctorOrthodonticIncome,
+    clinicIncome,
+    totalExpenses,
+    netProfit,
+    closingType,
+    formula: `Utilidad = ${clinicIncome} - ${totalExpenses} = ${netProfit}`
+  });
+  
+  // DEVOLVER SOLO LAS COLUMNAS QUE EXISTEN EN LA TABLA
+  return {
+    total_general_income: generalIncome,
+    total_clinical_orthodontic_income: clinicOrthodonticIncome,
+    total_orthodontic_doctor_income: doctorOrthodonticIncome,
+    total_fixed_expenses: expenseStats.fixed_expenses || 0,
+    total_variable_expenses: expenseStats.variable_expenses || 0,
+    net_profit: netProfit,
+    closing_type: closingType,
+    // Campos adicionales para referencia
+    total_external_doctor_payments: incomeStats.total_external_doctor_payments || 0,
+    clinic_percentage: clinicPercentage,
+    doctor_percentage: doctorPercentage,
+    exchange_rate: settings.exchange_rate || 36.5
+  };
+},
+
+  // Agregar esta función en monthlyClosingModel.js
+async getExternalDoctorPayments(startDate, endDate) {
+  const { data, error } = await supabaseAdmin
+    .from('procedures')
+    .select(`
+      procedure_ID,
+      procedure_description,
+      total_procedure,
+      theres_external_doctor,
+      external_doctor_name,
+      external_doctor_payment_value,
+      external_doctor_payment_currency,
+      external_doctor_payment_type,
+      exchange_rate_used
+    `)
+    .eq('theres_external_doctor', true)
+    .gte('procedure_date', startDate + 'T00:00:00')
+    .lte('procedure_date', endDate + 'T23:59:59');
+  
+  if (error) throw error;
+  
+  const settings = await this.getSystemSettings();
+  const exchangeRate = settings?.exchange_rate || 36.5;
+  
+  const payments = data.map(proc => {
+    let paymentCordobas = 0;
+    let paymentUSD = 0;
+    
+    if (proc.external_doctor_payment_currency === 'C$') {
+      paymentCordobas = proc.external_doctor_payment_value || 0;
+      paymentUSD = paymentCordobas / exchangeRate;
+    } else if (proc.external_doctor_payment_currency === 'USD') {
+      paymentUSD = proc.external_doctor_payment_value || 0;
+      paymentCordobas = paymentUSD * exchangeRate;
     }
     
-    console.log('📊 Estadísticas obtenidas:', incomeStats);
-    
-    const generalIncome = incomeStats.general_income || 0;
-    const clinicOrthodonticIncome = incomeStats.clinic_orthodontic_income || 0;
-    const doctorOrthodonticIncome = incomeStats.doctor_orthodontic_income || 0;
-    const clinicIncome = incomeStats.clinic_income || generalIncome + clinicOrthodonticIncome;
-    
-    let totalExpenses = 0;
-    
-    if (closingType === 'all') {
-      totalExpenses = expenseStats.total_expenses || 0;
-    }
-    
-    const netProfit = clinicIncome - totalExpenses;
-    
-    console.log('🧮 Cálculos finales:', {
-      generalIncome,
-      clinicOrthodonticIncome,
-      doctorOrthodonticIncome,
-      clinicIncome,
-      totalExpenses,
-      netProfit,
-      closingType
-    });
-    
-    // DEVOLVER SOLO LAS COLUMNAS QUE EXISTEN EN LA TABLA
     return {
-      total_general_income: generalIncome,
-      total_clinical_orthodontic_income: clinicOrthodonticIncome,
-      total_orthodontic_doctor_income: doctorOrthodonticIncome,
-      total_fixed_expenses: expenseStats.fixed_expenses || 0,
-      total_variable_expenses: expenseStats.variable_expenses || 0,
-      net_profit: netProfit,
-      closing_type: closingType
+      procedure_id: proc.procedure_ID,
+      description: proc.procedure_description,
+      doctor_name: proc.external_doctor_name,
+      payment_value: proc.external_doctor_payment_value,
+      currency: proc.external_doctor_payment_currency,
+      payment_type: proc.external_doctor_payment_type,
+      payment_cordobas: paymentCordobas,
+      payment_usd: paymentUSD
     };
-  },
+  });
+  
+  const totalCordobas = payments.reduce((sum, p) => sum + p.payment_cordobas, 0);
+  const totalUSD = payments.reduce((sum, p) => sum + p.payment_usd, 0);
+  
+  return {
+    payments,
+    total_payments_cordobas: totalCordobas,
+    total_payments_usd: totalUSD,
+    count: payments.length
+  };
+},
 
   // Obtener resumen por mes específico
   async getMonthlySummary(month, year, closingType = 'all') {

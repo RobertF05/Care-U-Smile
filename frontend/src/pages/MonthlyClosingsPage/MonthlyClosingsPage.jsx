@@ -29,7 +29,14 @@ import {
   faDollarSign,
   faMoneyBill,
   faSyncAlt,
-  faExclamationTriangle
+  faExclamationTriangle,
+  faUserDoctor,
+  faHandHoldingMedical,
+  faMoneyBillTransfer,
+  faUserFriends,
+  faPercentage,
+  faExchangeAlt,
+  faReceipt
 } from '@fortawesome/free-solid-svg-icons';
 import { AppContext } from '../../context/AppContext';
 import { AuthContext } from '../../context/AuthContext';
@@ -70,8 +77,10 @@ const MonthlyClosingsPage = () => {
   const [creating, setCreating] = useState(false);
   const [creatingDaily, setCreatingDaily] = useState(false);
   const [dailySummary, setDailySummary] = useState(null);
-  const [deleteVariableExpenses, setDeleteVariableExpenses] = useState(true);
+  const [deleteVariableExpenses, setDeleteVariableExpenses] = useState(false); // Cambiado a false
   const [exchangeRate, setExchangeRate] = useState(36.5);
+  const [clinicPercentage, setClinicPercentage] = useState(40);
+  const [doctorPercentage, setDoctorPercentage] = useState(60);
   
   // Formulario para crear cierre mensual
   const [newClosing, setNewClosing] = useState({
@@ -103,10 +112,12 @@ const MonthlyClosingsPage = () => {
     }
   }, [user]);
 
-  // Obtener tipo de cambio actual
+  // Obtener configuración del sistema
   useEffect(() => {
-    if (systemSettings?.exchange_rate) {
-      setExchangeRate(systemSettings.exchange_rate);
+    if (systemSettings) {
+      setExchangeRate(systemSettings.exchange_rate || 36.5);
+      setClinicPercentage(systemSettings.clinic_payment || 40);
+      setDoctorPercentage(systemSettings.doctor_payment || 60);
     }
   }, [systemSettings]);
 
@@ -125,15 +136,23 @@ const MonthlyClosingsPage = () => {
 
   // Formateadores de moneda
   const formatCurrency = (amount, currency = 'NIO', showBoth = false) => {
+    if (amount === null || amount === undefined || isNaN(amount)) {
+      amount = 0;
+    }
+    
     if (showBoth) {
       const cordobas = new Intl.NumberFormat('es-NI', {
         style: 'currency',
-        currency: 'NIO'
+        currency: 'NIO',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
       }).format(amount || 0);
       
       const dollars = new Intl.NumberFormat('en-US', {
         style: 'currency',
-        currency: 'USD'
+        currency: 'USD',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
       }).format((amount || 0) / exchangeRate);
       
       return (
@@ -147,17 +166,25 @@ const MonthlyClosingsPage = () => {
     if (currency === 'USD') {
       return new Intl.NumberFormat('en-US', {
         style: 'currency',
-        currency: 'USD'
+        currency: 'USD',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
       }).format(amount || 0);
     }
     
     return new Intl.NumberFormat('es-NI', {
       style: 'currency',
-      currency: 'NIO'
+      currency: 'NIO',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
     }).format(amount || 0);
   };
 
   const formatCurrencySimple = (amount, currency = 'NIO') => {
+    if (amount === null || amount === undefined || isNaN(amount)) {
+      amount = 0;
+    }
+    
     if (currency === 'USD') {
       return new Intl.NumberFormat('en-US', {
         style: 'currency',
@@ -189,23 +216,44 @@ const MonthlyClosingsPage = () => {
     }));
   };
 
+  // Función para calcular USD de doctores externos
+  const calculateExternalDoctorPaymentUSD = (cordobas, exchangeRateUsed) => {
+    if (!cordobas || cordobas <= 0) return 0;
+    const rate = parseFloat(exchangeRateUsed) || exchangeRate;
+    return cordobas / rate;
+  };
+
   // Combinar y filtrar todos los cierres
   const allClosings = useMemo(() => {
-    const monthly = monthlyClosings.map(closing => ({
-      ...closing,
-      id: closing.closing_ID || closing.id,
-      closing_id: closing.closing_ID,
-      type: 'monthly',
-      sub_type: closing.closing_type || 'all',
-      display_date: `Cierre de ${closing.month} ${closing.year}`,
-      date_exact: closing.closing_date_display || formatDate(closing.closing_date),
-      date_sort: `${closing.year}-${getMonthNumber(closing.month).padStart(2, '0')}-01`,
-      total_clinic_income: (closing.total_general_income || 0) + (closing.total_clinical_orthodontic_income || 0),
-      total_expenses: (closing.total_fixed_expenses || 0) + (closing.total_variable_expenses || 0),
-      total_clinic_income_usd: ((closing.total_general_income || 0) + (closing.total_clinical_orthodontic_income || 0)) / exchangeRate,
-      total_expenses_usd: ((closing.total_fixed_expenses || 0) + (closing.total_variable_expenses || 0)) / exchangeRate,
-      net_profit_usd: (closing.net_profit || 0) / exchangeRate
-    }));
+    const monthly = monthlyClosings.map(closing => {
+      // Calcular utilidad neta CORRECTA incluyendo gastos
+      const clinicIncome = (closing.total_general_income || 0) + (closing.total_clinical_orthodontic_income || 0);
+      const totalExpenses = (closing.total_fixed_expenses || 0) + (closing.total_variable_expenses || 0);
+      const netProfit = clinicIncome - totalExpenses;
+      
+      return {
+        ...closing,
+        id: closing.closing_ID || closing.id,
+        closing_id: closing.closing_ID,
+        type: 'monthly',
+        sub_type: closing.closing_type || 'all',
+        display_date: `Cierre de ${closing.month} ${closing.year}`,
+        date_exact: closing.closing_date_display || formatDate(closing.closing_date),
+        date_sort: `${closing.year}-${getMonthNumber(closing.month).padStart(2, '0')}-01`,
+        total_clinic_income: clinicIncome,
+        total_expenses: totalExpenses,
+        total_clinic_income_usd: clinicIncome / exchangeRate,
+        total_expenses_usd: totalExpenses / exchangeRate,
+        net_profit: netProfit, // ¡IMPORTANTE! Calcular correctamente
+        net_profit_usd: netProfit / exchangeRate,
+        // Mantener los campos individuales para el desglose
+        total_general_income: closing.total_general_income || 0,
+        total_clinical_orthodontic_income: closing.total_clinical_orthodontic_income || 0,
+        total_orthodontic_doctor_income: closing.total_orthodontic_doctor_income || 0,
+        total_fixed_expenses: closing.total_fixed_expenses || 0,
+        total_variable_expenses: closing.total_variable_expenses || 0
+      };
+    });
 
     const daily = dailyClosings.map(closing => ({
       ...closing,
@@ -218,12 +266,16 @@ const MonthlyClosingsPage = () => {
       date_sort: closing.closing_date,
       total_clinic_income: closing.total_clinic_income || 0,
       total_clinic_income_usd: (closing.total_clinic_income || 0) / exchangeRate,
-      total_expenses: 0,
+      total_expenses: 0, // Cierres diarios no incluyen gastos
       total_expenses_usd: 0,
-      net_profit: closing.net_profit || 0,
-      net_profit_usd: (closing.net_profit || 0) / exchangeRate,
+      net_profit: closing.net_profit || closing.total_clinic_income || 0,
+      net_profit_usd: (closing.net_profit || closing.total_clinic_income || 0) / exchangeRate,
+      total_income: closing.total_income || 0,
       total_income_usd: (closing.total_income || 0) / exchangeRate,
-      total_doctor_income_usd: (closing.total_doctor_income || 0) / exchangeRate
+      total_doctor_income: closing.total_doctor_income || 0,
+      total_doctor_income_usd: (closing.total_doctor_income || 0) / exchangeRate,
+      total_external_doctor_payments: closing.total_external_doctor_payments || 0,
+      total_external_doctor_payments_usd: (closing.total_external_doctor_payments || 0) / exchangeRate
     }));
 
     return [...monthly, ...daily];
@@ -275,110 +327,131 @@ const MonthlyClosingsPage = () => {
   }, [allClosings, closingTypeFilter, yearFilter, searchTerm]);
 
   // Función para verificar existencia de cierre mensual
-const checkMonthlyClosingExists = async (month, year, closingType) => {
-  try {
-    const queryParams = new URLSearchParams({ 
-      month, 
-      year, 
-      closing_type: closingType 
-    }).toString();
-    
-    const response = await apiFetch(`/monthly-closings/check/exists?${queryParams}`);
-    
-    if (response.success) {
-      return response.data.exists;
+  const checkMonthlyClosingExists = async (month, year, closingType) => {
+    try {
+      const queryParams = new URLSearchParams({ 
+        month, 
+        year, 
+        closing_type: closingType 
+      }).toString();
+      
+      const response = await apiFetch(`/monthly-closings/check/exists?${queryParams}`);
+      
+      if (response.success) {
+        return response.data.exists;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error verificando cierre:', error);
+      return false;
     }
-    return false;
-  } catch (error) {
-    console.error('Error verificando cierre:', error);
-    return false;
-  }
-};
+  };
 
   // Crear cierre mensual
-  // Crear cierre mensual - VERSIÓN CORREGIDA
-const handleCreateClosing = async (e) => {
-  e.preventDefault();
-  setCreating(true);
-  
-  try {
-    // Verificar si ya existe cierre
-    const exists = await checkMonthlyClosingExists(newClosing.month, newClosing.year, newClosing.closing_type);
+  const handleCreateClosing = async (e) => {
+    e.preventDefault();
+    setCreating(true);
     
-    if (exists) {
-      alert(`⚠️ Ya existe un cierre ${getClosingTypeLabel(newClosing.closing_type)} para ${newClosing.month} ${newClosing.year}`);
+    try {
+      // Verificar si ya existe cierre
+      const exists = await checkMonthlyClosingExists(newClosing.month, newClosing.year, newClosing.closing_type);
+      
+      if (exists) {
+        alert(`⚠️ Ya existe un cierre ${getClosingTypeLabel(newClosing.closing_type)} para ${newClosing.month} ${newClosing.year}`);
+        setCreating(false);
+        return;
+      }
+
+      // Calcular fechas del período
+      const startDate = newClosing.startDate || `${newClosing.year}-${getMonthNumber(newClosing.month)}-01`;
+      const endDate = newClosing.endDate || getLastDayOfMonth(newClosing.year, newClosing.month);
+      
+      console.log('📅 Período a calcular:', { startDate, endDate, type: newClosing.closing_type });
+      
+      // Crear cierre - NO vamos a eliminar gastos
+      const closingData = {
+        month: newClosing.month,
+        year: parseInt(newClosing.year),
+        startDate,
+        endDate,
+        closing_type: newClosing.closing_type,
+        comentary: newClosing.comentary || '',
+        deleteVariableExpenses: false // Siempre false, no eliminamos gastos
+      };
+      
+      console.log('📤 Datos para crear cierre mensual:', closingData);
+
+      const response = await createMonthlyClosing(closingData);
+      
+      if (response.success) {
+        let message = `✅ Cierre ${getClosingTypeLabel(newClosing.closing_type)} de ${newClosing.month} ${newClosing.year} creado exitosamente\n\n`;
+        
+        if (newClosing.closing_type === 'all') {
+          // Calcular utilidad neta correctamente
+          const clinicIncome = (response.data.total_general_income || 0) + (response.data.total_clinical_orthodontic_income || 0);
+          const totalExpenses = (response.data.total_fixed_expenses || 0) + (response.data.total_variable_expenses || 0);
+          const netProfit = clinicIncome - totalExpenses;
+          
+          message += `📊 INGRESOS GENERALES (Clínica):\n`;
+          message += `   Ganancia neta clínica: ${formatCurrencySimple(response.data.total_general_income || 0)}\n\n`;
+          
+          message += `🦷 ORTODONCIA:\n`;
+          message += `   Total ganancias: ${formatCurrencySimple((response.data.total_clinical_orthodontic_income || 0) + (response.data.total_orthodontic_doctor_income || 0))}\n`;
+          message += `   Clínica (${clinicPercentage}%): ${formatCurrencySimple(response.data.total_clinical_orthodontic_income || 0)}\n`;
+          message += `   Doctora (${doctorPercentage}%): ${formatCurrencySimple(response.data.total_orthodontic_doctor_income || 0)}\n\n`;
+          
+          message += `💰 GASTOS INCLUIDOS:\n`;
+          message += `   Gastos Fijos: ${formatCurrencySimple(response.data.total_fixed_expenses || 0)}\n`;
+          message += `   Gastos Variables: ${formatCurrencySimple(response.data.total_variable_expenses || 0)}\n`;
+          message += `   Total Gastos: ${formatCurrencySimple(totalExpenses)}\n\n`;
+          
+          message += `🧮 CÁLCULO DE UTILIDAD:\n`;
+          message += `   Total ganancias clínica: ${formatCurrencySimple(clinicIncome)}\n`;
+          message += `   - Total gastos: ${formatCurrencySimple(totalExpenses)}\n`;
+          message += `   = Utilidad Neta Clínica: ${formatCurrencySimple(netProfit)}\n`;
+          message += `   📈 Margen: ${netProfit > 0 ? ((netProfit / clinicIncome) * 100).toFixed(2) : '0.00'}%\n`;
+        } else if (newClosing.closing_type === 'general') {
+          message += `📊 INGRESOS GENERALES:\n`;
+          message += `   Ganancia neta clínica: ${formatCurrencySimple(response.data.total_general_income || 0)}\n`;
+        } else if (newClosing.closing_type === 'orthodontics') {
+          message += `🦷 ORTODONCIA:\n`;
+          message += `   Total ganancias: ${formatCurrencySimple((response.data.total_clinical_orthodontic_income || 0) + (response.data.total_orthodontic_doctor_income || 0))}\n`;
+          message += `   Clínica (${clinicPercentage}%): ${formatCurrencySimple(response.data.total_clinical_orthodontic_income || 0)}\n`;
+          message += `   Doctora (${doctorPercentage}%): ${formatCurrencySimple(response.data.total_orthodontic_doctor_income || 0)}\n`;
+        }
+        
+        // Agregar información de doctores externos si existe
+        if (response.data.total_external_doctor_payments) {
+          message += `\n👨‍⚕️ PAGOS DOCTORES EXTERNOS:\n`;
+          message += `   Total pagado: ${formatCurrencySimple(response.data.total_external_doctor_payments)}\n`;
+          message += `   (Ya deducido de las ganancias mostradas arriba)`;
+        }
+        
+        alert(message);
+        
+        setShowCreateModal(false);
+        setNewClosing({
+          month: MONTHS[new Date().getMonth()],
+          year: new Date().getFullYear().toString(),
+          startDate: '',
+          endDate: '',
+          closing_type: 'all',
+          comentary: ''
+        });
+        
+        // Recargar cierres
+        fetchMonthlyClosings();
+      } else {
+        throw new Error(response.error || 'Error al crear cierre');
+      }
+      
+    } catch (error) {
+      console.error('❌ Error detallado al crear cierre:', error);
+      alert(`❌ Error: ${error.message}`);
+    } finally {
       setCreating(false);
-      return;
     }
-
-    // Calcular fechas del período
-    const startDate = newClosing.startDate || `${newClosing.year}-${getMonthNumber(newClosing.month)}-01`;
-    const endDate = newClosing.endDate || getLastDayOfMonth(newClosing.year, newClosing.month);
-    
-    console.log('📅 Período a calcular:', { startDate, endDate, type: newClosing.closing_type });
-    
-    // Crear cierre
-    const closingData = {
-      month: newClosing.month,
-      year: parseInt(newClosing.year),
-      startDate,
-      endDate,
-      closing_type: newClosing.closing_type,
-      comentary: newClosing.comentary || '',
-      deleteVariableExpenses: newClosing.closing_type === 'all' ? deleteVariableExpenses : false
-    };
-    
-    console.log('📤 Datos para crear cierre mensual:', closingData);
-
-    const response = await createMonthlyClosing(closingData);
-    
-    if (response.success) {
-      let message = `✅ Cierre ${getClosingTypeLabel(newClosing.closing_type)} de ${newClosing.month} ${newClosing.year} creado exitosamente\n\n`;
-      
-      if (newClosing.closing_type === 'all' && deleteVariableExpenses) {
-        message += '✅ Gastos variables procesados\n';
-      }
-      
-      if (newClosing.closing_type === 'all') {
-        message += `Ingresos Generales: ${formatCurrencySimple(response.data.total_general_income || 0)}\n`;
-        message += `Ortodoncia Clínica (${systemSettings?.clinic_payment || 40}%): ${formatCurrencySimple(response.data.total_clinical_orthodontic_income || 0)}\n`;
-        message += `Gastos Fijos: ${formatCurrencySimple(response.data.total_fixed_expenses || 0)}\n`;
-        message += `Gastos Variables: ${formatCurrencySimple(response.data.total_variable_expenses || 0)}\n`;
-      } else if (newClosing.closing_type === 'general') {
-        message += `Ingresos Generales: ${formatCurrencySimple(response.data.total_general_income || 0)}\n`;
-      } else if (newClosing.closing_type === 'orthodontics') {
-        message += `Ortodoncia Total: ${formatCurrencySimple(response.data.total_clinical_orthodontic_income + response.data.total_orthodontic_doctor_income || 0)}\n`;
-        message += `Clínica (${systemSettings?.clinic_payment || 40}%): ${formatCurrencySimple(response.data.total_clinical_orthodontic_income || 0)}\n`;
-        message += `Doctora (${systemSettings?.doctor_payment || 60}%): ${formatCurrencySimple(response.data.total_orthodontic_doctor_income || 0)}\n`;
-      }
-      
-      message += `Utilidad Neta: ${formatCurrencySimple(response.data.net_profit || 0)}`;
-      
-      alert(message);
-      
-      setShowCreateModal(false);
-      setNewClosing({
-        month: MONTHS[new Date().getMonth()],
-        year: new Date().getFullYear().toString(),
-        startDate: '',
-        endDate: '',
-        closing_type: 'all',
-        comentary: ''
-      });
-      
-      // Recargar cierres
-      fetchMonthlyClosings();
-    } else {
-      throw new Error(response.error || 'Error al crear cierre');
-    }
-    
-  } catch (error) {
-    console.error('❌ Error detallado al crear cierre:', error);
-    alert(`❌ Error: ${error.message}`);
-  } finally {
-    setCreating(false);
-  }
-};
+  };
 
   // Obtener resumen diario previo
   const handleGetDailySummary = async () => {
@@ -430,16 +503,25 @@ const handleCreateClosing = async (e) => {
       if (response.success) {
         const typeLabel = newDailyClosing.closing_type === 'orthodontics' ? 'de Ortodoncia' : 'General';
         let message = `✅ Cierre Diario ${typeLabel} creado exitosamente\n\n`;
-        message += `Fecha: ${formatDate(newDailyClosing.date)}\n`;
-        message += `Procedimientos incluidos: ${response.data.procedure_count || 0}\n`;
-        message += `Tipo de cambio: C$${exchangeRate.toFixed(2)} = $1\n\n`;
+        message += `📅 Fecha: ${formatDate(newDailyClosing.date)}\n`;
+        message += `📋 Procedimientos incluidos: ${response.data.procedure_count || 0}\n`;
+        message += `💱 Tipo de cambio: C$${exchangeRate.toFixed(2)} = $1\n\n`;
         
         if (newDailyClosing.closing_type === 'orthodontics') {
-          message += `Ingresos Totales: ${formatCurrency(response.data.total_income, 'NIO', true)}\n`;
-          message += `Clínica (${response.data.clinic_percentage || 40}%): ${formatCurrency(response.data.total_clinic_income, 'NIO', true)}\n`;
-          message += `Doctora (${response.data.doctor_percentage || 60}%): ${formatCurrency(response.data.total_doctor_income, 'NIO', true)}\n`;
+          message += `🦷 ORTODONCIA:\n`;
+          message += `   Total ganancias: ${formatCurrency(response.data.total_income, 'NIO', true)}\n`;
+          message += `   Clínica (${clinicPercentage}%): ${formatCurrency(response.data.total_clinic_income, 'NIO', true)}\n`;
+          message += `   Doctora (${doctorPercentage}%): ${formatCurrency(response.data.total_doctor_income, 'NIO', true)}\n`;
         } else {
-          message += `Ingresos Clínica: ${formatCurrency(response.data.total_clinic_income, 'NIO', true)}\n`;
+          message += `📊 PROCEDIMIENTOS GENERALES:\n`;
+          message += `   Ganancia neta clínica: ${formatCurrency(response.data.total_clinic_income, 'NIO', true)}\n`;
+        }
+        
+        // Agregar información de doctores externos si existe
+        if (response.data.total_external_doctor_payments > 0) {
+          message += `\n👨‍⚕️ PAGOS DOCTORES EXTERNOS:\n`;
+          message += `   Total pagado: ${formatCurrency(response.data.total_external_doctor_payments, 'NIO', true)}\n`;
+          message += `   (Ya deducido de las ganancias mostradas arriba)`;
         }
         
         alert(message);
@@ -585,17 +667,6 @@ const handleCreateClosing = async (e) => {
     }
   };
 
-  // Función para verificar existencia de cierre
-  const handleCheckClosingExists = async (month, year, type) => {
-    try {
-      const response = await apiFetch(`/monthly-closings/check?month=${month}&year=${year}&closing_type=${type}`);
-      return response.data?.exists || false;
-    } catch (error) {
-      console.error('Error verificando cierre:', error);
-      return false;
-    }
-  };
-
   if (loading && allClosings.length === 0) {
     return (
       <div className="closings-container">
@@ -621,12 +692,20 @@ const handleCreateClosing = async (e) => {
           </p>
           <div className="clinic-info">
             <span className="info-item">
-              <FontAwesomeIcon icon={faHospital} />
-              <span>Clínica: {systemSettings?.clinic_payment || 40}%</span>
+              <FontAwesomeIcon icon={faPercentage} />
+              <span>Clínica: {clinicPercentage}%</span>
             </span>
             <span className="info-item">
               <FontAwesomeIcon icon={faUserMd} />
-              <span>Doctora: {systemSettings?.doctor_payment || 60}%</span>
+              <span>Doctora: {doctorPercentage}%</span>
+            </span>
+            <span className="info-item">
+              <FontAwesomeIcon icon={faUserDoctor} />
+              <span>Doctores externos: Deducidos automáticamente</span>
+            </span>
+            <span className="info-item">
+              <FontAwesomeIcon icon={faExchangeAlt} />
+              <span>Tipo cambio: C${exchangeRate.toFixed(2)}</span>
             </span>
           </div>
         </div>
@@ -839,6 +918,38 @@ const handleCreateClosing = async (e) => {
                         <span>{closing.comentary}</span>
                       </div>
                     )}
+                    
+                    {/* Mostrar desglose básico */}
+                    <div className="closing-quick-stats">
+                      {closing.type === 'monthly' && closing.sub_type === 'all' && (
+                        <>
+                          <span className="quick-stat">
+                            <FontAwesomeIcon icon={faHospital} />
+                            <span>Clínica: {formatCurrency(closing.total_clinic_income, 'NIO', false)}</span>
+                          </span>
+                          <span className="quick-stat">
+                            <FontAwesomeIcon icon={faUserMd} />
+                            <span>Doctora: {formatCurrency(closing.total_orthodontic_doctor_income || 0, 'NIO', false)}</span>
+                          </span>
+                          <span className="quick-stat negative">
+                            <FontAwesomeIcon icon={faReceipt} />
+                            <span>Gastos: {formatCurrency(closing.total_expenses, 'NIO', false)}</span>
+                          </span>
+                        </>
+                      )}
+                      {closing.type === 'daily' && (
+                        <span className="quick-stat">
+                          <FontAwesomeIcon icon={faHospital} />
+                          <span>Clínica: {formatCurrency(closing.total_clinic_income, 'NIO', false)}</span>
+                        </span>
+                      )}
+                      {closing.total_external_doctor_payments > 0 && (
+                        <span className="quick-stat external">
+                          <FontAwesomeIcon icon={faUserDoctor} />
+                          <span>Doctores externos: {formatCurrency(closing.total_external_doctor_payments, 'NIO', false)}</span>
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
                 
@@ -850,7 +961,7 @@ const handleCreateClosing = async (e) => {
                     >
                       {formatCurrency(closing.net_profit, 'NIO', true)}
                     </div>
-                    <span className="profit-label">Utilidad Neta</span>
+                    <span className="profit-label">Utilidad Neta Clínica</span>
                     <div 
                       className={`profit-indicator ${closing.net_profit >= 0 ? 'positive' : 'negative'}`}
                     >
@@ -895,111 +1006,241 @@ const handleCreateClosing = async (e) => {
               {expandedClosings[closing.id] && (
                 <div className="closing-details">
                   <div className="financial-summary">
-                    <h5>Resumen Financiero</h5>
+                    <h5>
+                      <FontAwesomeIcon icon={faCalculator} />
+                      Resumen Financiero - Ganancias Netas
+                    </h5>
+                    <div className="summary-note">
+                      <FontAwesomeIcon icon={faInfoCircle} />
+                      <small>Todos los montos muestran ganancias netas después de deducciones (POS, doctores externos, etc.)</small>
+                    </div>
                     
                     {closing.type === 'monthly' ? (
                       <div className="summary-grid">
                         {closing.sub_type === 'all' && (
                           <>
-                            <div className="summary-item income">
-                              <span className="summary-label">Ingresos Generales:</span>
+                            <div className="summary-item income-general">
+                              <div className="summary-header">
+                                <FontAwesomeIcon icon={faHospital} />
+                                <span className="summary-label">Procedimientos Generales:</span>
+                              </div>
                               <span className="summary-value">{formatCurrency(closing.total_general_income, 'NIO', true)}</span>
+                              <div className="summary-description">
+                                <small>Ganancia neta 100% para la clínica</small>
+                              </div>
                             </div>
-                            <div className="summary-item income-ortho">
-                              <span className="summary-label">Ortodoncia (Clínica {systemSettings?.clinic_payment || 40}%):</span>
-                              <span className="summary-value">{formatCurrency(closing.total_clinical_orthodontic_income, 'NIO', true)}</span>
+                            
+                            <div className="summary-section ortho-section">
+                              <div className="section-title">
+                                <FontAwesomeIcon icon={faTooth} />
+                                <span>Ortodoncia</span>
+                              </div>
+                              
+                              <div className="summary-item income-ortho-total">
+                                <div className="summary-header">
+                                  <span className="summary-label">Total ganancias ortodoncia:</span>
+                                </div>
+                                <span className="summary-value">
+                                  {formatCurrency((closing.total_clinical_orthodontic_income || 0) + (closing.total_orthodontic_doctor_income || 0), 'NIO', true)}
+                                </span>
+                              </div>
+                              
+                              <div className="summary-item income-ortho-clinic">
+                                <div className="summary-header">
+                                  <FontAwesomeIcon icon={faPercentage} />
+                                  <span className="summary-label">Clínica ({clinicPercentage}%):</span>
+                                </div>
+                                <span className="summary-value">{formatCurrency(closing.total_clinical_orthodontic_income, 'NIO', true)}</span>
+                              </div>
+                              
+                              <div className="summary-item income-ortho-doctor">
+                                <div className="summary-header">
+                                  <FontAwesomeIcon icon={faUserMd} />
+                                  <span className="summary-label">Doctora ({doctorPercentage}%):</span>
+                                </div>
+                                <span className="summary-value">{formatCurrency(closing.total_orthodontic_doctor_income, 'NIO', true)}</span>
+                              </div>
                             </div>
-                            <div className="summary-item expense-fixed">
-                              <span className="summary-label">Gastos Fijos:</span>
-                              <span className="summary-value">{formatCurrency(closing.total_fixed_expenses, 'NIO', true)}</span>
-                            </div>
-                            <div className="summary-item expense-variable">
-                              <span className="summary-label">Gastos Variables:</span>
-                              <span className="summary-value">{formatCurrency(closing.total_variable_expenses, 'NIO', true)}</span>
+                            
+                            <div className="summary-section expenses-section">
+                              <div className="section-title">
+                                <FontAwesomeIcon icon={faMoneyBillWave} />
+                                <span>Gastos</span>
+                              </div>
+                              
+                              <div className="summary-item expense-fixed">
+                                <span className="summary-label">Gastos Fijos:</span>
+                                <span className="summary-value">{formatCurrency(closing.total_fixed_expenses, 'NIO', true)}</span>
+                                <div className="summary-description">
+                                  <small>Gastos recurrentes mensuales</small>
+                                </div>
+                              </div>
+                              
+                              <div className="summary-item expense-variable">
+                                <span className="summary-label">Gastos Variables:</span>
+                                <span className="summary-value">{formatCurrency(closing.total_variable_expenses, 'NIO', true)}</span>
+                                <div className="summary-description">
+                                  <small>Gastos ocasionales del período</small>
+                                </div>
+                              </div>
+                              
+                              <div className="summary-total expense-total negative">
+                                <span className="summary-label">Total Gastos:</span>
+                                <span className="summary-value">{formatCurrency(closing.total_expenses, 'NIO', true)}</span>
+                              </div>
                             </div>
                           </>
                         )}
                         
                         {closing.sub_type === 'general' && (
-                          <div className="summary-item income">
-                            <span className="summary-label">Ingresos Generales:</span>
+                          <div className="summary-item income-general">
+                            <div className="summary-header">
+                              <FontAwesomeIcon icon={faHospital} />
+                              <span className="summary-label">Procedimientos Generales:</span>
+                            </div>
                             <span className="summary-value">{formatCurrency(closing.total_general_income, 'NIO', true)}</span>
+                            <div className="summary-description">
+                              <small>Ganancia neta 100% para la clínica</small>
+                            </div>
                           </div>
                         )}
                         
                         {closing.sub_type === 'orthodontics' && (
-                          <>
-                            <div className="summary-item income-ortho-total">
-                              <span className="summary-label">Ortodoncia Total:</span>
-                              <span className="summary-value">{formatCurrency(closing.total_clinical_orthodontic_income + closing.total_orthodontic_doctor_income, 'NIO', true)}</span>
+                          <div className="summary-section ortho-section full">
+                            <div className="section-title">
+                              <FontAwesomeIcon icon={faTooth} />
+                              <span>Ortodoncia</span>
                             </div>
+                            
+                            <div className="summary-item income-ortho-total">
+                              <div className="summary-header">
+                                <span className="summary-label">Total ganancias ortodoncia:</span>
+                              </div>
+                              <span className="summary-value">
+                                {formatCurrency((closing.total_clinical_orthodontic_income || 0) + (closing.total_orthodontic_doctor_income || 0), 'NIO', true)}
+                              </span>
+                            </div>
+                            
                             <div className="summary-item income-ortho-clinic">
-                              <span className="summary-label">Clínica ({systemSettings?.clinic_payment || 40}%):</span>
+                              <div className="summary-header">
+                                <FontAwesomeIcon icon={faPercentage} />
+                                <span className="summary-label">Clínica ({clinicPercentage}%):</span>
+                              </div>
                               <span className="summary-value">{formatCurrency(closing.total_clinical_orthodontic_income, 'NIO', true)}</span>
                             </div>
+                            
                             <div className="summary-item income-ortho-doctor">
-                              <span className="summary-label">
-                                <FontAwesomeIcon icon={faUserMd} /> Doctora ({systemSettings?.doctor_payment || 60}%):
-                              </span>
+                              <div className="summary-header">
+                                <FontAwesomeIcon icon={faUserMd} />
+                                <span className="summary-label">Doctora ({doctorPercentage}%):</span>
+                              </div>
                               <span className="summary-value">{formatCurrency(closing.total_orthodontic_doctor_income, 'NIO', true)}</span>
                             </div>
-                          </>
+                          </div>
                         )}
                       </div>
                     ) : (
                       <div className="summary-grid">
-                        <div className="summary-item income">
-                          <span className="summary-label">Ingresos Totales:</span>
+                        <div className="summary-item income-total">
+                          <div className="summary-header">
+                            <FontAwesomeIcon icon={faDollarSign} />
+                            <span className="summary-label">Total ganancias del día:</span>
+                          </div>
                           <span className="summary-value">{formatCurrency(closing.total_income, 'NIO', true)}</span>
                         </div>
-                        <div className="summary-item clinic-income">
-                          <span className="summary-label">
-                            {closing.sub_type === 'orthodontics' ? `Clínica (${systemSettings?.clinic_payment || 40}%)` : 'Ingresos Clínica'}:
-                          </span>
-                          <span className="summary-value">{formatCurrency(closing.total_clinic_income, 'NIO', true)}</span>
-                        </div>
-                        {closing.sub_type === 'orthodontics' && (
-                          <div className="summary-item doctor-income">
-                            <span className="summary-label">
-                              <FontAwesomeIcon icon={faUserMd} /> Doctora ({systemSettings?.doctor_payment || 60}%):
-                            </span>
-                            <span className="summary-value">{formatCurrency(closing.total_doctor_income, 'NIO', true)}</span>
+                        
+                        <div className="summary-section distribution-section">
+                          <div className="section-title">
+                            <FontAwesomeIcon icon={faUserFriends} />
+                            <span>Distribución</span>
                           </div>
-                        )}
+                          
+                          <div className="summary-item clinic-income">
+                            <div className="summary-header">
+                              <FontAwesomeIcon icon={faHospital} />
+                              <span className="summary-label">
+                                {closing.sub_type === 'orthodontics' ? `Clínica (${clinicPercentage}%)` : 'Clínica (100%)'}:
+                              </span>
+                            </div>
+                            <span className="summary-value">{formatCurrency(closing.total_clinic_income, 'NIO', true)}</span>
+                            <div className="summary-description">
+                              <small>Ganancia neta de la clínica</small>
+                            </div>
+                          </div>
+                          
+                          {closing.sub_type === 'orthodontics' && (
+                            <div className="summary-item doctor-income">
+                              <div className="summary-header">
+                                <FontAwesomeIcon icon={faUserMd} />
+                                <span className="summary-label">Doctora ({doctorPercentage}%):</span>
+                              </div>
+                              <span className="summary-value">{formatCurrency(closing.total_doctor_income, 'NIO', true)}</span>
+                            </div>
+                          )}
+                        </div>
+                        
                         {closing.total_external_doctor_payments > 0 && (
-                          <div className="summary-item external-doctor">
-                            <span className="summary-label">Pagos Doctores Externos:</span>
-                            <span className="summary-value">{formatCurrency(closing.total_external_doctor_payments, 'NIO', true)}</span>
+                          <div className="summary-section external-section">
+                            <div className="section-title">
+                              <FontAwesomeIcon icon={faUserDoctor} />
+                              <span>Pagos a Doctores Externos</span>
+                            </div>
+                            
+                            <div className="summary-item external-doctor">
+                              <span className="summary-label">Total pagado:</span>
+                              <span className="summary-value">{formatCurrency(closing.total_external_doctor_payments, 'NIO', true)}</span>
+                              <div className="summary-description">
+                                <small>Ya deducido de las ganancias mostradas arriba</small>
+                              </div>
+                            </div>
                           </div>
                         )}
                       </div>
                     )}
                     
                     <div className="net-profit-summary">
-                      <div className="net-profit-item">
-                        <span className="net-profit-label">
-                          {closing.type === 'monthly' ? 'Ingresos Clínica:' : 'Ingresos Netos:'}
-                        </span>
-                        <span className="net-profit-value">
-                          {formatCurrency(closing.total_clinic_income, 'NIO', true)}
-                        </span>
+                      <div className="net-profit-header">
+                        <h6>
+                          <FontAwesomeIcon icon={faChartLine} />
+                          Resumen Final - Clínica
+                        </h6>
                       </div>
-                      {closing.type === 'monthly' && closing.sub_type === 'all' && (
+                      
+                      <div className="net-profit-items">
                         <div className="net-profit-item">
-                          <span className="net-profit-label">Gastos Totales:</span>
+                          <span className="net-profit-label">Total ganancias clínica:</span>
                           <span className="net-profit-value">
-                            {formatCurrency(closing.total_expenses, 'NIO', true)}
+                            {formatCurrency(closing.total_clinic_income, 'NIO', true)}
                           </span>
                         </div>
-                      )}
-                      <div className="net-profit-final">
-                        <span className="net-profit-label">Utilidad Neta:</span>
-                        <span 
-                          className="net-profit-value"
-                          style={{ color: getProfitColor(closing.net_profit) }}
-                        >
-                          {formatCurrency(closing.net_profit, 'NIO', true)}
-                        </span>
+                        
+                        {closing.type === 'monthly' && closing.sub_type === 'all' && (
+                          <div className="net-profit-item">
+                            <span className="net-profit-label">Total gastos:</span>
+                            <span className="net-profit-value negative">
+                              {formatCurrency(closing.total_expenses, 'NIO', true)}
+                            </span>
+                          </div>
+                        )}
+                        
+                        <div className="net-profit-final">
+                          <span className="net-profit-label">Utilidad neta clínica:</span>
+                          <span 
+                            className="net-profit-value"
+                            style={{ color: getProfitColor(closing.net_profit) }}
+                          >
+                            {formatCurrency(closing.net_profit, 'NIO', true)}
+                          </span>
+                        </div>
+                        
+                        {closing.total_clinic_income > 0 && (
+                          <div className="profit-margin">
+                            <span className="margin-label">Margen de utilidad:</span>
+                            <span className="margin-value">
+                              {((closing.net_profit / closing.total_clinic_income) * 100).toFixed(2)}%
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1100,7 +1341,7 @@ const handleCreateClosing = async (e) => {
                     <option value="orthodontics">Solo Ortodoncia</option>
                   </select>
                   <small className="form-help">
-                    {newClosing.closing_type === 'all' && 'Incluye todos los procedimientos y gastos'}
+                    {newClosing.closing_type === 'all' && 'Incluye todos los procedimientos y gastos (fijos + variables)'}
                     {newClosing.closing_type === 'general' && 'Solo procedimientos generales, sin gastos'}
                     {newClosing.closing_type === 'orthodontics' && 'Solo ortodoncia, sin gastos'}
                   </small>
@@ -1131,33 +1372,6 @@ const handleCreateClosing = async (e) => {
                 <small className="form-help">Si no se especifica, se usará el último día del mes</small>
               </div>
 
-              {newClosing.closing_type === 'all' && (
-                <div className="form-group">
-                  <label className="form-label">
-                    <div className="switch-container">
-                      <span>Eliminar gastos variables después del cierre:</span>
-                      <label className="switch">
-                        <input
-                          type="checkbox"
-                          checked={deleteVariableExpenses}
-                          onChange={(e) => setDeleteVariableExpenses(e.target.checked)}
-                          disabled={creating}
-                        />
-                        <span className="slider round"></span>
-                      </label>
-                      <span className="switch-label">
-                        {deleteVariableExpenses ? 'Sí, eliminar automáticamente' : 'No, conservar en el sistema'}
-                      </span>
-                    </div>
-                  </label>
-                  <small className="form-help">
-                    {deleteVariableExpenses 
-                      ? '⚠️ Los gastos variables del período serán eliminados permanentemente'
-                      : 'Los gastos variables se conservarán para futuras consultas'}
-                  </small>
-                </div>
-              )}
-
               <div className="form-group">
                 <label className="form-label">Comentarios (opcional):</label>
                 <textarea
@@ -1173,15 +1387,21 @@ const handleCreateClosing = async (e) => {
               <div className="form-note important">
                 <FontAwesomeIcon icon={faInfoCircle} />
                 <div>
-                  <strong>IMPORTANTE:</strong> El sistema calculará automáticamente:
+                  <strong>IMPORTANTE - CÁLCULOS CORRECTOS:</strong>
                   <ul>
-                    <li>✅ Procedimientos del período seleccionado</li>
-                    {newClosing.closing_type === 'all' && <li>✅ Gastos fijos y variables del período</li>}
-                    {newClosing.closing_type === 'orthodontics' && (
-                      <li>✅ Separación automática: Clínica ({systemSettings?.clinic_payment || 40}%), Doctora ({systemSettings?.doctor_payment || 60}%)</li>
+                    <li>✅ Usa <strong>clinic_payment_cordobas/dollars</strong> para ganancia clínica</li>
+                    <li>✅ Usa <strong>doctor_payment_cordobas/dollars</strong> para ganancia doctora</li>
+                    <li>✅ Usa <strong>external_doctor_payment</strong> para pagos externos</li>
+                    <li>✅ <strong>NO usa total_procedure</strong> (es lo que paga el paciente)</li>
+                    {newClosing.closing_type === 'all' && (
+                      <>
+                        <li>✅ Incluye <strong>TODOS los gastos fijos</strong> del período</li>
+                        <li>✅ Incluye <strong>TODOS los gastos variables</strong> del período</li>
+                        <li>⚠️ Los gastos <strong>NO se marcan como procesados</strong></li>
+                      </>
                     )}
-                    <li>✅ Cálculo en ambas monedas (C$ y USD)</li>
-                    <li>✅ Tipo de cambio actual: C${exchangeRate.toFixed(2)} = $1</li>
+                    <li>💱 Tipo de cambio: C${exchangeRate.toFixed(2)} = $1</li>
+                    <li>✅ Todos los cálculos son sobre <strong>GANANCIAS NETAS</strong></li>
                   </ul>
                 </div>
               </div>
@@ -1270,8 +1490,8 @@ const handleCreateClosing = async (e) => {
                   </select>
                   <small className="form-help">
                     {newDailyClosing.closing_type === 'orthodontics' 
-                      ? `Separa automáticamente: Clínica (${systemSettings?.clinic_payment || 40}%), Doctora (${systemSettings?.doctor_payment || 60}%)`
-                      : 'Todos los procedimientos del día'}
+                      ? `Separa automáticamente: Clínica (${clinicPercentage}%), Doctora (${doctorPercentage}%)`
+                      : 'Todos los procedimientos generales del día'}
                   </small>
                 </div>
               </div>
@@ -1300,28 +1520,44 @@ const handleCreateClosing = async (e) => {
                       <span className="preview-value">{dailySummary.procedures?.length || 0}</span>
                     </div>
                     <div className="preview-item">
-                      <span>Ingresos Totales:</span>
+                      <span>Total ganancias:</span>
                       <span className="preview-value">{formatCurrency(dailySummary.total_income, 'NIO', true)}</span>
+                      <div className="preview-note">
+                        <small>Suma de ganancias netas</small>
+                      </div>
                     </div>
                     {newDailyClosing.closing_type === 'orthodontics' ? (
                       <>
                         <div className="preview-item">
-                          <span>Clínica ({dailySummary.clinic_percentage || 40}%):</span>
+                          <span>Clínica ({clinicPercentage}%):</span>
                           <span className="preview-value">{formatCurrency(dailySummary.total_clinic_income, 'NIO', true)}</span>
                         </div>
                         <div className="preview-item">
-                          <span>Doctora ({dailySummary.doctor_percentage || 60}%):</span>
+                          <span>Doctora ({doctorPercentage}%):</span>
                           <span className="preview-value">{formatCurrency(dailySummary.total_doctor_income, 'NIO', true)}</span>
                         </div>
                       </>
                     ) : (
                       <div className="preview-item">
-                        <span>Ingresos Clínica:</span>
+                        <span>Clínica (100%):</span>
                         <span className="preview-value">{formatCurrency(dailySummary.total_clinic_income, 'NIO', true)}</span>
                       </div>
                     )}
+                    {dailySummary.total_external_doctor_payments > 0 && (
+                      <div className="preview-item external">
+                        <span>
+                          <FontAwesomeIcon icon={faUserDoctor} /> Doctores externos:
+                        </span>
+                        <span className="preview-value">
+                          {formatCurrency(dailySummary.total_external_doctor_payments, 'NIO', true)}
+                        </span>
+                        <div className="preview-note">
+                          <small>Ya deducidos de las ganancias</small>
+                        </div>
+                      </div>
+                    )}
                     <div className="preview-item total">
-                      <span>Utilidad Neta estimada:</span>
+                      <span>Utilidad neta clínica:</span>
                       <span 
                         className="preview-value"
                         style={{ color: getProfitColor(dailySummary.net_profit || 0) }}
@@ -1342,12 +1578,14 @@ const handleCreateClosing = async (e) => {
               <div className="form-note">
                 <FontAwesomeIcon icon={faInfoCircle} />
                 <div>
-                  <strong>NOTA:</strong> 
+                  <strong>INFORMACIÓN IMPORTANTE:</strong> 
                   <ul>
-                    <li>Los cierres diarios solo incluyen ingresos por procedimientos</li>
-                    <li>No se incluyen gastos en los cierres diarios</li>
-                    <li>Tipo de cambio: C${exchangeRate.toFixed(2)} = $1</li>
-                    <li>No se pueden crear dos cierres para la misma fecha y tipo</li>
+                    <li>✅ Calcula sobre <strong>ganancias netas</strong> (no sobre pagos de pacientes)</li>
+                    <li>✅ Usa <strong>clinic_payment_cordobas/dollars</strong> para ganancia clínica</li>
+                    <li>✅ Usa <strong>doctor_payment_cordobas/dollars</strong> para ganancia doctora</li>
+                    <li>❌ <strong>NO incluye gastos</strong> en cierres diarios</li>
+                    <li>💱 Tipo de cambio: C${exchangeRate.toFixed(2)} = $1</li>
+                    <li>⚠️ No se pueden crear dos cierres para la misma fecha y tipo</li>
                   </ul>
                 </div>
               </div>
@@ -1470,82 +1708,134 @@ const handleCreateClosing = async (e) => {
               </div>
 
               <div className="detail-section">
-                <h4>Resumen Financiero</h4>
+                <h4>Resumen Financiero Detallado</h4>
                 <div className="financial-breakdown">
+                  
+                  {/* Nota importante */}
+                  <div className="breakdown-note important">
+                    <FontAwesomeIcon icon={faInfoCircle} />
+                    <div>
+                      <strong>NOTA:</strong> Todos los montos mostrados son <strong>ganancias netas</strong> 
+                      calculadas directamente desde la base de datos usando los campos correctos:
+                      <ul>
+                        <li><code>clinic_payment_cordobas/dollars</code> para ganancia clínica</li>
+                        <li><code>doctor_payment_cordobas/dollars</code> para ganancia doctora</li>
+                        <li><code>external_doctor_payment</code> para pagos externos</li>
+                        <li><strong>NO</strong> se usa <code>total_procedure</code> (pagos de pacientes)</li>
+                      </ul>
+                    </div>
+                  </div>
                   
                   {selectedClosing.type === 'monthly' ? (
                     // Resumen mensual
                     <>
                       {selectedClosing.sub_type === 'all' && (
-                        <div className="breakdown-section income">
-                          <h5>Ingresos de la Clínica</h5>
-                          <div className="breakdown-item">
-                            <span>Procedimientos Generales (100% clínica):</span>
-                            <span className="amount">{formatCurrency(selectedClosing.total_general_income, 'NIO', true)}</span>
+                        <>
+                          <div className="breakdown-section income">
+                            <h5>
+                              <FontAwesomeIcon icon={faHospital} />
+                              Procedimientos Generales
+                            </h5>
+                            <div className="breakdown-item">
+                              <span>Ganancia neta clínica:</span>
+                              <span className="amount">{formatCurrency(selectedClosing.total_general_income, 'NIO', true)}</span>
+                            </div>
+                            <div className="breakdown-description">
+                              <small>100% para la clínica, después de todas las deducciones</small>
+                            </div>
                           </div>
-                          <div className="breakdown-item">
-                            <span>Ortodoncia ({systemSettings?.clinic_payment || 40}% clínica):</span>
-                            <span className="amount">{formatCurrency(selectedClosing.total_clinical_orthodontic_income, 'NIO', true)}</span>
+
+                          <div className="breakdown-section ortho">
+                            <h5>
+                              <FontAwesomeIcon icon={faTooth} />
+                              Ortodoncia
+                            </h5>
+                            <div className="breakdown-item">
+                              <span>Total ganancias ortodoncia:</span>
+                              <span className="amount">
+                                {formatCurrency((selectedClosing.total_clinical_orthodontic_income || 0) + (selectedClosing.total_orthodontic_doctor_income || 0), 'NIO', true)}
+                              </span>
+                            </div>
+                            <div className="breakdown-item">
+                              <span>Clínica ({clinicPercentage}%):</span>
+                              <span className="amount">{formatCurrency(selectedClosing.total_clinical_orthodontic_income, 'NIO', true)}</span>
+                            </div>
+                            <div className="breakdown-item">
+                              <span>
+                                <FontAwesomeIcon icon={faUserMd} /> Doctora ({doctorPercentage}%):
+                              </span>
+                              <span className="amount">{formatCurrency(selectedClosing.total_orthodontic_doctor_income, 'NIO', true)}</span>
+                            </div>
                           </div>
-                          <div className="breakdown-total">
-                            <span>Total Ingresos Clínica:</span>
-                            <span className="total-amount">
-                              {formatCurrency(selectedClosing.total_clinic_income, 'NIO', true)}
-                            </span>
+
+                          <div className="breakdown-section expenses">
+                            <h5>
+                              <FontAwesomeIcon icon={faMoneyBillWave} />
+                              Gastos Incluidos
+                            </h5>
+                            <div className="breakdown-item">
+                              <span>Gastos Fijos:</span>
+                              <span className="amount">{formatCurrency(selectedClosing.total_fixed_expenses, 'NIO', true)}</span>
+                              <div className="breakdown-description">
+                                <small>Gastos recurrentes mensuales</small>
+                              </div>
+                            </div>
+                            <div className="breakdown-item">
+                              <span>Gastos Variables:</span>
+                              <span className="amount">
+                                {formatCurrency(selectedClosing.total_variable_expenses, 'NIO', true)}
+                              </span>
+                              <div className="breakdown-description">
+                                <small>Gastos ocasionales del período</small>
+                              </div>
+                            </div>
+                            <div className="breakdown-total negative">
+                              <span>Total Gastos:</span>
+                              <span className="total-amount">
+                                {formatCurrency(selectedClosing.total_expenses, 'NIO', true)}
+                              </span>
+                            </div>
                           </div>
-                        </div>
+                        </>
                       )}
 
                       {selectedClosing.sub_type === 'general' && (
-                        <div className="breakdown-section income">
-                          <h5>Ingresos Generales</h5>
+                        <div className="breakdown-section income full">
+                          <h5>
+                            <FontAwesomeIcon icon={faHospital} />
+                            Procedimientos Generales
+                          </h5>
                           <div className="breakdown-item">
-                            <span>Procedimientos Generales:</span>
+                            <span>Ganancia neta clínica:</span>
                             <span className="amount">{formatCurrency(selectedClosing.total_general_income, 'NIO', true)}</span>
+                          </div>
+                          <div className="breakdown-description">
+                            <small>100% para la clínica, después de todas las deducciones</small>
                           </div>
                         </div>
                       )}
 
                       {selectedClosing.sub_type === 'orthodontics' && (
-                        <div className="breakdown-section income">
-                          <h5>Ingresos de Ortodoncia</h5>
+                        <div className="breakdown-section ortho full">
+                          <h5>
+                            <FontAwesomeIcon icon={faTooth} />
+                            Ortodoncia
+                          </h5>
                           <div className="breakdown-item">
-                            <span>Ortodoncia Total:</span>
-                            <span className="amount">{formatCurrency(selectedClosing.total_clinical_orthodontic_income + selectedClosing.total_orthodontic_doctor_income, 'NIO', true)}</span>
+                            <span>Total ganancias ortodoncia:</span>
+                            <span className="amount">
+                              {formatCurrency((selectedClosing.total_clinical_orthodontic_income || 0) + (selectedClosing.total_orthodontic_doctor_income || 0), 'NIO', true)}
+                            </span>
                           </div>
                           <div className="breakdown-item">
-                            <span>Clínica ({systemSettings?.clinic_payment || 40}%):</span>
+                            <span>Clínica ({clinicPercentage}%):</span>
                             <span className="amount">{formatCurrency(selectedClosing.total_clinical_orthodontic_income, 'NIO', true)}</span>
                           </div>
                           <div className="breakdown-item">
                             <span>
-                              <FontAwesomeIcon icon={faUserMd} /> Doctora ({systemSettings?.doctor_payment || 60}%):
+                              <FontAwesomeIcon icon={faUserMd} /> Doctora ({doctorPercentage}%):
                             </span>
                             <span className="amount">{formatCurrency(selectedClosing.total_orthodontic_doctor_income, 'NIO', true)}</span>
-                          </div>
-                        </div>
-                      )}
-
-                      {selectedClosing.sub_type === 'all' && (
-                        <div className="breakdown-section expenses">
-                          <h5>Gastos</h5>
-                          <div className="breakdown-item">
-                            <span>Gastos Fijos:</span>
-                            <span className="amount">{formatCurrency(selectedClosing.total_fixed_expenses, 'NIO', true)}</span>
-                          </div>
-                          <div className="breakdown-item highlight">
-                            <span>
-                              Gastos Variables:
-                            </span>
-                            <span className="amount">
-                              {formatCurrency(selectedClosing.total_variable_expenses, 'NIO', true)}
-                            </span>
-                          </div>
-                          <div className="breakdown-total">
-                            <span>Total Gastos:</span>
-                            <span className="total-amount">
-                              {formatCurrency(selectedClosing.total_expenses, 'NIO', true)}
-                            </span>
                           </div>
                         </div>
                       )}
@@ -1554,38 +1844,52 @@ const handleCreateClosing = async (e) => {
                     // Resumen diario
                     <>
                       <div className="breakdown-section income">
-                        <h5>Ingresos</h5>
+                        <h5>
+                          <FontAwesomeIcon icon={faDollarSign} />
+                          Ganancias Totales del Día
+                        </h5>
                         <div className="breakdown-item">
-                          <span>Ingresos Totales:</span>
+                          <span>Total ganancias:</span>
                           <span className="amount">{formatCurrency(selectedClosing.total_income, 'NIO', true)}</span>
                         </div>
-                        {selectedClosing.sub_type === 'orthodontics' ? (
-                          <>
-                            <div className="breakdown-item">
-                              <span>Clínica ({systemSettings?.clinic_payment || 40}%):</span>
-                              <span className="amount">{formatCurrency(selectedClosing.total_clinic_income, 'NIO', true)}</span>
-                            </div>
-                            <div className="breakdown-item">
-                              <span>
-                                <FontAwesomeIcon icon={faUserMd} /> Doctora ({systemSettings?.doctor_payment || 60}%):
-                              </span>
-                              <span className="amount">{formatCurrency(selectedClosing.total_doctor_income, 'NIO', true)}</span>
-                            </div>
-                          </>
-                        ) : (
+                      </div>
+
+                      <div className="breakdown-section distribution">
+                        <h5>
+                          <FontAwesomeIcon icon={faUserFriends} />
+                          Distribución
+                        </h5>
+                        <div className="breakdown-item">
+                          <span>
+                            {selectedClosing.sub_type === 'orthodontics' ? `Clínica (${clinicPercentage}%)` : 'Clínica (100%)'}:
+                          </span>
+                          <span className="amount">{formatCurrency(selectedClosing.total_clinic_income, 'NIO', true)}</span>
+                        </div>
+                        {selectedClosing.sub_type === 'orthodontics' && (
                           <div className="breakdown-item">
-                            <span>Ingresos Clínica:</span>
-                            <span className="amount">{formatCurrency(selectedClosing.total_clinic_income, 'NIO', true)}</span>
+                            <span>
+                              <FontAwesomeIcon icon={faUserMd} /> Doctora ({doctorPercentage}%):
+                            </span>
+                            <span className="amount">{formatCurrency(selectedClosing.total_doctor_income, 'NIO', true)}</span>
                           </div>
                         )}
                       </div>
 
                       {selectedClosing.total_external_doctor_payments > 0 && (
                         <div className="breakdown-section external">
-                          <h5>Pagos a Doctores Externos</h5>
+                          <h5>
+                            <FontAwesomeIcon icon={faUserDoctor} />
+                            Pagos a Doctores Externos
+                          </h5>
                           <div className="breakdown-item">
-                            <span>Total pagos externos:</span>
-                            <span className="amount">{formatCurrency(selectedClosing.total_external_doctor_payments, 'NIO', true)}</span>
+                            <span>Total pagado:</span>
+                            <span className="amount">
+                              {formatCurrency(selectedClosing.total_external_doctor_payments, 'NIO', true)}
+                            </span>
+                          </div>
+                          <div className="breakdown-note">
+                            <FontAwesomeIcon icon={faInfoCircle} />
+                            <span>Esta cantidad YA FUE DEDUCIDA de las ganancias mostradas arriba</span>
                           </div>
                         </div>
                       )}
@@ -1593,24 +1897,27 @@ const handleCreateClosing = async (e) => {
                   )}
 
                   {/* RESUMEN FINAL */}
-                  <div className="breakdown-section summary">
-                    <h5>Resumen Final</h5>
+                  <div className="breakdown-section summary final">
+                    <h5>
+                      <FontAwesomeIcon icon={faChartLine} />
+                      Resumen Final - Clínica
+                    </h5>
                     <div className="breakdown-item">
-                      <span>Ingresos Netos Clínica:</span>
+                      <span>Total ganancias clínica:</span>
                       <span className="amount">
                         {formatCurrency(selectedClosing.total_clinic_income, 'NIO', true)}
                       </span>
                     </div>
                     {selectedClosing.type === 'monthly' && selectedClosing.sub_type === 'all' && (
                       <div className="breakdown-item">
-                        <span>Gastos Totales:</span>
-                        <span className="amount">
+                        <span>Total gastos:</span>
+                        <span className="amount negative">
                           {formatCurrency(selectedClosing.total_expenses, 'NIO', true)}
                         </span>
                       </div>
                     )}
                     <div className="breakdown-final">
-                      <span>Utilidad Neta Clínica:</span>
+                      <span>Utilidad neta clínica:</span>
                       <span 
                         className="final-amount"
                         style={{ color: getProfitColor(selectedClosing.net_profit) }}

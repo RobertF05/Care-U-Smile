@@ -57,9 +57,7 @@ const monthlyClosingController = {
     }
   },
 
-  // Crear cierre mensual
-  // monthlyClosingController.js - Corregir función create
-
+  // monthlyClosingController.js - Función create COMPLETA
 create: async (req, res) => {
   try {
     const { 
@@ -71,6 +69,15 @@ create: async (req, res) => {
       comentary = '', 
       deleteVariableExpenses = false 
     } = req.body;
+    
+    console.log('📝 Datos recibidos para crear cierre:', {
+      month, 
+      year, 
+      startDate, 
+      endDate, 
+      closing_type,
+      deleteVariableExpenses
+    });
     
     if (!month || !year) {
       return res.status(400).json({ 
@@ -101,37 +108,91 @@ create: async (req, res) => {
     const periodStartDate = startDate || `${year}-${getMonthNumber(month)}-01`;
     const periodEndDate = endDate || getLastDayOfMonth(year, month);
     
-    console.log('📅 Período a calcular:', { 
+    console.log('📅 Período calculado para el cierre:', { 
+      month,
+      year,
       startDate: periodStartDate, 
       endDate: periodEndDate,
-      type: closing_type 
+      type: closing_type,
+      startDateProvided: !!startDate,
+      endDateProvided: !!endDate
     });
     
+    // DEBUG: Verificar formato de fechas
+    console.log('🔍 DEBUG - Verificación de fechas:', {
+      periodStartDate,
+      periodEndDate,
+      startDateLength: periodStartDate.length,
+      endDateLength: periodEndDate.length,
+      expectedFormat: 'YYYY-MM-DD'
+    });
+    
+    // DEBUG: Verificar si hay datos en bills para este período
+    console.log('🔍 DEBUG - Verificando gastos en bills...');
+    try {
+      const { data: billsInPeriod, error: billsError } = await supabaseAdmin
+        .from('bills')
+        .select('bill_ID, description, amount, bill_date, is_recurrent, currency_used')
+        .gte('bill_date', periodStartDate)
+        .lte('bill_date', periodEndDate);
+      
+      if (billsError) {
+        console.error('❌ Error verificando bills:', billsError);
+      } else {
+        console.log('📊 DEBUG - Bills encontrados en período:', {
+          total: billsInPeriod?.length || 0,
+          fixed: billsInPeriod?.filter(b => b.is_recurrent === true).length || 0,
+          variable: billsInPeriod?.filter(b => b.is_recurrent === false).length || 0,
+          sample: billsInPeriod?.slice(0, 3).map(b => ({
+            id: b.bill_ID,
+            date: b.bill_date,
+            amount: b.amount,
+            recurrent: b.is_recurrent,
+            desc: b.description
+          }))
+        });
+      }
+    } catch (debugError) {
+      console.error('❌ Error en debug de bills:', debugError);
+    }
+    
     // Obtener resumen financiero según tipo
+    console.log('🧮 Obteniendo resumen financiero...');
     const financialSummary = await MonthlyClosing.getFinancialSummary(
       periodStartDate,
       periodEndDate,
       closing_type
     );
     
-    // Solo procesar gastos variables si es cierre 'all'
+    console.log('📊 Resumen financiero obtenido:', {
+      total_general_income: financialSummary.total_general_income,
+      total_clinical_orthodontic_income: financialSummary.total_clinical_orthodontic_income,
+      total_orthodontic_doctor_income: financialSummary.total_orthodontic_doctor_income,
+      total_fixed_expenses: financialSummary.total_fixed_expenses,
+      total_variable_expenses: financialSummary.total_variable_expenses,
+      net_profit: financialSummary.net_profit,
+      closing_type: financialSummary.closing_type
+    });
+    
+    // Solo obtener información de gastos para referencia, NO marcarlos como procesados
     let variableBillsProcessed = [];
     let variableExpensesAmount = 0;
     
-    if (deleteVariableExpenses && closing_type === 'all') {
+    // Solo para cierres completos
+    if (closing_type === 'all') {
+      console.log('💰 Procesando información de gastos variables (solo lectura)...');
       try {
         const { data: variableBills, error } = await supabaseAdmin
           .from('bills')
-          .select('bill_ID, description, amount, currency_used, amount_usd, exchange_rate_bill')
+          .select('bill_ID, description, amount, currency_used, amount_usd, exchange_rate_bill, bill_date')
           .eq('is_recurrent', false)
-          .eq('is_processed_in_closing', false)
           .gte('bill_date', periodStartDate)
           .lte('bill_date', periodEndDate);
         
         if (!error && variableBills) {
           variableBillsProcessed = variableBills;
           
-          // Calcular monto total en córdobas
+          // Calcular monto total en córdobas para referencia
           variableExpensesAmount = variableBillsProcessed.reduce((sum, bill) => {
             if (bill.currency_used === 'USD') {
               return sum + ((bill.amount_usd || 0) * (bill.exchange_rate_bill || 36.5));
@@ -140,28 +201,25 @@ create: async (req, res) => {
             }
           }, 0);
           
-          const billIds = variableBillsProcessed.map(bill => bill.bill_ID);
-          
-          const { error: updateError } = await supabaseAdmin
-            .from('bills')
-            .update({
-              is_processed_in_closing: true,
-              processed_in_closing_ID: null
-            })
-            .in('bill_ID', billIds);
-          
-          if (updateError) {
-            console.warn('⚠️ No se pudieron marcar gastos como procesados:', updateError.message);
-          } else {
-            console.log(`✅ Marcados ${billIds.length} gastos variables como procesados`);
-          }
+          console.log(`📊 ${variableBillsProcessed.length} gastos variables encontrados (NO procesados):`, {
+            cantidad: variableBillsProcessed.length,
+            montoTotal: variableExpensesAmount,
+            muestra: variableBillsProcessed.slice(0, 3).map(b => ({
+              id: b.bill_ID,
+              desc: b.description,
+              monto: b.amount || b.amount_usd,
+              moneda: b.currency_used
+            }))
+          });
+        } else if (error) {
+          console.warn('⚠️ Error obteniendo gastos variables:', error.message);
         }
       } catch (billError) {
-        console.warn('⚠️ Error al procesar gastos variables:', billError.message);
+        console.warn('⚠️ Error al obtener gastos variables:', billError.message);
       }
     }
     
-    // Crear cierre - SOLO con columnas que existen
+    // Crear cierre - SOLO con columnas que existen en la tabla
     const closingData = {
       month,
       year: parseInt(year),
@@ -173,74 +231,132 @@ create: async (req, res) => {
       total_variable_expenses: financialSummary.total_variable_expenses,
       net_profit: financialSummary.net_profit,
       comentary,
-      processed_variable_expenses: deleteVariableExpenses && closing_type === 'all',
+      // IMPORTANTE: Siempre false, no marcamos gastos como procesados
+      processed_variable_expenses: false,
       daily_closings_included: false,
       orthodontics_daily_closings_included: false
     };
     
-    console.log('📤 Datos para crear cierre:', closingData);
+    console.log('📤 Datos finales para crear cierre en BD:', closingData);
     
     const newClosing = await MonthlyClosing.create(closingData);
+    
+    console.log('✅ Cierre creado en BD:', {
+      id: newClosing.closing_ID,
+      month: newClosing.month,
+      year: newClosing.year,
+      tipo: newClosing.closing_type
+    });
     
     // Formatear respuesta
     const formattedClosing = {
       ...newClosing,
       closing_ID: newClosing.closing_ID,
       id: newClosing.closing_ID,
-      variable_expenses_processed: variableBillsProcessed.length,
+      variable_expenses_processed: 0, // Siempre 0 porque no procesamos
       variable_expenses_amount: variableExpensesAmount,
-      delete_operation: deleteVariableExpenses ? 'marked_as_processed' : 'skipped',
+      delete_operation: 'skipped', // Siempre skipped
       // Agregar información adicional para la respuesta (no se guarda en BD)
       clinic_percentage: financialSummary.clinic_percentage,
       doctor_percentage: financialSummary.doctor_percentage,
-      exchange_rate: financialSummary.exchange_rate
+      exchange_rate: financialSummary.exchange_rate,
+      // Información de doctores externos si existe
+      total_external_doctor_payments: financialSummary.total_external_doctor_payments || 0
     };
     
     const typeLabel = getClosingTypeLabel(closing_type);
     
-    res.status(201).json({ 
-      success: true, 
-      message: `Cierre mensual ${typeLabel} creado exitosamente` + 
-              (deleteVariableExpenses && closing_type === 'all' ? ' (gastos variables procesados)' : ''),
-      data: formattedClosing 
-    });
-  } catch (error) {
-    console.error('Error al crear cierre:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Error al crear cierre: ' + error.message 
-    });
-  }
-},
-
-  // Agregar esta función al monthlyClosingController.js
-
-// Verificar si existe cierre
-checkExists: async (req, res) => {
-  try {
-    const { month, year, closing_type = 'all' } = req.query;
+    // Mensaje de éxito detallado
+    let successMessage = `✅ Cierre mensual ${typeLabel} creado exitosamente`;
     
-    if (!month || !year) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Mes y año son requeridos' 
-      });
+    if (closing_type === 'all') {
+      const totalClinicIncome = (financialSummary.total_general_income || 0) + 
+                               (financialSummary.total_clinical_orthodontic_income || 0);
+      const totalExpenses = (financialSummary.total_fixed_expenses || 0) + 
+                           (financialSummary.total_variable_expenses || 0);
+      
+      successMessage += `\n\n📊 RESUMEN:\n`;
+      successMessage += `• Procedimientos Generales: C$${financialSummary.total_general_income?.toFixed(2) || '0.00'}\n`;
+      successMessage += `• Ortodoncia Clínica (${financialSummary.clinic_percentage || 40}%): C$${financialSummary.total_clinical_orthodontic_income?.toFixed(2) || '0.00'}\n`;
+      successMessage += `• Ortodoncia Doctora (${financialSummary.doctor_percentage || 60}%): C$${financialSummary.total_orthodontic_doctor_income?.toFixed(2) || '0.00'}\n`;
+      successMessage += `• Gastos Fijos: C$${financialSummary.total_fixed_expenses?.toFixed(2) || '0.00'}\n`;
+      successMessage += `• Gastos Variables: C$${financialSummary.total_variable_expenses?.toFixed(2) || '0.00'}\n`;
+      successMessage += `• Total Gastos: C$${totalExpenses.toFixed(2)}\n`;
+      successMessage += `• Total Ingresos Clínica: C$${totalClinicIncome.toFixed(2)}\n`;
+      successMessage += `• Utilidad Neta: C$${financialSummary.net_profit?.toFixed(2) || '0.00'}`;
+      
+      if (financialSummary.total_external_doctor_payments) {
+        successMessage += `\n• Pagos Doctores Externos: C$${financialSummary.total_external_doctor_payments.toFixed(2)} (ya deducidos)`;
+      }
     }
     
-    const exists = await MonthlyClosing.exists(month, year, closing_type);
+    console.log('📤 Enviando respuesta al cliente...');
     
-    res.json({ 
+    res.status(201).json({ 
       success: true, 
-      data: { exists } 
+      message: successMessage,
+      data: formattedClosing,
+      debug: {
+        periodo: `${periodStartDate} al ${periodEndDate}`,
+        gastos_variables_encontrados: variableBillsProcessed.length,
+        gastos_variables_monto: variableExpensesAmount,
+        procesamiento_gastos: 'NO PROCESADOS (solo lectura)'
+      }
     });
+    
   } catch (error) {
-    console.error('Error al verificar cierre:', error);
+    console.error('❌ Error completo al crear cierre:', {
+      error: error.message,
+      stack: error.stack,
+      body: req.body,
+      timestamp: new Date().toISOString()
+    });
+    
+    let errorMessage = 'Error al crear cierre: ' + error.message;
+    
+    // Mensajes de error más específicos
+    if (error.message.includes('duplicate key')) {
+      errorMessage = `Ya existe un cierre para ${req.body.month} ${req.body.year}`;
+    } else if (error.message.includes('network') || error.message.includes('connection')) {
+      errorMessage = 'Error de conexión con la base de datos. Verifique la conexión.';
+    } else if (error.message.includes('invalid input syntax')) {
+      errorMessage = 'Error en el formato de los datos. Verifique las fechas.';
+    }
+    
     res.status(500).json({ 
       success: false, 
-      error: 'Error al verificar cierre' 
+      error: errorMessage,
+      debug: req.body // Para ayudar en debugging
     });
   }
 },
+
+  // Verificar si existe cierre
+  checkExists: async (req, res) => {
+    try {
+      const { month, year, closing_type = 'all' } = req.query;
+      
+      if (!month || !year) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Mes y año son requeridos' 
+        });
+      }
+      
+      const exists = await MonthlyClosing.exists(month, year, closing_type);
+      
+      res.json({ 
+        success: true, 
+        data: { exists } 
+      });
+    } catch (error) {
+      console.error('Error al verificar cierre:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: 'Error al verificar cierre' 
+      });
+    }
+  },
 
   // Obtener resumen financiero
   getFinancialSummary: async (req, res) => {
@@ -268,6 +384,68 @@ checkExists: async (req, res) => {
       });
     }
   },
+
+  // En monthlyClosingController.js, agregar esta función:
+testBillsConnection: async (req, res) => {
+  try {
+    console.log('🔍 Test de conexión a tabla bills');
+    
+    // Test 1: Contar todos los gastos
+    const { count: totalCount, error: countError } = await supabaseAdmin
+      .from('bills')
+      .select('*', { count: 'exact', head: true });
+    
+    if (countError) {
+      console.error('❌ Error contando bills:', countError);
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Error contando bills: ' + countError.message 
+      });
+    }
+    
+    // Test 2: Obtener algunos gastos de ejemplo
+    const { data: sampleBills, error: sampleError } = await supabaseAdmin
+      .from('bills')
+      .select('*')
+      .limit(5)
+      .order('bill_date', { ascending: false });
+    
+    if (sampleError) {
+      console.error('❌ Error obteniendo sample bills:', sampleError);
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Error obteniendo sample bills: ' + sampleError.message 
+      });
+    }
+    
+    // Test 3: Verificar estructura de fechas
+    const { data: dateRange, error: dateError } = await supabaseAdmin
+      .from('bills')
+      .select('bill_date')
+      .order('bill_date', { ascending: true })
+      .limit(1);
+    
+    res.json({
+      success: true,
+      data: {
+        totalBills: totalCount || 0,
+        sampleBills: sampleBills || [],
+        earliestDate: dateRange && dateRange.length > 0 ? dateRange[0].bill_date : 'No hay datos',
+        connectionTest: 'OK',
+        message: sampleBills && sampleBills.length > 0 
+          ? `✅ Hay ${totalCount} gastos en la tabla` 
+          : '⚠️ No hay gastos registrados en la tabla bills'
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Error en testBillsConnection:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Error en test: ' + error.message 
+    });
+  }
+},
 
   // Obtener resumen por mes
   getMonthlySummary: async (req, res) => {

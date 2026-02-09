@@ -329,46 +329,27 @@ async getDailyProcedures(date, closingType = 'general') {
     }
   },
 
-  // getDailyFinancialSummary - Actualizado para usar settings
-  // models/dailyClosingModel.js - Corregir getDailyFinancialSummary
+  // models/dailyClosingModel.js - getDailyFinancialSummary actualizado CORRECTAMENTE
 async getDailyFinancialSummary(date, closingType = 'general') {
   console.log('🔍 Obteniendo resumen diario para:', { date, closingType });
   
   const procedures = await this.getDailyProcedures(date, closingType);
   
   console.log('📊 Procedimientos encontrados:', procedures.length);
-  console.log('📄 Procedimientos:', procedures.map(p => ({
-    id: p.procedure_ID,
-    desc: p.procedure_description,
-    total_procedure: p.total_procedure,
-    total_procedure_usd: p.total_procedure_usd,
-    is_orthodontics: p.is_orthodontics
-  })));
   
-  // Obtener configuración desde settings
+  // Obtener configuración
   const settings = await this.getSystemSettings();
   const exchangeRate = settings.exchange_rate || 36.5;
-  let clinicPercentage = 100;
-  let doctorPercentage = 0;
   
-  if (closingType === 'orthodontics') {
-    clinicPercentage = settings.clinic_payment || 40;
-    doctorPercentage = settings.doctor_payment || 60;
-  }
-  
-  console.log('🔢 Configuración aplicada:', {
-    clinic: clinicPercentage,
-    doctor: doctorPercentage,
-    exchange_rate: exchangeRate,
-    type: closingType
-  });
-  
-  // Calcular ingresos USANDO total_procedure y total_procedure_usd
-  let totalIncomeCordobas = 0;
-  let totalIncomeDollars = 0;
+  // Calcular ingresos usando los campos correctos
   let totalClinicIncomeCordobas = 0;
+  let totalClinicIncomeDollars = 0;
   let totalDoctorIncomeCordobas = 0;
+  let totalDoctorIncomeDollars = 0;
   let totalExternalDoctorPaymentsCordobas = 0;
+  let totalExternalDoctorPaymentsDollars = 0;
+  let totalIncomeCordobas = 0; // Solo para referencia
+  let totalIncomeDollars = 0;  // Solo para referencia
   
   const procedureClosings = [];
   
@@ -376,83 +357,97 @@ async getDailyFinancialSummary(date, closingType = 'general') {
     console.log('📝 Procesando procedimiento:', {
       id: procedure.procedure_ID,
       desc: procedure.procedure_description,
+      // Lo que paga el paciente
       total_procedure: procedure.total_procedure,
-      total_procedure_usd: procedure.total_procedure_usd
+      total_procedure_usd: procedure.total_procedure_usd,
+      // Ganancia clínica
+      clinic_payment_cordobas: procedure.clinic_payment_cordobas,
+      clinic_payment_dollars: procedure.clinic_payment_dollars,
+      // Ganancia doctora
+      doctor_payment_cordobas: procedure.doctor_payment_cordobas,
+      doctor_payment_dollars: procedure.doctor_payment_dollars,
+      // Doctor externo
+      external_doctor_payment: procedure.external_doctor_payment,
+      exchange_rate_used: procedure.exchange_rate_used,
+      is_orthodontics: procedure.is_orthodontics
     });
     
-    // Usar total_procedure y total_procedure_usd que ya están calculados
-    const procedureAmountCordobas = procedure.total_procedure || 0;
-    const procedureAmountDollars = procedure.total_procedure_usd || 0;
+    // Sumar ingresos totales (lo que paga el paciente) - solo para referencia
+    totalIncomeCordobas += procedure.total_procedure || 0;
+    totalIncomeDollars += procedure.total_procedure_usd || 0;
     
-    totalIncomeCordobas += procedureAmountCordobas;
-    totalIncomeDollars += procedureAmountDollars;
+    // Sumar GANANCIA DE LA CLÍNICA (campos correctos)
+    const clinicCordobas = parseFloat(procedure.clinic_payment_cordobas) || 0;
+    const clinicDollars = parseFloat(procedure.clinic_payment_dollars) || 0;
+    totalClinicIncomeCordobas += clinicCordobas;
+    totalClinicIncomeDollars += clinicDollars;
     
-    let clinicPortionCordobas = 0;
-    let doctorPortionCordobas = 0;
+    // Sumar GANANCIA DE LA DOCTORA ORTODONCISTA (si es ortodoncia)
+    const doctorCordobas = parseFloat(procedure.doctor_payment_cordobas) || 0;
+    const doctorDollars = parseFloat(procedure.doctor_payment_dollars) || 0;
+    totalDoctorIncomeCordobas += doctorCordobas;
+    totalDoctorIncomeDollars += doctorDollars;
     
-    if (closingType === 'orthodontics') {
-      // Solo aplicar porcentajes si es ortodoncia
-      clinicPortionCordobas = procedureAmountCordobas * (clinicPercentage / 100);
-      doctorPortionCordobas = procedureAmountCordobas * (doctorPercentage / 100);
-    } else {
-      // Para cierres generales, 100% para clínica
-      clinicPortionCordobas = procedureAmountCordobas;
-    }
-    
-    // Restar pagos a doctores externos si existen
+    // Sumar PAGOS A DOCTORES EXTERNOS
     let externalPaymentCordobas = 0;
+    let externalPaymentDollars = 0;
     
-    if (procedure.theres_external_doctor && procedure.external_doctor_payment_value) {
-      console.log('💰 Procedimiento con doctor externo:', {
-        valor: procedure.external_doctor_payment_value,
-        moneda: procedure.external_doctor_payment_currency
-      });
+    if (procedure.external_doctor_payment && procedure.external_doctor_payment > 0) {
+      externalPaymentCordobas = parseFloat(procedure.external_doctor_payment) || 0;
       
-      if (procedure.external_doctor_payment_currency === 'C$') {
-        externalPaymentCordobas = procedure.external_doctor_payment_value;
-        clinicPortionCordobas -= externalPaymentCordobas;
-      } else {
-        // Si es USD, convertir a córdobas
-        externalPaymentCordobas = procedure.external_doctor_payment_value * exchangeRate;
-        clinicPortionCordobas -= externalPaymentCordobas;
-      }
+      // Convertir a dólares usando el tipo de cambio del procedimiento
+      const procExchangeRate = parseFloat(procedure.exchange_rate_used) || exchangeRate;
+      externalPaymentDollars = externalPaymentCordobas / procExchangeRate;
+      
+      totalExternalDoctorPaymentsCordobas += externalPaymentCordobas;
+      totalExternalDoctorPaymentsDollars += externalPaymentDollars;
+      
+      console.log('💰 Doctor externo:', {
+        cordobas: externalPaymentCordobas,
+        dolares: externalPaymentDollars,
+        tasa_cambio: procExchangeRate
+      });
     }
     
-    totalClinicIncomeCordobas += clinicPortionCordobas;
-    totalDoctorIncomeCordobas += doctorPortionCordobas;
-    totalExternalDoctorPaymentsCordobas += externalPaymentCordobas;
-    
+    // Para la relación con el cierre diario
     procedureClosings.push({
       procedure_id: procedure.procedure_ID,
-      clinic_income_portion: clinicPortionCordobas,
-      doctor_income_portion: doctorPortionCordobas,
+      clinic_income_portion: clinicCordobas,
+      doctor_income_portion: doctorCordobas,
       external_doctor_payment: externalPaymentCordobas
     });
   });
   
   // Calcular totales
-  const totalClinicIncome = totalClinicIncomeCordobas;
-  const totalDoctorIncome = totalDoctorIncomeCordobas;
-  const totalIncome = totalIncomeCordobas;
+  let totalIncome = 0;
+  let netProfit = 0;
   
-  // Los cierres diarios solo muestran ingresos, no gastos
-  const netProfit = totalClinicIncome;
+  if (closingType === 'orthodontics') {
+    // Para ortodoncia: ingresos = ganancia clínica + ganancia doctora
+    totalIncome = totalClinicIncomeCordobas + totalDoctorIncomeCordobas;
+    netProfit = totalClinicIncomeCordobas; // La clínica solo recibe su porción
+  } else {
+    // Para general: ingresos = ganancia clínica (ya es neto)
+    totalIncome = totalClinicIncomeCordobas;
+    netProfit = totalClinicIncomeCordobas;
+  }
   
   const result = {
     procedures,
     procedureClosings,
     total_income: totalIncome,
-    total_income_usd: totalIncomeDollars + (totalIncomeCordobas / exchangeRate),
-    total_clinic_income: totalClinicIncome,
-    total_clinic_income_usd: (totalClinicIncome / exchangeRate),
-    total_doctor_income: totalDoctorIncome,
-    total_doctor_income_usd: (totalDoctorIncome / exchangeRate),
+    total_income_usd: totalIncome / exchangeRate,
+    total_clinic_income: totalClinicIncomeCordobas,
+    total_clinic_income_usd: totalClinicIncomeDollars,
+    total_doctor_income: totalDoctorIncomeCordobas,
+    total_doctor_income_usd: totalDoctorIncomeDollars,
     total_external_doctor_payments: totalExternalDoctorPaymentsCordobas,
-    total_external_doctor_payments_usd: (totalExternalDoctorPaymentsCordobas / exchangeRate),
+    total_external_doctor_payments_usd: totalExternalDoctorPaymentsDollars,
+    // Campos adicionales para información
+    total_patient_payment: totalIncomeCordobas, // Lo que pagó el paciente
+    total_patient_payment_usd: totalIncomeDollars,
     net_profit: netProfit,
     net_profit_usd: netProfit / exchangeRate,
-    clinic_percentage: clinicPercentage,
-    doctor_percentage: doctorPercentage,
     exchange_rate: exchangeRate,
     fecha_nicaragua: date,
     cantidad_procedimientos: procedures.length

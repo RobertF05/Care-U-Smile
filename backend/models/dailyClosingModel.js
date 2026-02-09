@@ -221,15 +221,33 @@ const DailyClosing = {
     return data;
   },
 
-  // Obtener procedimientos del día para cierre
-  // En dailyClosingModel.js - getDailyProcedures
+  // En dailyClosingModel.js - getDailyProcedures CORREGIDA
 async getDailyProcedures(date, closingType = 'general') {
-  const { start, end } = createNicaraguaDateRange(date);
+  console.log('🔍 DEBUG getDailyProcedures - Iniciando búsqueda:', {
+    fechaRecibida: date,
+    tipo: closingType
+  });
+
+  // IMPORTANTE: Convertir la fecha a formato UTC correctamente
+  // La fecha viene como '2026-02-17' (local time Nicaragua)
+  // Necesitamos crear un rango de 00:00 a 23:59:59.999 en Nicaragua time
   
-  console.log('🔍 Buscando procedimientos para cierre diario:', {
+  // Crear fecha de inicio: 00:00:00 en Nicaragua
+  const startDate = new Date(date + 'T00:00:00-06:00'); // Nicaragua es UTC-6
+  
+  // Crear fecha de fin: 23:59:59.999 en Nicaragua
+  const endDate = new Date(date + 'T23:59:59.999-06:00');
+  
+  // Convertir a UTC para la consulta
+  const startUTC = startDate.toISOString();
+  const endUTC = endDate.toISOString();
+  
+  console.log('🔍 Rango de tiempo calculado:', {
     fechaNicaragua: date,
-    inicioUTC: start,
-    finUTC: end,
+    inicioLocal: startDate.toString(),
+    finLocal: endDate.toString(),
+    inicioUTC: startUTC,
+    finUTC: endUTC,
     tipo: closingType
   });
   
@@ -240,17 +258,42 @@ async getDailyProcedures(date, closingType = 'general') {
       patients (first_name, first_last_name)
     `)
     .eq('is_orthodontics', closingType === 'orthodontics')
-    .gte('procedure_date', start)
-    .lte('procedure_date', end);
+    .gte('procedure_date', startUTC)
+    .lte('procedure_date', endUTC);
+  
+  console.log('🔍 Query a ejecutar:', {
+    tabla: 'procedures',
+    filtroOrtho: closingType === 'orthodontics',
+    fechaDesde: startUTC,
+    fechaHasta: endUTC
+  });
   
   const { data, error } = await query;
   
   if (error) {
-    console.error('❌ Error obteniendo procedimientos:', error);
+    console.error('❌ Error obteniendo procedimientos:', {
+      error: error.message,
+      code: error.code,
+      details: error.details
+    });
     throw error;
   }
   
   console.log(`✅ Encontrados ${data.length} procedimientos para el día ${date}`);
+  
+  // DEBUG: Mostrar detalles de cada procedimiento encontrado
+  if (data.length > 0) {
+    console.log('📋 Detalle de procedimientos encontrados:');
+    data.forEach((proc, index) => {
+      console.log(`  ${index + 1}. ID: ${proc.procedure_ID}, ` +
+        `Fecha: ${proc.procedure_date}, ` +
+        `Hora: ${new Date(proc.procedure_date).toLocaleTimeString()}, ` +
+        `Desc: ${proc.procedure_description}, ` +
+        `Paciente: ${proc.patients?.first_name} ${proc.patients?.first_last_name}`);
+    });
+  } else {
+    console.log('⚠️ No se encontraron procedimientos para esta fecha y tipo');
+  }
   
   // Convertir fechas a Nicaragua para mostrar
   const formattedData = data.map(procedure => ({

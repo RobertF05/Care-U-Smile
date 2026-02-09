@@ -331,6 +331,39 @@ create: async (req, res) => {
   }
 },
 
+// Agregar en monthlyClosingController.js
+getExternalDoctorDetails: async (req, res) => {
+  try {
+    const { startDate, endDate, closing_type = 'all' } = req.query;
+    
+    if (!startDate || !endDate) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Fecha inicio y fin son requeridas' 
+      });
+    }
+    
+    const details = await MonthlyClosing.getExternalDoctorPayments(startDate, endDate);
+    
+    // Filtrar por tipo si es necesario
+    if (closing_type !== 'all') {
+      // Necesitarías una función para obtener procedimientos por tipo
+      // y luego filtrar los pagos de doctores externos
+    }
+    
+    res.json({ 
+      success: true, 
+      data: details 
+    });
+  } catch (error) {
+    console.error('Error al obtener detalles de doctores externos:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Error al obtener detalles de doctores externos' 
+    });
+  }
+},
+
   // Verificar si existe cierre
   checkExists: async (req, res) => {
     try {

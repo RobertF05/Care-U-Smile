@@ -36,7 +36,9 @@ import {
   faUserFriends,
   faPercentage,
   faExchangeAlt,
-  faReceipt
+  faReceipt,
+  faUsers,
+  faStethoscope
 } from '@fortawesome/free-solid-svg-icons';
 import { AppContext } from '../../context/AppContext';
 import { AuthContext } from '../../context/AuthContext';
@@ -77,10 +79,12 @@ const MonthlyClosingsPage = () => {
   const [creating, setCreating] = useState(false);
   const [creatingDaily, setCreatingDaily] = useState(false);
   const [dailySummary, setDailySummary] = useState(null);
-  const [deleteVariableExpenses, setDeleteVariableExpenses] = useState(false); // Cambiado a false
+  const [deleteVariableExpenses, setDeleteVariableExpenses] = useState(false);
   const [exchangeRate, setExchangeRate] = useState(36.5);
   const [clinicPercentage, setClinicPercentage] = useState(40);
   const [doctorPercentage, setDoctorPercentage] = useState(60);
+  const [externalDoctorDetails, setExternalDoctorDetails] = useState(null);
+  const [showExternalDoctorsModal, setShowExternalDoctorsModal] = useState(false);
   
   // Formulario para crear cierre mensual
   const [newClosing, setNewClosing] = useState({
@@ -216,11 +220,41 @@ const MonthlyClosingsPage = () => {
     }));
   };
 
-  // Función para calcular USD de doctores externos
-  const calculateExternalDoctorPaymentUSD = (cordobas, exchangeRateUsed) => {
-    if (!cordobas || cordobas <= 0) return 0;
-    const rate = parseFloat(exchangeRateUsed) || exchangeRate;
-    return cordobas / rate;
+  // Función para obtener detalles de doctores externos
+  const fetchExternalDoctorDetails = async (closing) => {
+    try {
+      let startDate, endDate;
+      
+      if (closing.type === 'monthly') {
+        const monthNumber = getMonthNumber(closing.month);
+        startDate = `${closing.year}-${monthNumber}-01`;
+        endDate = getLastDayOfMonth(closing.year, closing.month);
+      } else {
+        startDate = closing.closing_date;
+        endDate = closing.closing_date;
+      }
+      
+      const queryParams = new URLSearchParams({
+        startDate,
+        endDate,
+        closing_type: closing.sub_type
+      }).toString();
+      
+      const response = await apiFetch(`/monthly-closings/external-doctors?${queryParams}`);
+      
+      if (response.success) {
+        setExternalDoctorDetails({
+          ...response.data,
+          closingInfo: closing
+        });
+        setShowExternalDoctorsModal(true);
+      } else {
+        throw new Error(response.error || 'Error al obtener detalles');
+      }
+    } catch (error) {
+      console.error('Error obteniendo detalles de doctores externos:', error);
+      alert(`❌ Error: ${error.message}`);
+    }
   };
 
   // Combinar y filtrar todos los cierres
@@ -230,6 +264,9 @@ const MonthlyClosingsPage = () => {
       const clinicIncome = (closing.total_general_income || 0) + (closing.total_clinical_orthodontic_income || 0);
       const totalExpenses = (closing.total_fixed_expenses || 0) + (closing.total_variable_expenses || 0);
       const netProfit = clinicIncome - totalExpenses;
+      
+      // Agregar pagos a doctores externos si existen
+      const externalDoctorPayments = closing.total_external_doctor_payments || 0;
       
       return {
         ...closing,
@@ -244,8 +281,10 @@ const MonthlyClosingsPage = () => {
         total_expenses: totalExpenses,
         total_clinic_income_usd: clinicIncome / exchangeRate,
         total_expenses_usd: totalExpenses / exchangeRate,
-        net_profit: netProfit, // ¡IMPORTANTE! Calcular correctamente
+        net_profit: netProfit,
         net_profit_usd: netProfit / exchangeRate,
+        total_external_doctor_payments: externalDoctorPayments, // AGREGADO
+        total_external_doctor_payments_usd: externalDoctorPayments / exchangeRate, // AGREGADO
         // Mantener los campos individuales para el desglose
         total_general_income: closing.total_general_income || 0,
         total_clinical_orthodontic_income: closing.total_clinical_orthodontic_income || 0,
@@ -491,6 +530,28 @@ const MonthlyClosingsPage = () => {
         return;
       }
 
+      // Obtener resumen primero para verificar si hay procedimientos
+      const summaryResponse = await getDailySummary(newDailyClosing.date, newDailyClosing.closing_type);
+      
+      if (!summaryResponse.success) {
+        throw new Error('Error al obtener el resumen diario');
+      }
+      
+      const summary = summaryResponse.data;
+      
+      // VERIFICAR: Si no hay procedimientos, mostrar advertencia
+      if (!summary.procedures || summary.procedures.length === 0) {
+        const confirmCreate = window.confirm(
+          `⚠️ No se encontraron procedimientos de tipo "${newDailyClosing.closing_type}" para la fecha ${formatDate(newDailyClosing.date)}.\n\n` +
+          `¿Desea crear el cierre igualmente?`
+        );
+        
+        if (!confirmCreate) {
+          setCreatingDaily(false);
+          return;
+        }
+      }
+      
       // Crear cierre diario
       const closingData = {
         date: newDailyClosing.date,
@@ -501,27 +562,36 @@ const MonthlyClosingsPage = () => {
       const response = await createDailyClosing(closingData);
       
       if (response.success) {
+        // Mensaje personalizado basado en si hay procedimientos o no
         const typeLabel = newDailyClosing.closing_type === 'orthodontics' ? 'de Ortodoncia' : 'General';
         let message = `✅ Cierre Diario ${typeLabel} creado exitosamente\n\n`;
         message += `📅 Fecha: ${formatDate(newDailyClosing.date)}\n`;
         message += `📋 Procedimientos incluidos: ${response.data.procedure_count || 0}\n`;
-        message += `💱 Tipo de cambio: C$${exchangeRate.toFixed(2)} = $1\n\n`;
         
-        if (newDailyClosing.closing_type === 'orthodontics') {
-          message += `🦷 ORTODONCIA:\n`;
-          message += `   Total ganancias: ${formatCurrency(response.data.total_income, 'NIO', true)}\n`;
-          message += `   Clínica (${clinicPercentage}%): ${formatCurrency(response.data.total_clinic_income, 'NIO', true)}\n`;
-          message += `   Doctora (${doctorPercentage}%): ${formatCurrency(response.data.total_doctor_income, 'NIO', true)}\n`;
-        } else {
-          message += `📊 PROCEDIMIENTOS GENERALES:\n`;
-          message += `   Ganancia neta clínica: ${formatCurrency(response.data.total_clinic_income, 'NIO', true)}\n`;
+        if (response.data.procedure_count === 0) {
+          message += `⚠️ Nota: No se encontraron procedimientos de este tipo para esta fecha\n`;
         }
         
-        // Agregar información de doctores externos si existe
-        if (response.data.total_external_doctor_payments > 0) {
-          message += `\n👨‍⚕️ PAGOS DOCTORES EXTERNOS:\n`;
-          message += `   Total pagado: ${formatCurrency(response.data.total_external_doctor_payments, 'NIO', true)}\n`;
-          message += `   (Ya deducido de las ganancias mostradas arriba)`;
+        message += `💱 Tipo de cambio: C$${exchangeRate.toFixed(2)} = $1\n\n`;
+        
+        // Solo mostrar ganancias si hay procedimientos
+        if (response.data.procedure_count > 0) {
+          if (newDailyClosing.closing_type === 'orthodontics') {
+            message += `🦷 ORTODONCIA:\n`;
+            message += `   Total ganancias: ${formatCurrency(response.data.total_income, 'NIO', true)}\n`;
+            message += `   Clínica (${clinicPercentage}%): ${formatCurrency(response.data.total_clinic_income, 'NIO', true)}\n`;
+            message += `   Doctora (${doctorPercentage}%): ${formatCurrency(response.data.total_doctor_income, 'NIO', true)}\n`;
+          } else {
+            message += `📊 PROCEDIMIENTOS GENERALES:\n`;
+            message += `   Ganancia neta clínica: ${formatCurrency(response.data.total_clinic_income, 'NIO', true)}\n`;
+          }
+          
+          // Agregar información de doctores externos si existe
+          if (response.data.total_external_doctor_payments > 0) {
+            message += `\n👨‍⚕️ PAGOS DOCTORES EXTERNOS:\n`;
+            message += `   Total pagado: ${formatCurrency(response.data.total_external_doctor_payments, 'NIO', true)}\n`;
+            message += `   (Ya deducido de las ganancias mostradas arriba)`;
+          }
         }
         
         alert(message);
@@ -919,7 +989,7 @@ const MonthlyClosingsPage = () => {
                       </div>
                     )}
                     
-                    {/* Mostrar desglose básico */}
+                    {/* Mostrar desglose básico - AGREGADO DOCTORES EXTERNOS */}
                     <div className="closing-quick-stats">
                       {closing.type === 'monthly' && closing.sub_type === 'all' && (
                         <>
@@ -943,8 +1013,9 @@ const MonthlyClosingsPage = () => {
                           <span>Clínica: {formatCurrency(closing.total_clinic_income, 'NIO', false)}</span>
                         </span>
                       )}
+                      {/* AGREGADO: Mostrar doctores externos si existen */}
                       {closing.total_external_doctor_payments > 0 && (
-                        <span className="quick-stat external">
+                        <span className="quick-stat external" title="Ver detalles de doctores externos">
                           <FontAwesomeIcon icon={faUserDoctor} />
                           <span>Doctores externos: {formatCurrency(closing.total_external_doctor_payments, 'NIO', false)}</span>
                         </span>
@@ -993,6 +1064,16 @@ const MonthlyClosingsPage = () => {
                       <FontAwesomeIcon icon={faListAlt} />
                       <span className="btn-tooltip">Excel Detallado</span>
                     </button>
+                    {/* AGREGADO: Botón para ver detalles de doctores externos */}
+                    {closing.total_external_doctor_payments > 0 && (
+                      <button 
+                        className="action-btn external"
+                        onClick={() => fetchExternalDoctorDetails(closing)}
+                        title="Ver detalles de doctores externos"
+                      >
+                        <FontAwesomeIcon icon={faStethoscope} />
+                      </button>
+                    )}
                     <FontAwesomeIcon 
                       icon={expandedClosings[closing.id] ? faChevronUp : faChevronDown} 
                       className="expand-icon"
@@ -1062,6 +1143,33 @@ const MonthlyClosingsPage = () => {
                               </div>
                             </div>
                             
+                            {/* AGREGADO: Sección de doctores externos */}
+                            {closing.total_external_doctor_payments > 0 && (
+                              <div className="summary-section external-section">
+                                <div className="section-title">
+                                  <FontAwesomeIcon icon={faUserDoctor} />
+                                  <span>Pagos a Doctores Externos</span>
+                                </div>
+                                
+                                <div className="summary-item external-doctor">
+                                  <span className="summary-label">Total pagado:</span>
+                                  <span className="summary-value external">
+                                    {formatCurrency(closing.total_external_doctor_payments, 'NIO', true)}
+                                  </span>
+                                  <div className="summary-description">
+                                    <small>Ya deducido de las ganancias mostradas arriba</small>
+                                    <button 
+                                      className="details-btn small"
+                                      onClick={() => fetchExternalDoctorDetails(closing)}
+                                    >
+                                      <FontAwesomeIcon icon={faEye} />
+                                      Ver detalles
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            
                             <div className="summary-section expenses-section">
                               <div className="section-title">
                                 <FontAwesomeIcon icon={faMoneyBillWave} />
@@ -1093,50 +1201,108 @@ const MonthlyClosingsPage = () => {
                         )}
                         
                         {closing.sub_type === 'general' && (
-                          <div className="summary-item income-general">
-                            <div className="summary-header">
-                              <FontAwesomeIcon icon={faHospital} />
-                              <span className="summary-label">Procedimientos Generales:</span>
+                          <>
+                            <div className="summary-item income-general">
+                              <div className="summary-header">
+                                <FontAwesomeIcon icon={faHospital} />
+                                <span className="summary-label">Procedimientos Generales:</span>
+                              </div>
+                              <span className="summary-value">{formatCurrency(closing.total_general_income, 'NIO', true)}</span>
+                              <div className="summary-description">
+                                <small>Ganancia neta 100% para la clínica</small>
+                              </div>
                             </div>
-                            <span className="summary-value">{formatCurrency(closing.total_general_income, 'NIO', true)}</span>
-                            <div className="summary-description">
-                              <small>Ganancia neta 100% para la clínica</small>
-                            </div>
-                          </div>
+                            
+                            {/* AGREGADO: Doctores externos para general */}
+                            {closing.total_external_doctor_payments > 0 && (
+                              <div className="summary-section external-section">
+                                <div className="section-title">
+                                  <FontAwesomeIcon icon={faUserDoctor} />
+                                  <span>Pagos a Doctores Externos</span>
+                                </div>
+                                
+                                <div className="summary-item external-doctor">
+                                  <span className="summary-label">Total pagado:</span>
+                                  <span className="summary-value external">
+                                    {formatCurrency(closing.total_external_doctor_payments, 'NIO', true)}
+                                  </span>
+                                  <div className="summary-description">
+                                    <small>Ya deducido de las ganancias mostradas arriba</small>
+                                    <button 
+                                      className="details-btn small"
+                                      onClick={() => fetchExternalDoctorDetails(closing)}
+                                    >
+                                      <FontAwesomeIcon icon={faEye} />
+                                      Ver detalles
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </>
                         )}
                         
                         {closing.sub_type === 'orthodontics' && (
-                          <div className="summary-section ortho-section full">
-                            <div className="section-title">
-                              <FontAwesomeIcon icon={faTooth} />
-                              <span>Ortodoncia</span>
+                          <>
+                            <div className="summary-section ortho-section full">
+                              <div className="section-title">
+                                <FontAwesomeIcon icon={faTooth} />
+                                <span>Ortodoncia</span>
+                              </div>
+                              
+                              <div className="summary-item income-ortho-total">
+                                <div className="summary-header">
+                                  <span className="summary-label">Total ganancias ortodoncia:</span>
+                                </div>
+                                <span className="summary-value">
+                                  {formatCurrency((closing.total_clinical_orthodontic_income || 0) + (closing.total_orthodontic_doctor_income || 0), 'NIO', true)}
+                                </span>
+                              </div>
+                              
+                              <div className="summary-item income-ortho-clinic">
+                                <div className="summary-header">
+                                  <FontAwesomeIcon icon={faPercentage} />
+                                  <span className="summary-label">Clínica ({clinicPercentage}%):</span>
+                                </div>
+                                <span className="summary-value">{formatCurrency(closing.total_clinical_orthodontic_income, 'NIO', true)}</span>
+                              </div>
+                              
+                              <div className="summary-item income-ortho-doctor">
+                                <div className="summary-header">
+                                  <FontAwesomeIcon icon={faUserMd} />
+                                  <span className="summary-label">Doctora ({doctorPercentage}%):</span>
+                                </div>
+                                <span className="summary-value">{formatCurrency(closing.total_orthodontic_doctor_income, 'NIO', true)}</span>
+                              </div>
                             </div>
                             
-                            <div className="summary-item income-ortho-total">
-                              <div className="summary-header">
-                                <span className="summary-label">Total ganancias ortodoncia:</span>
+                            {/* AGREGADO: Doctores externos para ortodoncia */}
+                            {closing.total_external_doctor_payments > 0 && (
+                              <div className="summary-section external-section">
+                                <div className="section-title">
+                                  <FontAwesomeIcon icon={faUserDoctor} />
+                                  <span>Pagos a Doctores Externos</span>
+                                </div>
+                                
+                                <div className="summary-item external-doctor">
+                                  <span className="summary-label">Total pagado:</span>
+                                  <span className="summary-value external">
+                                    {formatCurrency(closing.total_external_doctor_payments, 'NIO', true)}
+                                  </span>
+                                  <div className="summary-description">
+                                    <small>Ya deducido de las ganancias mostradas arriba</small>
+                                    <button 
+                                      className="details-btn small"
+                                      onClick={() => fetchExternalDoctorDetails(closing)}
+                                    >
+                                      <FontAwesomeIcon icon={faEye} />
+                                      Ver detalles
+                                    </button>
+                                  </div>
+                                </div>
                               </div>
-                              <span className="summary-value">
-                                {formatCurrency((closing.total_clinical_orthodontic_income || 0) + (closing.total_orthodontic_doctor_income || 0), 'NIO', true)}
-                              </span>
-                            </div>
-                            
-                            <div className="summary-item income-ortho-clinic">
-                              <div className="summary-header">
-                                <FontAwesomeIcon icon={faPercentage} />
-                                <span className="summary-label">Clínica ({clinicPercentage}%):</span>
-                              </div>
-                              <span className="summary-value">{formatCurrency(closing.total_clinical_orthodontic_income, 'NIO', true)}</span>
-                            </div>
-                            
-                            <div className="summary-item income-ortho-doctor">
-                              <div className="summary-header">
-                                <FontAwesomeIcon icon={faUserMd} />
-                                <span className="summary-label">Doctora ({doctorPercentage}%):</span>
-                              </div>
-                              <span className="summary-value">{formatCurrency(closing.total_orthodontic_doctor_income, 'NIO', true)}</span>
-                            </div>
-                          </div>
+                            )}
+                          </>
                         )}
                       </div>
                     ) : (
@@ -1179,6 +1345,7 @@ const MonthlyClosingsPage = () => {
                           )}
                         </div>
                         
+                        {/* AGREGADO: Doctores externos para cierres diarios */}
                         {closing.total_external_doctor_payments > 0 && (
                           <div className="summary-section external-section">
                             <div className="section-title">
@@ -1188,9 +1355,16 @@ const MonthlyClosingsPage = () => {
                             
                             <div className="summary-item external-doctor">
                               <span className="summary-label">Total pagado:</span>
-                              <span className="summary-value">{formatCurrency(closing.total_external_doctor_payments, 'NIO', true)}</span>
+                              <span className="summary-value external">{formatCurrency(closing.total_external_doctor_payments, 'NIO', true)}</span>
                               <div className="summary-description">
                                 <small>Ya deducido de las ganancias mostradas arriba</small>
+                                <button 
+                                  className="details-btn small"
+                                  onClick={() => fetchExternalDoctorDetails(closing)}
+                                >
+                                  <FontAwesomeIcon icon={faEye} />
+                                  Ver detalles
+                                </button>
                               </div>
                             </div>
                           </div>
@@ -1213,6 +1387,21 @@ const MonthlyClosingsPage = () => {
                             {formatCurrency(closing.total_clinic_income, 'NIO', true)}
                           </span>
                         </div>
+                        
+                        {/* AGREGADO: Mostrar doctores externos en resumen final */}
+                        {closing.total_external_doctor_payments > 0 && (
+                          <div className="net-profit-item external-note">
+                            <span className="net-profit-label">
+                              <FontAwesomeIcon icon={faUserDoctor} /> Doctores externos:
+                            </span>
+                            <span className="net-profit-value external">
+                              -{formatCurrency(closing.total_external_doctor_payments, 'NIO', true)}
+                            </span>
+                            <div className="net-profit-description">
+                              <small>Ya incluido en ganancias clínicas</small>
+                            </div>
+                          </div>
+                        )}
                         
                         {closing.type === 'monthly' && closing.sub_type === 'all' && (
                           <div className="net-profit-item">
@@ -1269,6 +1458,16 @@ const MonthlyClosingsPage = () => {
                         <FontAwesomeIcon icon={faFileExcel} />
                         Excel General
                       </button>
+                      {/* AGREGADO: Botón para exportar detalles de doctores externos */}
+                      {closing.total_external_doctor_payments > 0 && (
+                        <button 
+                          className="secondary-btn small external"
+                          onClick={() => fetchExternalDoctorDetails(closing)}
+                        >
+                          <FontAwesomeIcon icon={faUserDoctor} />
+                          Ver Doctores Externos
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1362,7 +1561,7 @@ const MonthlyClosingsPage = () => {
 
               <div className="form-group">
                 <label className="form-label">Fecha fin del período (opcional):</label>
-                <input
+                  <input
                   type="date"
                   value={newClosing.endDate}
                   onChange={(e) => setNewClosing({...newClosing, endDate: e.target.value})}
@@ -1393,6 +1592,7 @@ const MonthlyClosingsPage = () => {
                     <li>✅ Usa <strong>doctor_payment_cordobas/dollars</strong> para ganancia doctora</li>
                     <li>✅ Usa <strong>external_doctor_payment</strong> para pagos externos</li>
                     <li>✅ <strong>NO usa total_procedure</strong> (es lo que paga el paciente)</li>
+                    <li>✅ Incluye automáticamente <strong>pagos a doctores externos</strong> en el resumen</li>
                     {newClosing.closing_type === 'all' && (
                       <>
                         <li>✅ Incluye <strong>TODOS los gastos fijos</strong> del período</li>
@@ -1571,6 +1771,12 @@ const MonthlyClosingsPage = () => {
                         <span>Ya existe un cierre para esta fecha y tipo</span>
                       </div>
                     )}
+                    {dailySummary.procedures?.length === 0 && (
+                      <div className="preview-warning">
+                        <FontAwesomeIcon icon={faExclamationTriangle} />
+                        <span>No se encontraron procedimientos para esta fecha y tipo</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -1583,9 +1789,11 @@ const MonthlyClosingsPage = () => {
                     <li>✅ Calcula sobre <strong>ganancias netas</strong> (no sobre pagos de pacientes)</li>
                     <li>✅ Usa <strong>clinic_payment_cordobas/dollars</strong> para ganancia clínica</li>
                     <li>✅ Usa <strong>doctor_payment_cordobas/dollars</strong> para ganancia doctora</li>
+                    <li>✅ Incluye automáticamente <strong>pagos a doctores externos</strong> si existen</li>
                     <li>❌ <strong>NO incluye gastos</strong> en cierres diarios</li>
                     <li>💱 Tipo de cambio: C${exchangeRate.toFixed(2)} = $1</li>
                     <li>⚠️ No se pueden crear dos cierres para la misma fecha y tipo</li>
+                    <li>⚠️ Puede crear cierres diarios incluso si no hay procedimientos</li>
                   </ul>
                 </div>
               </div>
@@ -1631,7 +1839,190 @@ const MonthlyClosingsPage = () => {
         </div>
       )}
 
-      {/* Modal de detalles */}
+      {/* Modal de detalles de doctores externos */}
+      {showExternalDoctorsModal && externalDoctorDetails && (
+        <div className="modal-overlay">
+          <div className="modal-content wide">
+            <div className="modal-header">
+              <h3>
+                <FontAwesomeIcon icon={faUserDoctor} />
+                Detalles de Pagos a Doctores Externos
+              </h3>
+              <button 
+                className="close-modal-btn"
+                onClick={() => setShowExternalDoctorsModal(false)}
+              >
+                <FontAwesomeIcon icon={faTimes} />
+              </button>
+            </div>
+            
+            <div className="detail-content">
+              <div className="detail-section">
+                <h4>Información del Cierre</h4>
+                <div className="detail-grid">
+                  <div className="detail-item">
+                    <span className="detail-label">Cierre:</span>
+                    <span className="detail-value">{externalDoctorDetails.closingInfo.display_date}</span>
+                  </div>
+                  <div className="detail-item">
+                    <span className="detail-label">Tipo:</span>
+                    <span className="detail-value">{getClosingTypeText(externalDoctorDetails.closingInfo.type, externalDoctorDetails.closingInfo.sub_type)}</span>
+                  </div>
+                  <div className="detail-item">
+                    <span className="detail-label">Total pagado:</span>
+                    <span className="detail-value external">
+                      {formatCurrency(externalDoctorDetails.total_payments_cordobas, 'NIO', true)}
+                    </span>
+                  </div>
+                  <div className="detail-item">
+                    <span className="detail-label">Cantidad de pagos:</span>
+                    <span className="detail-value">{externalDoctorDetails.count}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="detail-section">
+                <h4>Detalle de Pagos</h4>
+                {externalDoctorDetails.payments && externalDoctorDetails.payments.length > 0 ? (
+                  <div className="external-doctors-table">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Procedimiento</th>
+                          <th>Doctor</th>
+                          <th>Tipo de Pago</th>
+                          <th>Valor Original</th>
+                          <th>Valor en Córdobas</th>
+                          <th>Valor en Dólares</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {externalDoctorDetails.payments.map((payment, index) => (
+                          <tr key={index}>
+                            <td>
+                              <div className="procedure-info">
+                                <div className="procedure-id">#{payment.procedure_id}</div>
+                                <div className="procedure-desc">{payment.description}</div>
+                              </div>
+                            </td>
+                            <td>
+                              <div className="doctor-info">
+                                <FontAwesomeIcon icon={faUserDoctor} />
+                                <span>{payment.doctor_name || 'Sin nombre'}</span>
+                              </div>
+                            </td>
+                            <td>
+                              <span className={`payment-type ${payment.payment_type}`}>
+                                {payment.payment_type === 'fixed' ? 'Monto Fijo' : 'Porcentaje'}
+                              </span>
+                              <div className="payment-currency">{payment.currency}</div>
+                            </td>
+                            <td>
+                              <div className="original-payment">
+                                {payment.currency === 'C$' ? 'C$' : '$'}
+                                {payment.payment_value?.toFixed(2) || '0.00'}
+                              </div>
+                            </td>
+                            <td>
+                              <div className="payment-amount">
+                                C${payment.payment_cordobas?.toFixed(2) || '0.00'}
+                              </div>
+                            </td>
+                            <td>
+                              <div className="payment-amount">
+                                ${payment.payment_usd?.toFixed(2) || '0.00'}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr>
+                          <td colSpan="4" className="total-label">
+                            <strong>Total General:</strong>
+                          </td>
+                          <td className="total-amount">
+                            <strong>C${externalDoctorDetails.total_payments_cordobas?.toFixed(2) || '0.00'}</strong>
+                          </td>
+                          <td className="total-amount">
+                            <strong>${externalDoctorDetails.total_payments_usd?.toFixed(2) || '0.00'}</strong>
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="no-data">
+                    <FontAwesomeIcon icon={faInfoCircle} />
+                    <p>No hay pagos a doctores externos registrados para este período.</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="detail-section">
+                <h4>Notas Importantes</h4>
+                <div className="notes-container">
+                  <div className="note-item important">
+                    <FontAwesomeIcon icon={faInfoCircle} />
+                    <div>
+                      <strong>IMPORTANTE:</strong> Estos pagos ya han sido deducidos de las ganancias 
+                      mostradas en el cierre. Representan pagos realizados a doctores externos que 
+                      colaboraron en los procedimientos durante este período.
+                    </div>
+                  </div>
+                  <div className="note-item">
+                    <FontAwesomeIcon icon={faCalculator} />
+                    <div>
+                      <strong>Cálculo:</strong> Los montos se calculan automáticamente desde los 
+                      procedimientos usando el campo <code>external_doctor_payment</code> y se 
+                      convierten a ambas monedas usando el tipo de cambio del sistema.
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="modal-actions">
+                <button 
+                  className="secondary-btn"
+                  onClick={() => setShowExternalDoctorsModal(false)}
+                >
+                  Cerrar
+                </button>
+                <button 
+                  className="primary-btn"
+                  onClick={() => {
+                    // Exportar a Excel
+                    const blob = new Blob([
+                      `Detalles de Pagos a Doctores Externos\n` +
+                      `Cierre: ${externalDoctorDetails.closingInfo.display_date}\n` +
+                      `Fecha: ${new Date().toLocaleDateString()}\n\n` +
+                      `Procedimiento,Doctor,Tipo Pago,Moneda Original,Valor Original,Córdobas,Dólares\n` +
+                      externalDoctorDetails.payments.map(p => 
+                        `"${p.description}","${p.doctor_name}","${p.payment_type}","${p.currency}","${p.payment_value}","${p.payment_cordobas}","${p.payment_usd}"`
+                      ).join('\n') + `\n\nTotal,,,,"C$${externalDoctorDetails.total_payments_cordobas}","$${externalDoctorDetails.total_payments_usd}"`
+                    ], { type: 'text/csv' });
+                    
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `doctores_externos_${externalDoctorDetails.closingInfo.display_date.replace(/[^a-zA-Z0-9]/g, '_')}.csv`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                  }}
+                  disabled={!externalDoctorDetails.payments || externalDoctorDetails.payments.length === 0}
+                >
+                  <FontAwesomeIcon icon={faDownload} />
+                  Exportar a CSV
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de detalles general del cierre */}
       {showDetailModal && selectedClosing && (
         <div className="modal-overlay">
           <div className="modal-content wide">
@@ -1768,6 +2159,32 @@ const MonthlyClosingsPage = () => {
                             </div>
                           </div>
 
+                          {/* AGREGADO: Sección de doctores externos */}
+                          {selectedClosing.total_external_doctor_payments > 0 && (
+                            <div className="breakdown-section external">
+                              <h5>
+                                <FontAwesomeIcon icon={faUserDoctor} />
+                                Pagos a Doctores Externos
+                              </h5>
+                              <div className="breakdown-item">
+                                <span>Total pagado:</span>
+                                <span className="amount external">
+                                  {formatCurrency(selectedClosing.total_external_doctor_payments, 'NIO', true)}
+                                </span>
+                              </div>
+                              <div className="breakdown-description">
+                                <small>Ya deducido de las ganancias mostradas arriba</small>
+                                <button 
+                                  className="details-btn"
+                                  onClick={() => fetchExternalDoctorDetails(selectedClosing)}
+                                >
+                                  <FontAwesomeIcon icon={faEye} />
+                                  Ver detalles completos
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
                           <div className="breakdown-section expenses">
                             <h5>
                               <FontAwesomeIcon icon={faMoneyBillWave} />
@@ -1800,44 +2217,100 @@ const MonthlyClosingsPage = () => {
                       )}
 
                       {selectedClosing.sub_type === 'general' && (
-                        <div className="breakdown-section income full">
-                          <h5>
-                            <FontAwesomeIcon icon={faHospital} />
-                            Procedimientos Generales
-                          </h5>
-                          <div className="breakdown-item">
-                            <span>Ganancia neta clínica:</span>
-                            <span className="amount">{formatCurrency(selectedClosing.total_general_income, 'NIO', true)}</span>
+                        <>
+                          <div className="breakdown-section income full">
+                            <h5>
+                              <FontAwesomeIcon icon={faHospital} />
+                              Procedimientos Generales
+                            </h5>
+                            <div className="breakdown-item">
+                              <span>Ganancia neta clínica:</span>
+                              <span className="amount">{formatCurrency(selectedClosing.total_general_income, 'NIO', true)}</span>
+                            </div>
+                            <div className="breakdown-description">
+                              <small>100% para la clínica, después de todas las deducciones</small>
+                            </div>
                           </div>
-                          <div className="breakdown-description">
-                            <small>100% para la clínica, después de todas las deducciones</small>
-                          </div>
-                        </div>
+                          
+                          {/* AGREGADO: Doctores externos para general */}
+                          {selectedClosing.total_external_doctor_payments > 0 && (
+                            <div className="breakdown-section external">
+                              <h5>
+                                <FontAwesomeIcon icon={faUserDoctor} />
+                                Pagos a Doctores Externos
+                              </h5>
+                              <div className="breakdown-item">
+                                <span>Total pagado:</span>
+                                <span className="amount external">
+                                  {formatCurrency(selectedClosing.total_external_doctor_payments, 'NIO', true)}
+                                </span>
+                              </div>
+                              <div className="breakdown-description">
+                                <small>Ya deducido de las ganancias mostradas arriba</small>
+                                <button 
+                                  className="details-btn"
+                                  onClick={() => fetchExternalDoctorDetails(selectedClosing)}
+                                >
+                                  <FontAwesomeIcon icon={faEye} />
+                                  Ver detalles completos
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </>
                       )}
 
                       {selectedClosing.sub_type === 'orthodontics' && (
-                        <div className="breakdown-section ortho full">
-                          <h5>
-                            <FontAwesomeIcon icon={faTooth} />
-                            Ortodoncia
-                          </h5>
-                          <div className="breakdown-item">
-                            <span>Total ganancias ortodoncia:</span>
-                            <span className="amount">
-                              {formatCurrency((selectedClosing.total_clinical_orthodontic_income || 0) + (selectedClosing.total_orthodontic_doctor_income || 0), 'NIO', true)}
-                            </span>
+                        <>
+                          <div className="breakdown-section ortho full">
+                            <h5>
+                              <FontAwesomeIcon icon={faTooth} />
+                              Ortodoncia
+                            </h5>
+                            <div className="breakdown-item">
+                              <span>Total ganancias ortodoncia:</span>
+                              <span className="amount">
+                                {formatCurrency((selectedClosing.total_clinical_orthodontic_income || 0) + (selectedClosing.total_orthodontic_doctor_income || 0), 'NIO', true)}
+                              </span>
+                            </div>
+                            <div className="breakdown-item">
+                              <span>Clínica ({clinicPercentage}%):</span>
+                              <span className="amount">{formatCurrency(selectedClosing.total_clinical_orthodontic_income, 'NIO', true)}</span>
+                            </div>
+                            <div className="breakdown-item">
+                              <span>
+                                <FontAwesomeIcon icon={faUserMd} /> Doctora ({doctorPercentage}%):
+                              </span>
+                              <span className="amount">{formatCurrency(selectedClosing.total_orthodontic_doctor_income, 'NIO', true)}</span>
+                            </div>
                           </div>
-                          <div className="breakdown-item">
-                            <span>Clínica ({clinicPercentage}%):</span>
-                            <span className="amount">{formatCurrency(selectedClosing.total_clinical_orthodontic_income, 'NIO', true)}</span>
-                          </div>
-                          <div className="breakdown-item">
-                            <span>
-                              <FontAwesomeIcon icon={faUserMd} /> Doctora ({doctorPercentage}%):
-                            </span>
-                            <span className="amount">{formatCurrency(selectedClosing.total_orthodontic_doctor_income, 'NIO', true)}</span>
-                          </div>
-                        </div>
+                          
+                          {/* AGREGADO: Doctores externos para ortodoncia */}
+                          {selectedClosing.total_external_doctor_payments > 0 && (
+                            <div className="breakdown-section external">
+                              <h5>
+                                <FontAwesomeIcon icon={faUserDoctor} />
+                                Pagos a Doctores Externos
+                              </h5>
+                              <div className="breakdown-item">
+                                <span>Total pagado:</span>
+                                <span className="amount external">
+                                  {formatCurrency(selectedClosing.total_external_doctor_payments, 'NIO', true)}
+                                </span>
+                              </div>
+                              <div className="breakdown-description">
+                                <small>Ya deducido de las ganancias mostradas arriba</small>
+                                <button 
+                                  className="details-btn"
+                                  onClick={() => fetchExternalDoctorDetails(selectedClosing)}
+                                >
+                                  <FontAwesomeIcon icon={faEye} />
+                                  Ver detalles completos
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </>
                       )}
                     </>
                   ) : (
@@ -1875,6 +2348,7 @@ const MonthlyClosingsPage = () => {
                         )}
                       </div>
 
+                      {/* AGREGADO: Doctores externos para cierres diarios */}
                       {selectedClosing.total_external_doctor_payments > 0 && (
                         <div className="breakdown-section external">
                           <h5>
@@ -1883,13 +2357,12 @@ const MonthlyClosingsPage = () => {
                           </h5>
                           <div className="breakdown-item">
                             <span>Total pagado:</span>
-                            <span className="amount">
+                            <span className="amount external">
                               {formatCurrency(selectedClosing.total_external_doctor_payments, 'NIO', true)}
                             </span>
                           </div>
-                          <div className="breakdown-note">
-                            <FontAwesomeIcon icon={faInfoCircle} />
-                            <span>Esta cantidad YA FUE DEDUCIDA de las ganancias mostradas arriba</span>
+                          <div className="breakdown-description">
+                            <small>Esta cantidad YA FUE DEDUCIDA de las ganancias mostradas arriba</small>
                           </div>
                         </div>
                       )}
@@ -1908,6 +2381,22 @@ const MonthlyClosingsPage = () => {
                         {formatCurrency(selectedClosing.total_clinic_income, 'NIO', true)}
                       </span>
                     </div>
+                    
+                    {/* AGREGADO: Mostrar deducción de doctores externos */}
+                    {selectedClosing.total_external_doctor_payments > 0 && (
+                      <div className="breakdown-item external-note">
+                        <span>
+                          <FontAwesomeIcon icon={faUserDoctor} /> Deducción doctores externos:
+                        </span>
+                        <span className="amount external">
+                          -{formatCurrency(selectedClosing.total_external_doctor_payments, 'NIO', true)}
+                        </span>
+                        <div className="breakdown-description">
+                          <small>Ya incluido en ganancias clínicas</small>
+                        </div>
+                      </div>
+                    )}
+                    
                     {selectedClosing.type === 'monthly' && selectedClosing.sub_type === 'all' && (
                       <div className="breakdown-item">
                         <span>Total gastos:</span>
@@ -1970,22 +2459,6 @@ const MonthlyClosingsPage = () => {
                       onClick={() => handleExportExcelDetailed(selectedClosing)}
                     >
                       Descargar Excel Detallado
-                    </button>
-                  </div>
-                  
-                  <div className="export-option">
-                    <div className="export-icon">
-                      <FontAwesomeIcon icon={faFileExcel} />
-                    </div>
-                    <div className="export-info">
-                      <h5>Excel (Formato Tabla)</h5>
-                      <p>Tabla simple para análisis rápido o importación a otros sistemas</p>
-                    </div>
-                    <button 
-                      className="secondary-btn small"
-                      onClick={() => handleExportExcelGeneral(selectedClosing.type === 'monthly' ? 'monthly' : 'daily')}
-                    >
-                      Descargar Excel Simple
                     </button>
                   </div>
                 </div>

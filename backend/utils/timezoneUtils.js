@@ -93,23 +93,37 @@ export const formatCurrency = (amount, includeSymbol = true) => {
   }).format(amount);
 };
 
-/**
- * Crea un rango de fechas UTC para consultas
- */
-export const createNicaraguaDateRange = (dateString) => {
-  // dateString está en hora Nicaragua (YYYY-MM-DD)
-  const nicaraguaStart = new Date(dateString + 'T00:00:00');
-  const nicaraguaEnd = new Date(dateString + 'T23:59:59');
+// En utils/timezoneUtils.js
+export function createNicaraguaDateRange(dateString) {
+  console.log('🔍 createNicaraguaDateRange - Fecha recibida:', dateString);
   
-  // Convertir a UTC para consultas
-  const startUTC = new Date(nicaraguaStart.getTime() - NICARAGUA_OFFSET);
-  const endUTC = new Date(nicaraguaEnd.getTime() - NICARAGUA_OFFSET);
+  // Parsear la fecha (formato: 'YYYY-MM-DD')
+  const date = new Date(dateString + 'T00:00:00-06:00'); // Nicaragua time (UTC-6)
+  
+  // Crear fecha de inicio: 00:00:00 Nicaragua time
+  const start = new Date(date);
+  
+  // Crear fecha de fin: 23:59:59.999 Nicaragua time
+  const end = new Date(date);
+  end.setHours(23, 59, 59, 999);
+  
+  // Convertir a UTC
+  const startUTC = start.toISOString();
+  const endUTC = end.toISOString();
+  
+  console.log('📅 Rango calculado:', {
+    fechaOriginal: dateString,
+    inicioLocal: start.toString(),
+    finLocal: end.toString(),
+    inicioUTC: startUTC,
+    finUTC: endUTC
+  });
   
   return {
-    start: startUTC.toISOString(),
-    end: endUTC.toISOString()
+    start: startUTC,
+    end: endUTC
   };
-};
+}
 
 /**
  * Crea un rango de fechas para un mes completo

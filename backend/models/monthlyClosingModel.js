@@ -499,8 +499,7 @@ async verifyDateRange(startDate, endDate) {
   };
 },
 
-  // models/monthlyClosingModel.js - getFinancialSummary actualizado
-async getFinancialSummary(startDate, endDate, closingType = 'all') {
+  async getFinancialSummary(startDate, endDate, closingType = 'all') {
   console.log('Obteniendo resumen financiero:', {
     inicio: startDate,
     fin: endDate,
@@ -522,15 +521,31 @@ async getFinancialSummary(startDate, endDate, closingType = 'all') {
     variable_bills: [] 
   };
   
+  // AGREGAR: Obtener pagos a doctores externos
+  let externalDoctorPayments = { total_cordobas: 0, total_usd: 0 };
+  
   if (closingType === 'general') {
     incomeStats = await this.getGeneralProceduresStats(startDate, endDate);
+    // Agregar para generales también
+    const externalStats = await this.getExternalDoctorPayments(startDate, endDate);
+    externalDoctorPayments.total_cordobas = externalStats.total_payments_cordobas;
+    externalDoctorPayments.total_usd = externalStats.total_payments_usd;
   } else if (closingType === 'orthodontics') {
     incomeStats = await this.getOrthodonticsProceduresStats(startDate, endDate, clinicPercentage, doctorPercentage);
+    // Agregar para ortodoncia también
+    const externalStats = await this.getExternalDoctorPayments(startDate, endDate);
+    externalDoctorPayments.total_cordobas = externalStats.total_payments_cordobas;
+    externalDoctorPayments.total_usd = externalStats.total_payments_usd;
   } else {
     // 'all' - ambos tipos
     incomeStats = await this.getAllProceduresStats(startDate, endDate, clinicPercentage, doctorPercentage);
     
-    // Obtener gastos - IMPORTANTE: esto sí se ejecuta para 'all'
+    // AGREGAR: Obtener pagos a doctores externos para todos
+    const externalStats = await this.getExternalDoctorPayments(startDate, endDate);
+    externalDoctorPayments.total_cordobas = externalStats.total_payments_cordobas;
+    externalDoctorPayments.total_usd = externalStats.total_payments_usd;
+    
+    // Obtener gastos
     try {
       expenseStats = await this.getExpenseStats(startDate, endDate);
       console.log('💰 Gastos obtenidos para el cierre:', expenseStats);
@@ -542,6 +557,7 @@ async getFinancialSummary(startDate, endDate, closingType = 'all') {
   console.log('📊 Estadísticas obtenidas:', {
     incomeStats,
     expenseStats,
+    externalDoctorPayments, // AGREGADO
     closingType
   });
   
@@ -566,6 +582,7 @@ async getFinancialSummary(startDate, endDate, closingType = 'all') {
     totalExpenses,
     netProfit,
     closingType,
+    externalDoctorPayments, // AGREGADO
     formula: `Utilidad = ${clinicIncome} - ${totalExpenses} = ${netProfit}`
   });
   
@@ -579,7 +596,8 @@ async getFinancialSummary(startDate, endDate, closingType = 'all') {
     net_profit: netProfit,
     closing_type: closingType,
     // Campos adicionales para referencia
-    total_external_doctor_payments: incomeStats.total_external_doctor_payments || 0,
+    total_external_doctor_payments: externalDoctorPayments.total_cordobas || 0, // AGREGADO
+    total_external_doctor_payments_usd: externalDoctorPayments.total_usd || 0, // AGREGADO
     clinic_percentage: clinicPercentage,
     doctor_percentage: doctorPercentage,
     exchange_rate: settings.exchange_rate || 36.5

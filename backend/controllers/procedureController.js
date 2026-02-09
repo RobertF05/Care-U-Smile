@@ -67,217 +67,265 @@ const procedureController = {
   },
 
   // ============================================
-  // FUNCIÓN PARA CALCULAR PAGOS CON LÓGICA COMPLETA
+  // FUNCIÓN PARA CALCULAR PAGOS CON LÓGICA COMPLETA CORREGIDA
   // ============================================
   calculateProcedurePayments: (procedureData) => {
     console.log('🧮 Calculando pagos para procedimiento:', procedureData);
     
     const {
       is_orthodontics = false,
-      total_procedure = 0,
       amount_cordobas = 0,
       amount_dollars = 0,
-      exchange_rate_used = 36.5,
+      payment_method_cordobas = 'Efectivo',
+      payment_method_dollars = 'Efectivo',
+      exchange_rate = 36.5,
       external_doctor = false,
-      external_doctor_payment = 0,
-      external_doctor_payment_usd = 0,
+      external_doctor_name = '',
+      external_doctor_specialty = '',
       external_doctor_payment_type = 'fixed',
       external_doctor_payment_value = 0,
       external_doctor_payment_currency = 'C$',
-      clinic_payment_percentage = is_orthodontics ? 40 : 100,
-      doctor_payment_percentage = is_orthodontics ? 60 : 0,
-      clinic_payment_cordobas = 0,
-      clinic_payment_dollars = 0,
-      doctor_payment_cordobas = 0,
-      doctor_payment_dollars = 0,
-      // NUEVOS CAMPOS PARA DIVISIÓN DE ORTODONCIA CON DOCTOR EXTERNO
+      // Campos para ortodoncia con doctor externo - VALIDACIÓN MEJORADA
       ortho_doctor_percentage = is_orthodontics ? 60 : 0,
       external_doctor_percentage = 0,
-      external_doctor_split_type = 'from_clinic', // 'from_clinic' o 'from_total'
+      external_doctor_split_type = 'from_total', // 'from_total' o 'from_clinic'
+      observations = '',
+      procedure_description = '',
       ...restData
     } = procedureData;
     
-    // Calcular total en córdobas
-    const totalInCordobas = total_procedure > 0 ? total_procedure : 
-      (parseFloat(amount_cordobas) || 0) + ((parseFloat(amount_dollars) || 0) * exchange_rate_used);
+    // 1. Calcular montos brutos
+    const grossCordobas = parseFloat(amount_cordobas) || 0;
+    const grossDollars = parseFloat(amount_dollars) || 0;
+    const exchangeRate = parseFloat(exchange_rate) || 36.5;
     
-    // Calcular total en dólares
-    const totalInDollars = total_procedure > 0 ? 
-      (total_procedure / exchange_rate_used) : 
-      (parseFloat(amount_dollars) || 0) + ((parseFloat(amount_cordobas) || 0) / exchange_rate_used);
+    // 2. Aplicar deducciones POS (5.5%) solo si el pago es con POS
+    const isCordobasPOS = payment_method_cordobas === 'POS';
+    const isDollarsPOS = payment_method_dollars === 'POS';
     
+    const posDeductionCordobas = isCordobasPOS ? grossCordobas * 0.055 : 0;
+    const posDeductionDollars = isDollarsPOS ? grossDollars * 0.055 : 0;
+    
+    // 3. Montos netos después de POS
+    const netCordobas = grossCordobas - posDeductionCordobas;
+    const netDollars = grossDollars - posDeductionDollars;
+    
+    // 4. Total del procedimiento en córdobas (después de POS)
+    const totalProcedureCordobas = netCordobas + (netDollars * exchangeRate);
+    
+    // 5. Total del procedimiento en dólares (después de POS)
+    const totalProcedureDollars = netDollars + (netCordobas / exchangeRate);
+    
+    // 6. Preparar datos base
     let calculatedData = {
       ...restData,
       is_orthodontics,
-      total_procedure: totalInCordobas,
-      total_procedure_usd: totalInDollars,
-      amount_cordobas: parseFloat(amount_cordobas) || 0,
-      amount_dollars: parseFloat(amount_dollars) || 0,
-      exchange_rate_used,
+      procedure_description,
+      observations,
+      
+      // Montos abonados
+      amount_cordobas: grossCordobas,
+      amount_dollars: grossDollars,
+      total_cost: grossCordobas, // Para compatibilidad
+      total_cost_USD: grossDollars, // Para compatibilidad
+      
+      // Métodos de pago
+      payment_method_cordobas,
+      payment_method_dollars,
+      
+      // Deducciones POS
+      pos_deduction_cordobas: posDeductionCordobas,
+      pos_deduction_dollars: posDeductionDollars,
+      total_pos_deduction: posDeductionCordobas + (posDeductionDollars * exchangeRate),
+      
+      // Montos netos
+      net_amount_cordobas: netCordobas,
+      net_amount_dollars: netDollars,
+      
+      // Montos brutos
+      gross_amount_cordobas: grossCordobas,
+      gross_amount_dollars: grossDollars,
+      
+      // Total del procedimiento
+      total_procedure: totalProcedureCordobas,
+      total_procedure_usd: totalProcedureDollars,
+      
+      // Tipo de cambio
+      exchange_rate: exchangeRate,
+      
+      // Doctor externo
       external_doctor: !!external_doctor,
-      external_doctor_name: external_doctor ? procedureData.external_doctor_name : null,
-      external_doctor_specialty: external_doctor ? procedureData.external_doctor_specialty : null,
-      external_doctor_payment_type,
-      external_doctor_payment_value: parseFloat(external_doctor_payment_value) || 0,
-      external_doctor_payment_currency,
+      external_doctor_name: external_doctor ? external_doctor_name : null,
+      external_doctor_specialty: external_doctor ? external_doctor_specialty : null,
+      external_doctor_payment_type: external_doctor ? external_doctor_payment_type : null,
+      external_doctor_payment_value: external_doctor ? parseFloat(external_doctor_payment_value) || 0 : null,
+      external_doctor_payment_currency: external_doctor ? external_doctor_payment_currency : null,
+      theres_external_doctor: !!external_doctor,
+      
+      // Campos para ortodoncia con validación
       ortho_doctor_percentage: is_orthodontics ? parseFloat(ortho_doctor_percentage) : null,
       external_doctor_percentage: external_doctor ? parseFloat(external_doctor_percentage) : null,
       external_doctor_split_type: external_doctor ? external_doctor_split_type : null
     };
     
-    // VALIDACIONES Y CÁLCULOS PARA ORTODONCIA CON DOCTOR EXTERNO
+    // ============================================
+    // LÓGICA DE DISTRIBUCIÓN CORREGIDA
+    // ============================================
+    
+    // CASO 1: ORTODONCIA CON DOCTOR EXTERNO - VALIDACIÓN MEJORADA
     if (is_orthodontics && external_doctor) {
       const orthoPercentage = parseFloat(ortho_doctor_percentage) || 0;
       const externalPercentage = parseFloat(external_doctor_percentage) || 0;
       
-      // Validar porcentajes
+      // VALIDACIÓN ESTRICTA: La suma debe ser MENOR a 100%
       if (orthoPercentage + externalPercentage >= 100) {
-        throw new Error('La suma de porcentajes para doctora ortodoncista y doctor externo no puede ser 100% o más');
+        throw new Error(
+          `La suma de porcentajes para doctora ortodoncista (${orthoPercentage}%) ` +
+          `y doctor externo (${externalPercentage}%) no puede ser 100% o más. ` +
+          `La clínica debe recibir al menos un 1% de ganancia.`
+        );
       }
       
       if (orthoPercentage < 0 || externalPercentage < 0) {
         throw new Error('Los porcentajes no pueden ser negativos');
       }
       
-      // Calcular porcentaje restante para la clínica
-      const clinic_percentage = 100 - orthoPercentage - externalPercentage;
+      // Calcular porcentaje de la clínica
+      const clinicPercentage = 100 - orthoPercentage - externalPercentage;
       
-      if (clinic_percentage <= 0) {
-        throw new Error('La clínica debe tener un porcentaje de ganancia mayor a 0');
+      if (clinicPercentage <= 0) {
+        throw new Error(`La clínica debe tener un porcentaje de ganancia mayor a 0%`);
       }
       
-      // Actualizar los porcentajes
-      calculatedData.clinic_payment_percentage = clinic_percentage;
+      console.log('✅ Distribución validada (ortodoncia con externo):', {
+        doctoraOrtodoncista: orthoPercentage + '%',
+        doctorExterno: externalPercentage + '%',
+        clinica: clinicPercentage + '%',
+        total: '100%'
+      });
+      
+      // Actualizar porcentajes
+      calculatedData.clinic_payment_percentage = clinicPercentage;
       calculatedData.doctor_payment_percentage = orthoPercentage;
       
-      // Calcular pagos según el tipo de división
+      // Calcular pagos según tipo de división
       if (external_doctor_split_type === 'from_total') {
-        // El doctor externo recibe un porcentaje del total
-        const external_payment_cordobas = totalInCordobas * (externalPercentage / 100);
-        const external_payment_dollars = external_payment_cordobas / exchange_rate_used;
+        // El doctor externo recibe un porcentaje del TOTAL
+        const orthoPaymentCordobas = totalProcedureCordobas * (orthoPercentage / 100);
+        const externalPaymentCordobas = totalProcedureCordobas * (externalPercentage / 100);
+        const clinicPaymentCordobas = totalProcedureCordobas * (clinicPercentage / 100);
         
-        // Calcular pagos para la doctora ortodoncista
-        const ortho_payment_cordobas = totalInCordobas * (orthoPercentage / 100);
-        const ortho_payment_dollars = ortho_payment_cordobas / exchange_rate_used;
+        const orthoPaymentDollars = totalProcedureDollars * (orthoPercentage / 100);
+        const externalPaymentDollars = totalProcedureDollars * (externalPercentage / 100);
+        const clinicPaymentDollars = totalProcedureDollars * (clinicPercentage / 100);
         
-        // Calcular ganancia de la clínica
-        const clinic_payment_cordobas = totalInCordobas * (clinic_percentage / 100);
-        const clinic_payment_dollars = clinic_payment_cordobas / exchange_rate_used;
-        
-        // Actualizar todos los pagos
-        calculatedData.clinic_payment_cordobas = clinic_payment_cordobas;
-        calculatedData.clinic_payment_dollars = clinic_payment_dollars;
-        calculatedData.doctor_payment_cordobas = ortho_payment_cordobas;
-        calculatedData.doctor_payment_dollars = ortho_payment_dollars;
-        calculatedData.external_doctor_payment = external_payment_cordobas;
-        calculatedData.external_doctor_payment_usd = external_payment_dollars;
+        calculatedData.clinic_payment_cordobas = clinicPaymentCordobas;
+        calculatedData.clinic_payment_dollars = clinicPaymentDollars;
+        calculatedData.doctor_payment_cordobas = orthoPaymentCordobas;
+        calculatedData.doctor_payment_dollars = orthoPaymentDollars;
+        calculatedData.external_doctor_payment = externalPaymentCordobas;
+        calculatedData.external_doctor_payment_usd = externalPaymentDollars;
         
       } else if (external_doctor_split_type === 'from_clinic') {
-        // El doctor externo recibe un porcentaje de la parte de la clínica
+        // El doctor externo recibe un porcentaje de la PARTE DE LA CLÍNICA
+        const orthoPaymentCordobas = totalProcedureCordobas * (orthoPercentage / 100);
+        const orthoPaymentDollars = totalProcedureDollars * (orthoPercentage / 100);
         
-        // Primero, calcular pago de la doctora ortodoncista
-        const ortho_payment_cordobas = totalInCordobas * (orthoPercentage / 100);
-        const ortho_payment_dollars = ortho_payment_cordobas / exchange_rate_used;
+        const clinicPortionBeforeExternal = totalProcedureCordobas * (clinicPercentage / 100);
+        const externalPaymentCordobas = clinicPortionBeforeExternal * (externalPercentage / 100);
+        const externalPaymentDollars = (clinicPortionBeforeExternal / exchangeRate) * (externalPercentage / 100);
         
-        // Lo que queda es para la clínica (antes de doctor externo)
-        const clinic_portion_before_external = totalInCordobas * (clinic_percentage / 100);
+        const clinicPaymentCordobas = clinicPortionBeforeExternal - externalPaymentCordobas;
+        const clinicPaymentDollars = (clinicPortionBeforeExternal / exchangeRate) - externalPaymentDollars;
         
-        // El doctor externo recibe un porcentaje de la parte de la clínica
-        const external_payment_cordobas = clinic_portion_before_external * (externalPercentage / 100);
-        const external_payment_dollars = external_payment_cordobas / exchange_rate_used;
-        
-        // Ganancia final de la clínica (después de pagar al doctor externo)
-        const clinic_payment_cordobas = clinic_portion_before_external - external_payment_cordobas;
-        const clinic_payment_dollars = clinic_payment_cordobas / exchange_rate_used;
-        
-        // Actualizar todos los pagos
-        calculatedData.external_doctor_payment = external_payment_cordobas;
-        calculatedData.external_doctor_payment_usd = external_payment_dollars;
-        calculatedData.clinic_payment_cordobas = clinic_payment_cordobas;
-        calculatedData.clinic_payment_dollars = clinic_payment_dollars;
-        calculatedData.doctor_payment_cordobas = ortho_payment_cordobas;
-        calculatedData.doctor_payment_dollars = ortho_payment_dollars;
+        calculatedData.external_doctor_payment = externalPaymentCordobas;
+        calculatedData.external_doctor_payment_usd = externalPaymentDollars;
+        calculatedData.clinic_payment_cordobas = clinicPaymentCordobas;
+        calculatedData.clinic_payment_dollars = clinicPaymentDollars;
+        calculatedData.doctor_payment_cordobas = orthoPaymentCordobas;
+        calculatedData.doctor_payment_dollars = orthoPaymentDollars;
       }
       
-    } else if (!is_orthodontics && external_doctor) {
-      // PROCEDIMIENTO GENERAL CON DOCTOR EXTERNO
+    // CASO 2: ORTODONCIA SIN DOCTOR EXTERNO
+    } else if (is_orthodontics && !external_doctor) {
+      const clinicPercentage = 40; // Por defecto para ortodoncia
+      const doctorPercentage = 60; // Por defecto para ortodoncia
       
-      // Calcular pago al doctor externo
-      let external_payment_cordobas = 0;
-      let external_payment_dollars = 0;
+      const clinicPaymentCordobas = totalProcedureCordobas * (clinicPercentage / 100);
+      const clinicPaymentDollars = clinicPaymentCordobas / exchangeRate;
+      const doctorPaymentCordobas = totalProcedureCordobas * (doctorPercentage / 100);
+      const doctorPaymentDollars = doctorPaymentCordobas / exchangeRate;
+      
+      calculatedData.clinic_payment_cordobas = clinicPaymentCordobas;
+      calculatedData.clinic_payment_dollars = clinicPaymentDollars;
+      calculatedData.doctor_payment_cordobas = doctorPaymentCordobas;
+      calculatedData.doctor_payment_dollars = doctorPaymentDollars;
+      calculatedData.clinic_payment_percentage = clinicPercentage;
+      calculatedData.doctor_payment_percentage = doctorPercentage;
+      calculatedData.ortho_doctor_percentage = doctorPercentage;
+      calculatedData.external_doctor_payment = 0;
+      calculatedData.external_doctor_payment_usd = 0;
+      
+    // CASO 3: PROCEDIMIENTO GENERAL CON DOCTOR EXTERNO
+    } else if (!is_orthodontics && external_doctor) {
+      let externalPaymentCordobas = 0;
+      let externalPaymentDollars = 0;
       
       if (external_doctor_payment_type === 'percentage') {
         const percentage = parseFloat(external_doctor_payment_value) || 0;
         if (percentage > 100) {
           throw new Error('El porcentaje no puede ser mayor a 100%');
         }
-        external_payment_cordobas = totalInCordobas * (percentage / 100);
-        external_payment_dollars = external_payment_cordobas / exchange_rate_used;
+        externalPaymentCordobas = totalProcedureCordobas * (percentage / 100);
+        externalPaymentDollars = totalProcedureDollars * (percentage / 100);
       } else {
-        // Monto fijo
         const fixedAmount = parseFloat(external_doctor_payment_value) || 0;
         if (external_doctor_payment_currency === 'US$') {
-          external_payment_dollars = fixedAmount;
-          external_payment_cordobas = fixedAmount * exchange_rate_used;
+          externalPaymentDollars = fixedAmount;
+          externalPaymentCordobas = fixedAmount * exchangeRate;
         } else {
-          external_payment_cordobas = fixedAmount;
-          external_payment_dollars = fixedAmount / exchange_rate_used;
+          externalPaymentCordobas = fixedAmount;
+          externalPaymentDollars = fixedAmount / exchangeRate;
         }
       }
       
-      // Ganancia de la clínica (total - pago al doctor externo)
-      const clinic_payment_cordobas = totalInCordobas - external_payment_cordobas;
-      const clinic_payment_dollars = clinic_payment_cordobas / exchange_rate_used;
+      const clinicPaymentCordobas = totalProcedureCordobas - externalPaymentCordobas;
+      const clinicPaymentDollars = totalProcedureDollars - externalPaymentDollars;
       
-      // Validar que la clínica tenga ganancia
-      if (clinic_payment_cordobas <= 0) {
+      if (clinicPaymentCordobas <= 0) {
         throw new Error('El pago al doctor externo no puede ser mayor o igual al total del procedimiento');
       }
       
-      // Actualizar pagos
-      calculatedData.clinic_payment_cordobas = clinic_payment_cordobas;
-      calculatedData.clinic_payment_dollars = clinic_payment_dollars;
+      calculatedData.clinic_payment_cordobas = clinicPaymentCordobas;
+      calculatedData.clinic_payment_dollars = clinicPaymentDollars;
       calculatedData.doctor_payment_cordobas = 0;
       calculatedData.doctor_payment_dollars = 0;
-      calculatedData.external_doctor_payment = external_payment_cordobas;
-      calculatedData.external_doctor_payment_usd = external_payment_dollars;
+      calculatedData.external_doctor_payment = externalPaymentCordobas;
+      calculatedData.external_doctor_payment_usd = externalPaymentDollars;
       calculatedData.clinic_payment_percentage = 100;
       calculatedData.doctor_payment_percentage = 0;
       
-    } else if (is_orthodontics && !external_doctor) {
-      // ORTODONCIA SIN DOCTOR EXTERNO (lógica normal)
-      const clinicPercentage = parseFloat(clinic_payment_percentage) || 40;
-      const doctorPercentage = parseFloat(doctor_payment_percentage) || 60;
-      
-      const clinic_payment_cordobas = totalInCordobas * (clinicPercentage / 100);
-      const clinic_payment_dollars = clinic_payment_cordobas / exchange_rate_used;
-      const doctor_payment_cordobas = totalInCordobas * (doctorPercentage / 100);
-      const doctor_payment_dollars = doctor_payment_cordobas / exchange_rate_used;
-      
-      calculatedData.clinic_payment_cordobas = clinic_payment_cordobas;
-      calculatedData.clinic_payment_dollars = clinic_payment_dollars;
-      calculatedData.doctor_payment_cordobas = doctor_payment_cordobas;
-      calculatedData.doctor_payment_dollars = doctor_payment_dollars;
-      calculatedData.clinic_payment_percentage = clinicPercentage;
-      calculatedData.doctor_payment_percentage = doctorPercentage;
-      
+    // CASO 4: PROCEDIMIENTO GENERAL SIN DOCTOR EXTERNO
     } else {
-      // PROCEDIMIENTO GENERAL SIN DOCTOR EXTERNO
-      calculatedData.clinic_payment_cordobas = totalInCordobas;
-      calculatedData.clinic_payment_dollars = totalInCordobas / exchange_rate_used;
+      calculatedData.clinic_payment_cordobas = totalProcedureCordobas;
+      calculatedData.clinic_payment_dollars = totalProcedureDollars;
       calculatedData.doctor_payment_cordobas = 0;
       calculatedData.doctor_payment_dollars = 0;
       calculatedData.clinic_payment_percentage = 100;
       calculatedData.doctor_payment_percentage = 0;
+      calculatedData.external_doctor_payment = 0;
+      calculatedData.external_doctor_payment_usd = 0;
     }
     
-    console.log('✅ Datos calculados:', {
-      totalInCordobas,
-      totalInDollars,
-      clinic_payment_cordobas: calculatedData.clinic_payment_cordobas,
-      external_doctor_payment: calculatedData.external_doctor_payment,
-      clinic_payment_percentage: calculatedData.clinic_payment_percentage,
-      doctor_payment_percentage: calculatedData.doctor_payment_percentage
+    console.log('✅ Datos calculados finales:', {
+      totalAbonadoCordobas: grossCordobas,
+      totalAbonadoDolares: grossDollars,
+      totalProcedimientoCordobas: totalProcedureCordobas,
+      totalProcedimientoDolares: totalProcedureDollars,
+      gananciaClinicaCordobas: calculatedData.clinic_payment_cordobas,
+      gananciaDoctoraCordobas: calculatedData.doctor_payment_cordobas,
+      pagoDoctorExterno: calculatedData.external_doctor_payment,
+      deduccionPOS: calculatedData.total_pos_deduction
     });
     
     return calculatedData;
@@ -285,7 +333,6 @@ const procedureController = {
 
   // ============================================
   // OBTENER PROCEDIMIENTOS REGULARES (NO ORTODONCIA)
-  // CON FILTROS DE TIEMPO Y FECHAS ESPECÍFICAS
   // ============================================
   getAllNormal: async (req, res) => {
     try {
@@ -433,7 +480,7 @@ const procedureController = {
         }
         
         // Calcular montos usando los campos ya calculados
-        const exchangeRate = item.exchange_rate_used || 36.5;
+        const exchangeRate = item.exchange_rate || 36.5;
         const totalProcedureUSD = item.total_procedure_usd || (item.total_procedure / exchangeRate);
         const clinicNetIncomeUSD = item.clinic_payment_dollars || (item.clinic_payment_cordobas / exchangeRate);
         const externalDoctorPaymentUSD = item.external_doctor_payment_usd || (item.external_doctor_payment / exchangeRate);
@@ -460,7 +507,7 @@ const procedureController = {
           amount_dollars: item.amount_dollars || 0,
           payment_method_cordobas: item.payment_method_cordobas || 'No especificado',
           payment_method_dollars: item.payment_method_dollars || 'No especificado',
-          exchange_rate_used: exchangeRate,
+          exchange_rate: exchangeRate,
           total_cost_USD: item.total_cost_USD || 0,
           // Información adicional
           has_external_doctor: !!item.external_doctor || !!item.external_doctor_name || (item.external_doctor_payment > 0),
@@ -469,7 +516,7 @@ const procedureController = {
           // NUEVOS CAMPOS
           ortho_doctor_percentage: item.ortho_doctor_percentage,
           external_doctor_percentage: item.external_doctor_percentage,
-          external_doctor_split_type: item.external_doctor_split_type || 'from_clinic'
+          external_doctor_split_type: item.external_doctor_split_type || 'from_total'
         };
       });
       
@@ -506,7 +553,6 @@ const procedureController = {
 
   // ============================================
   // OBTENER PROCEDIMIENTOS DE ORTODONCIA
-  // VERSIÓN SIMPLIFICADA - SOLO FILTROS DIRECTOS
   // ============================================
   getAllOrthodontics: async (req, res) => {
     try {
@@ -624,7 +670,7 @@ const procedureController = {
       
       // Transformar datos
       const transformedData = (data || []).map(item => {
-        const exchangeRate = item.exchange_rate_used || 36.5;
+        const exchangeRate = item.exchange_rate || 36.5;
         
         // Calcular en córdobas (ya calculados)
         const clinicIncomeCordobas = item.clinic_payment_cordobas || 0;
@@ -697,7 +743,7 @@ const procedureController = {
           amount_dollars: item.amount_dollars || 0,
           payment_method_cordobas: item.payment_method_cordobas || 'No especificado',
           payment_method_dollars: item.payment_method_dollars || 'No especificado',
-          exchange_rate_used: exchangeRate,
+          exchange_rate: exchangeRate,
           total_cost_USD: item.total_cost_USD || 0,
           // Porcentajes
           clinic_payment_percentage: item.clinic_payment_percentage,
@@ -705,7 +751,7 @@ const procedureController = {
           // NUEVOS CAMPOS
           ortho_doctor_percentage: item.ortho_doctor_percentage,
           external_doctor_percentage: item.external_doctor_percentage,
-          external_doctor_split_type: item.external_doctor_split_type || 'from_clinic',
+          external_doctor_split_type: item.external_doctor_split_type || 'from_total',
           // Información adicional
           has_external_doctor: !!item.external_doctor || !!item.external_doctor_name || (item.external_doctor_payment > 0),
           external_doctor_name: item.external_doctor_name || item.external_doctor || null,
@@ -790,7 +836,7 @@ const procedureController = {
       }
       
       // Los cálculos ya están hechos en la BD
-      const exchangeRate = data.exchange_rate_used || 36.5;
+      const exchangeRate = data.exchange_rate || 36.5;
       const clinicIncome = data.clinic_payment_cordobas || 0;
       const doctorIncome = data.doctor_payment_cordobas || 0;
       const externalDoctorPayment = data.external_doctor_payment || 0;
@@ -823,7 +869,7 @@ const procedureController = {
         // NUEVOS CAMPOS
         ortho_doctor_percentage: data.ortho_doctor_percentage,
         external_doctor_percentage: data.external_doctor_percentage,
-        external_doctor_split_type: data.external_doctor_split_type || 'from_clinic'
+        external_doctor_split_type: data.external_doctor_split_type || 'from_total'
       };
       
       res.json({ 
@@ -842,8 +888,7 @@ const procedureController = {
   },
 
   // ============================================
-  // CREAR PROCEDIMIENTO DIRECTAMENTE (SIN CITA)
-  // USANDO LA NUEVA LÓGICA DE CÁLCULO
+  // CREAR PROCEDIMIENTO DIRECTAMENTE
   // ============================================
   create: async (req, res) => {
     try {
@@ -859,7 +904,7 @@ const procedureController = {
         });
       }
       
-      // Calcular pagos usando la nueva función
+      // Calcular pagos usando la función corregida
       const calculatedData = procedureController.calculateProcedurePayments({
         ...procedureData,
         Patient_ID: procedureData.patient_id,
@@ -904,7 +949,6 @@ const procedureController = {
 
   // ============================================
   // ACTUALIZAR PROCEDIMIENTO
-  // USANDO LA NUEVA LÓGICA DE CÁLCULO
   // ============================================
   update: async (req, res) => {
     try {
@@ -927,7 +971,7 @@ const procedureController = {
         });
       }
       
-      // Calcular pagos usando la nueva función
+      // Calcular pagos usando la función corregida
       const calculatedData = procedureController.calculateProcedurePayments(procedureData);
       
       const { data, error } = await supabaseAdmin
@@ -1051,7 +1095,7 @@ const procedureController = {
   },
 
   // ============================================
-  // ESTADÍSTICAS DE INGRESOS CON NUEVA LÓGICA
+  // ESTADÍSTICAS DE INGRESOS
   // ============================================
   getIncomeStats: async (req, res) => {
     try {

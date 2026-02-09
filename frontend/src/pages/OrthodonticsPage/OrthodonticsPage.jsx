@@ -27,7 +27,9 @@ import {
   faTeeth,
   faCalculator,
   faHandHoldingUsd,
-  faUserMd
+  faUserMd,
+  faBuilding,
+  faChartPie
 } from '@fortawesome/free-solid-svg-icons';
 import "./OrthodonticsPage.css";
 
@@ -133,7 +135,7 @@ export default function OrthodonticsPage() {
     const totalProcedureCordobas = orthodontic.total_procedure || 0;
     const totalProcedureDollars = orthodontic.total_procedure_usd || 0;
     
-    // Porcentajes (ortodoncia típicamente 40% clínica, 60% doctora)
+    // Porcentajes
     const clinicPercentage = orthodontic.clinic_payment_percentage || 40;
     const doctorPercentage = orthodontic.doctor_payment_percentage || 60;
     
@@ -141,44 +143,56 @@ export default function OrthodonticsPage() {
     const externalDoctorPayment = orthodontic.external_doctor_payment || 0;
     const externalDoctorPaymentUSD = orthodontic.external_doctor_payment_usd || 0;
     
-    // Base para repartir entre clínica y doctora ortodoncista
-    // Primero restamos el pago del doctor externo
-    const baseAmountCordobas = Math.max(0, totalProcedureCordobas - externalDoctorPayment);
-    const baseAmountDollars = Math.max(0, totalProcedureDollars - externalDoctorPaymentUSD);
-    
-    // Calcular ganancias según porcentajes
-    const clinicEarningsCordobas = orthodontic.clinic_payment_cordobas || 
-      (baseAmountCordobas * clinicPercentage / 100);
-    
-    const doctorEarningsCordobas = orthodontic.doctor_payment_cordobas || 
-      (baseAmountCordobas * doctorPercentage / 100);
-    
-    const clinicEarningsDollars = orthodontic.clinic_payment_dollars || 
-      (baseAmountDollars * clinicPercentage / 100);
-    
-    const doctorEarningsDollars = orthodontic.doctor_payment_dollars || 
-      (baseAmountDollars * doctorPercentage / 100);
-    
-    // Verificar consistencia de los cálculos
-    const calculatedTotalCordobas = clinicEarningsCordobas + doctorEarningsCordobas + externalDoctorPayment;
-    const calculatedTotalDollars = clinicEarningsDollars + doctorEarningsDollars + externalDoctorPaymentUSD;
-    
-    return {
-      totalProcedureCordobas,
-      totalProcedureDollars,
-      clinicEarningsCordobas,
-      clinicEarningsDollars,
-      doctorEarningsCordobas,
-      doctorEarningsDollars,
-      externalDoctorPayment,
-      externalDoctorPaymentUSD,
-      baseAmountCordobas,
-      baseAmountDollars,
-      clinicPercentage,
-      doctorPercentage,
-      calculatedTotalCordobas,
-      calculatedTotalDollars
-    };
+    // Calcular distribución según si hay doctor externo
+    if (orthodontic.has_external_doctor && orthodontic.external_doctor_percentage > 0) {
+      const orthoPercentage = orthodontic.ortho_doctor_percentage || 60;
+      const externalPercentage = orthodontic.external_doctor_percentage || 0;
+      
+      // Total del procedimiento se reparte según porcentajes
+      const orthoPaymentCordobas = totalProcedureCordobas * (orthoPercentage / 100);
+      const externalPaymentCordobas = totalProcedureCordobas * (externalPercentage / 100);
+      const clinicPaymentCordobas = totalProcedureCordobas - orthoPaymentCordobas - externalPaymentCordobas;
+      
+      const orthoPaymentDollars = totalProcedureDollars * (orthoPercentage / 100);
+      const externalPaymentDollars = totalProcedureDollars * (externalPercentage / 100);
+      const clinicPaymentDollars = totalProcedureDollars - orthoPaymentDollars - externalPaymentDollars;
+      
+      return {
+        totalProcedureCordobas,
+        totalProcedureDollars,
+        clinicPaymentCordobas,
+        clinicPaymentDollars,
+        doctorPaymentCordobas: orthoPaymentCordobas,
+        doctorPaymentDollars: orthoPaymentDollars,
+        externalPaymentCordobas,
+        externalPaymentDollars,
+        clinicPercentage: (clinicPaymentCordobas / totalProcedureCordobas) * 100,
+        doctorPercentage: orthoPercentage,
+        externalPercentage,
+        hasExternalDoctor: true
+      };
+    } else {
+      // Ortodoncia normal sin doctor externo
+      const clinicPaymentCordobas = totalProcedureCordobas * (clinicPercentage / 100);
+      const clinicPaymentDollars = totalProcedureDollars * (clinicPercentage / 100);
+      const doctorPaymentCordobas = totalProcedureCordobas * (doctorPercentage / 100);
+      const doctorPaymentDollars = totalProcedureDollars * (doctorPercentage / 100);
+      
+      return {
+        totalProcedureCordobas,
+        totalProcedureDollars,
+        clinicPaymentCordobas,
+        clinicPaymentDollars,
+        doctorPaymentCordobas,
+        doctorPaymentDollars,
+        externalPaymentCordobas: 0,
+        externalPaymentDollars: 0,
+        clinicPercentage,
+        doctorPercentage,
+        externalPercentage: 0,
+        hasExternalDoctor: false
+      };
+    }
   };
 
   // Calcular desglose completo para modal
@@ -203,7 +217,8 @@ export default function OrthodonticsPage() {
       grossCordobas,
       grossDollars,
       posDeductionCordobas,
-      posDeductionDollars
+      posDeductionDollars,
+      exchangeRate: orthodontic.exchange_rate || 36.5
     };
   };
 
@@ -283,10 +298,6 @@ export default function OrthodonticsPage() {
                       <h4><FontAwesomeIcon icon={faFileMedical} /> Información del Tratamiento</h4>
                       <div className="view-grid">
                         <div className="view-item">
-                          <span className="view-label">ID:</span>
-                          <span className="view-value">{selectedOrthodontic.procedure_ID}</span>
-                        </div>
-                        <div className="view-item">
                           <span className="view-label">Fecha del Tratamiento:</span>
                           <span className="view-value">{formatDisplayDate(selectedOrthodontic.procedure_date)}</span>
                         </div>
@@ -332,10 +343,10 @@ export default function OrthodonticsPage() {
                             <FontAwesomeIcon icon={faHospitalUser} />
                             <span className="percentage-title">Clínica</span>
                           </div>
-                          <div className="percentage-value">{breakdown.clinicPercentage}%</div>
+                          <div className="percentage-value">{breakdown.clinicPercentage.toFixed(1)}%</div>
                           <div className="percentage-amounts">
-                            <span className="amount-cordobas">{formatCurrency(breakdown.clinicEarningsCordobas)}</span>
-                            <span className="amount-dollars">{formatCurrencyUSD(breakdown.clinicEarningsDollars)}</span>
+                            <span className="amount-cordobas">{formatCurrency(breakdown.clinicPaymentCordobas)}</span>
+                            <span className="amount-dollars">{formatCurrencyUSD(breakdown.clinicPaymentDollars)}</span>
                           </div>
                         </div>
                         
@@ -344,16 +355,16 @@ export default function OrthodonticsPage() {
                             <FontAwesomeIcon icon={faUserMd} />
                             <span className="percentage-title">Doctora Ortodoncista</span>
                           </div>
-                          <div className="percentage-value">{breakdown.doctorPercentage}%</div>
+                          <div className="percentage-value">{breakdown.doctorPercentage.toFixed(1)}%</div>
                           <div className="percentage-amounts">
-                            <span className="amount-cordobas">{formatCurrency(breakdown.doctorEarningsCordobas)}</span>
-                            <span className="amount-dollars">{formatCurrencyUSD(breakdown.doctorEarningsDollars)}</span>
+                            <span className="amount-cordobas">{formatCurrency(breakdown.doctorPaymentCordobas)}</span>
+                            <span className="amount-dollars">{formatCurrencyUSD(breakdown.doctorPaymentDollars)}</span>
                           </div>
                         </div>
                       </div>
 
                       {/* Doctor externo si existe */}
-                      {breakdown.externalDoctorPayment > 0 && (
+                      {breakdown.hasExternalDoctor && breakdown.externalPercentage > 0 && (
                         <div className="percentage-distribution-view">
                           <div className="percentage-card external-doctor-card">
                             <div className="percentage-header">
@@ -361,18 +372,26 @@ export default function OrthodonticsPage() {
                               <span className="percentage-title">Doctor Externo</span>
                             </div>
                             <div className="percentage-value">
-                              {selectedOrthodontic.external_doctor_percentage 
-                                ? `${selectedOrthodontic.external_doctor_percentage}%`
-                                : 'Monto fijo'
-                              }
+                              {breakdown.externalPercentage.toFixed(1)}%
                             </div>
                             <div className="percentage-amounts">
-                              <span className="amount-cordobas">{formatCurrency(breakdown.externalDoctorPayment)}</span>
-                              <span className="amount-dollars">{formatCurrencyUSD(breakdown.externalDoctorPaymentUSD)}</span>
+                              <span className="amount-cordobas">{formatCurrency(breakdown.externalPaymentCordobas)}</span>
+                              <span className="amount-dollars">{formatCurrencyUSD(breakdown.externalPaymentDollars)}</span>
                             </div>
                             {selectedOrthodontic.external_doctor_name && (
                               <div className="doctor-name">
                                 {selectedOrthodontic.external_doctor_name}
+                              </div>
+                            )}
+                            {selectedOrthodontic.external_doctor_split_type && (
+                              <div className="split-type-info">
+                                <small>
+                                  Tipo de división: {
+                                    selectedOrthodontic.external_doctor_split_type === 'from_total' 
+                                      ? 'Del total' 
+                                      : 'De la parte de la clínica'
+                                  }
+                                </small>
                               </div>
                             )}
                           </div>
@@ -386,6 +405,17 @@ export default function OrthodonticsPage() {
                           <div className="total-values">
                             <span className="total-cordobas">{formatCurrency(breakdown.totalProcedureCordobas)}</span>
                             <span className="total-dollars">{formatCurrencyUSD(breakdown.totalProcedureDollars)}</span>
+                          </div>
+                        </div>
+                        
+                        <div className="total-distribution">
+                          <span className="distribution-label">Distribución total:</span>
+                          <div className="distribution-values">
+                            <span className="distribution-percentage">
+                              {breakdown.clinicPercentage.toFixed(1)}% + {breakdown.doctorPercentage.toFixed(1)}% 
+                              {breakdown.hasExternalDoctor ? ` + ${breakdown.externalPercentage.toFixed(1)}%` : ''}
+                              = 100%
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -424,7 +454,7 @@ export default function OrthodonticsPage() {
                                 )}
                                 <div className="method-row net-amount">
                                   <span className="method-label">Neto después de POS:</span>
-                                  <span className="method-value">{formatCurrency(breakdown.totalProcedureCordobas)}</span>
+                                  <span className="method-value">{formatCurrency(breakdown.totalProcedureCordobas - (breakdown.externalPaymentCordobas || 0))}</span>
                                 </div>
                               </div>
                             </div>
@@ -454,7 +484,7 @@ export default function OrthodonticsPage() {
                                 )}
                                 <div className="method-row net-amount">
                                   <span className="method-label">Neto después de POS:</span>
-                                  <span className="method-value">{formatCurrencyUSD(breakdown.totalProcedureDollars)}</span>
+                                  <span className="method-value">{formatCurrencyUSD(breakdown.totalProcedureDollars - (breakdown.externalPaymentDollars || 0))}</span>
                                 </div>
                               </div>
                             </div>
@@ -483,7 +513,7 @@ export default function OrthodonticsPage() {
                             <div className="breakdown-step deduction-step">
                               <div className="step-number">2</div>
                               <div className="step-content">
-                                <span className="step-label">- Deducción del POS:</span>
+                                <span className="step-label">- Deducción del POS (5.5%):</span>
                                 <div className="step-values">
                                   <span className="step-value-cordobas">-{formatCurrency(breakdown.posDeductionCordobas)}</span>
                                   <span className="step-value-dollars">-{formatCurrencyUSD(breakdown.posDeductionDollars)}</span>
@@ -504,67 +534,56 @@ export default function OrthodonticsPage() {
                             </div>
                           </div>
                           
-                          {/* Paso 4: Pago doctor externo */}
-                          {breakdown.externalDoctorPayment > 0 && (
-                            <div className="breakdown-step deduction-step">
-                              <div className="step-number">3</div>
-                              <div className="step-content">
-                                <span className="step-label">- Pago al doctor externo:</span>
-                                <div className="step-values">
-                                  <span className="step-value-cordobas">-{formatCurrency(breakdown.externalDoctorPayment)}</span>
-                                  <span className="step-value-dollars">-{formatCurrencyUSD(breakdown.externalDoctorPaymentUSD)}</span>
+                          {/* Paso 4: Distribución */}
+                          <div className="breakdown-step distribution-step">
+                            <div className="step-number">3</div>
+                            <div className="step-content">
+                              <span className="step-label">Distribución del total:</span>
+                              <div className="step-values">
+                                <div className="distribution-breakdown">
+                                  {breakdown.hasExternalDoctor ? (
+                                    <>
+                                      <div className="distribution-part">
+                                        <span className="part-label">Doctora ({breakdown.doctorPercentage.toFixed(1)}%):</span>
+                                        <span className="part-value">{formatCurrency(breakdown.doctorPaymentCordobas)}</span>
+                                      </div>
+                                      <div className="distribution-part">
+                                        <span className="part-label">Dr. Ext. ({breakdown.externalPercentage.toFixed(1)}%):</span>
+                                        <span className="part-value">{formatCurrency(breakdown.externalPaymentCordobas)}</span>
+                                      </div>
+                                      <div className="distribution-part clinic">
+                                        <span className="part-label">Clínica ({breakdown.clinicPercentage.toFixed(1)}%):</span>
+                                        <span className="part-value">{formatCurrency(breakdown.clinicPaymentCordobas)}</span>
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <div className="distribution-part">
+                                        <span className="part-label">Doctora ({breakdown.doctorPercentage.toFixed(1)}%):</span>
+                                        <span className="part-value">{formatCurrency(breakdown.doctorPaymentCordobas)}</span>
+                                      </div>
+                                      <div className="distribution-part clinic">
+                                        <span className="part-label">Clínica ({breakdown.clinicPercentage.toFixed(1)}%):</span>
+                                        <span className="part-value">{formatCurrency(breakdown.clinicPaymentCordobas)}</span>
+                                      </div>
+                                    </>
+                                  )}
                                 </div>
                               </div>
                             </div>
-                          )}
-                          
-                          {/* Paso 5: Base para repartir */}
-                          <div className="breakdown-step result-step">
-                            <div className="step-number">=</div>
-                            <div className="step-content">
-                              <span className="step-label">Base para repartir (clínica + doctora ortodoncista):</span>
-                              <div className="step-values">
-                                <span className="step-value-cordobas">{formatCurrency(breakdown.baseAmountCordobas)}</span>
-                                <span className="step-value-dollars">{formatCurrencyUSD(breakdown.baseAmountDollars)}</span>
-                              </div>
-                            </div>
                           </div>
                           
-                          {/* Paso 6: Reparto clínica */}
-                          <div className="breakdown-step split-step clinic-split">
-                            <div className="step-number">4</div>
-                            <div className="step-content">
-                              <span className="step-label">Clínica ({breakdown.clinicPercentage}%):</span>
-                              <div className="step-values">
-                                <span className="step-value-cordobas">{formatCurrency(breakdown.clinicEarningsCordobas)}</span>
-                                <span className="step-value-dollars">{formatCurrencyUSD(breakdown.clinicEarningsDollars)}</span>
-                              </div>
-                            </div>
-                          </div>
-                          
-                          {/* Paso 7: Reparto doctora ortodoncista */}
-                          <div className="breakdown-step split-step doctor-split">
-                            <div className="step-number">5</div>
-                            <div className="step-content">
-                              <span className="step-label">Doctora ortodoncista ({breakdown.doctorPercentage}%):</span>
-                              <div className="step-values">
-                                <span className="step-value-cordobas">{formatCurrency(breakdown.doctorEarningsCordobas)}</span>
-                                <span className="step-value-dollars">{formatCurrencyUSD(breakdown.doctorEarningsDollars)}</span>
-                              </div>
-                            </div>
-                          </div>
-                          
-                          {/* Paso 8: Totales finales */}
+                          {/* Paso 5: Totales finales */}
                           <div className="breakdown-step final-step">
                             <div className="step-number">∑</div>
                             <div className="step-content">
                               <span className="step-label final-label">TOTAL DISTRIBUIDO:</span>
                               <div className="step-values final-values">
                                 <span className="step-value-cordobas final-cordobas">
-                                  {formatCurrency(breakdown.calculatedTotalCordobas)}
+                                  {formatCurrency(breakdown.totalProcedureCordobas)}
                                 </span>
                                 <span className="step-value-dollars final-dollars">
-                                  {formatCurrencyUSD(breakdown.calculatedTotalDollars)}
+                                  {formatCurrencyUSD(breakdown.totalProcedureDollars)}
                                 </span>
                               </div>
                             </div>
@@ -583,12 +602,15 @@ export default function OrthodonticsPage() {
                             <div className="summary-amounts">
                               <div className="summary-amount">
                                 <span className="amount-label">Córdobas:</span>
-                                <span className="amount-value">{formatCurrency(breakdown.clinicEarningsCordobas)}</span>
+                                <span className="amount-value">{formatCurrency(breakdown.clinicPaymentCordobas)}</span>
                               </div>
                               <div className="summary-amount">
                                 <span className="amount-label">Dólares:</span>
-                                <span className="amount-value">{formatCurrencyUSD(breakdown.clinicEarningsDollars)}</span>
+                                <span className="amount-value">{formatCurrencyUSD(breakdown.clinicPaymentDollars)}</span>
                               </div>
+                            </div>
+                            <div className="summary-percentage">
+                              {breakdown.clinicPercentage.toFixed(1)}%
                             </div>
                           </div>
                           
@@ -600,31 +622,53 @@ export default function OrthodonticsPage() {
                             <div className="summary-amounts">
                               <div className="summary-amount">
                                 <span className="amount-label">Córdobas:</span>
-                                <span className="amount-value">{formatCurrency(breakdown.doctorEarningsCordobas)}</span>
+                                <span className="amount-value">{formatCurrency(breakdown.doctorPaymentCordobas)}</span>
                               </div>
                               <div className="summary-amount">
                                 <span className="amount-label">Dólares:</span>
-                                <span className="amount-value">{formatCurrencyUSD(breakdown.doctorEarningsDollars)}</span>
+                                <span className="amount-value">{formatCurrencyUSD(breakdown.doctorPaymentDollars)}</span>
                               </div>
+                            </div>
+                            <div className="summary-percentage">
+                              {breakdown.doctorPercentage.toFixed(1)}%
                             </div>
                           </div>
                         </div>
                         
-                        {breakdown.externalDoctorPayment > 0 && (
-                          <div className="summary-card external-summary">
-                            <div className="summary-header">
-                              <FontAwesomeIcon icon={faUserDoctor} />
-                              <span>Pago doctor externo</span>
-                            </div>
-                            <div className="summary-amounts">
-                              <div className="summary-amount">
-                                <span className="amount-label">Córdobas:</span>
-                                <span className="amount-value">{formatCurrency(breakdown.externalDoctorPayment)}</span>
+                        {breakdown.hasExternalDoctor && (
+                          <div className="summary-grid">
+                            <div className="summary-card external-summary">
+                              <div className="summary-header">
+                                <FontAwesomeIcon icon={faUserDoctor} />
+                                <span>Pago doctor externo</span>
                               </div>
-                              <div className="summary-amount">
-                                <span className="amount-label">Dólares:</span>
-                                <span className="amount-value">{formatCurrencyUSD(breakdown.externalDoctorPaymentUSD)}</span>
+                              <div className="summary-amounts">
+                                <div className="summary-amount">
+                                  <span className="amount-label">Córdobas:</span>
+                                  <span className="amount-value">{formatCurrency(breakdown.externalPaymentCordobas)}</span>
+                                </div>
+                                <div className="summary-amount">
+                                  <span className="amount-label">Dólares:</span>
+                                  <span className="amount-value">{formatCurrencyUSD(breakdown.externalPaymentDollars)}</span>
+                                </div>
                               </div>
+                              <div className="summary-percentage">
+                                {breakdown.externalPercentage.toFixed(1)}%
+                              </div>
+                              {selectedOrthodontic.external_doctor_split_type && (
+                                <div className="split-type-info">
+                                  <small>
+                                    <FontAwesomeIcon icon={
+                                      selectedOrthodontic.external_doctor_split_type === 'from_total' 
+                                        ? faChartPie 
+                                        : faBuilding
+                                    } />
+                                    {selectedOrthodontic.external_doctor_split_type === 'from_total' 
+                                      ? ' Del total' 
+                                      : ' De la parte de la clínica'}
+                                  </small>
+                                </div>
+                              )}
                             </div>
                           </div>
                         )}
@@ -633,7 +677,7 @@ export default function OrthodonticsPage() {
                       {/* Tasa de cambio */}
                       <div className="exchange-rate-section">
                         <FontAwesomeIcon icon={faExchangeAlt} />
-                        <span>Tasa de cambio utilizada: {selectedOrthodontic.exchange_rate_used || 36.5} C$/US$</span>
+                        <span>Tasa de cambio utilizada: {breakdown.exchangeRate} C$/US$</span>
                       </div>
                     </div>
 
@@ -670,6 +714,16 @@ export default function OrthodonticsPage() {
                             <div className="view-item">
                               <span className="view-label">Porcentaje:</span>
                               <span className="view-value">{selectedOrthodontic.external_doctor_percentage}%</span>
+                            </div>
+                          )}
+                          {selectedOrthodontic.external_doctor_split_type && (
+                            <div className="view-item">
+                              <span className="view-label">Tipo de división:</span>
+                              <span className="view-value">
+                                {selectedOrthodontic.external_doctor_split_type === 'from_total' 
+                                  ? 'Porcentaje del total' 
+                                  : 'Porcentaje de la parte de la clínica'}
+                              </span>
                             </div>
                           )}
                         </div>
@@ -851,6 +905,11 @@ export default function OrthodonticsPage() {
                       <td className="description-cell">
                         <div className="description-content">
                           <strong>{orthodontic.procedure_description || "Sin descripción"}</strong>
+                          {hasExternalDoctor && (
+                            <small className="external-doctor-indicator">
+                              <FontAwesomeIcon icon={faUserDoctor} /> Con doctor externo
+                            </small>
+                          )}
                         </div>
                       </td>
                       
@@ -871,18 +930,18 @@ export default function OrthodonticsPage() {
                       
                       <td className="clinic-net-cell">
                         <div className="clinic-earnings">
-                          {formatCurrency(earnings.clinicEarningsCordobas)}
+                          {formatCurrency(earnings.clinicPaymentCordobas)}
                           <div className="percentage-badge">
-                            {earnings.clinicPercentage}%
+                            {earnings.clinicPercentage.toFixed(1)}%
                           </div>
                         </div>
                       </td>
                       
                       <td className="doctor-net-cell">
                         <div className="doctor-earnings">
-                          {formatCurrency(earnings.doctorEarningsCordobas)}
+                          {formatCurrency(earnings.doctorPaymentCordobas)}
                           <div className="percentage-badge">
-                            {earnings.doctorPercentage}%
+                            {earnings.doctorPercentage.toFixed(1)}%
                           </div>
                         </div>
                       </td>

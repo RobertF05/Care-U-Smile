@@ -40,6 +40,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { AppContext } from '../../context/AppContext';
 import { AuthContext } from '../../context/AuthContext';
+import { useNotification } from '../../context/NotificationContext'
 import './AppointmentPage.css';
 
 // Filtros de tiempo
@@ -325,6 +326,8 @@ const AppointmentPage = () => {
     clinic_payment: 40,
     doctor_payment: 60
   });
+
+  const { addNotification } = useNotification();
   
   // Estados para desplegables móviles
   const [expandedStats, setExpandedStats] = useState(false);
@@ -631,33 +634,56 @@ const calculateOrthoPayments = () => {
 };
 
   // Función para validar porcentajes en ortodoncia con doctor externo
-  const validateOrthoPercentages = () => {
-    if (!selectedAppointment?.is_orthodontics || !procedureForm.external_doctor) return true;
-    
-    const orthoPercentage = parseFloat(procedureForm.ortho_doctor_percentage) || 0;
-    const externalPercentage = parseFloat(procedureForm.external_doctor_percentage) || 0;
-    
-    // Validar que no sumen 100% o más
-    if (orthoPercentage + externalPercentage >= 100) {
-      alert('Error: La suma de porcentajes para doctora ortodoncista y doctor externo debe ser menor a 100%');
-      return false;
-    }
-    
-    // Validar que la clínica tenga al menos algo
-    const clinicPercentage = 100 - orthoPercentage - externalPercentage;
-    if (clinicPercentage <= 0) {
-      alert('Error: La clínica debe tener un porcentaje de ganancia mayor a 0%');
-      return false;
-    }
-    
-    // Validar que los porcentajes no sean negativos
-    if (orthoPercentage < 0 || externalPercentage < 0) {
-      alert('Error: Los porcentajes no pueden ser negativos');
-      return false;
-    }
-    
-    return true;
-  };
+const validateOrthoPercentages = () => {
+  if (!selectedAppointment?.is_orthodontics || !procedureForm.external_doctor) return true;
+  
+  const orthoPercentage = parseFloat(procedureForm.ortho_doctor_percentage) || 0;
+  const externalPercentage = parseFloat(procedureForm.external_doctor_percentage) || 0;
+  const clinicPercentage = 100 - orthoPercentage - externalPercentage;
+  
+  // Validación 1: La clínica debe tener ganancia
+  if (orthoPercentage + externalPercentage >= 100) {
+    addNotification(
+      `❌ Error: La suma de porcentajes (${orthoPercentage}% + ${externalPercentage}% = ${orthoPercentage + externalPercentage}%) debe ser MENOR a 100%\n\nLa clínica necesita al menos un pequeño porcentaje de ganancia.`,
+      'error',
+      7000
+    );
+    return false;
+  }
+  
+  // Validación 2: La clínica debe recibir algo positivo
+  if (clinicPercentage <= 0) {
+    addNotification(
+      `❌ Error: La clínica recibiría ${clinicPercentage}% de ganancia\n\nAjuste los porcentajes para que la clínica reciba al menos algo.`,
+      'error',
+      7000
+    );
+    return false;
+  }
+  
+  // Validación 3: Porcentajes no negativos
+  if (orthoPercentage < 0 || externalPercentage < 0) {
+    addNotification('❌ Error: Los porcentajes no pueden ser negativos', 'error', 5000);
+    return false;
+  }
+  
+  // Validación 4: Advertencia si la clínica recibe muy poco
+  if (clinicPercentage < 10) {
+    addNotification(
+      `⚠️ Advertencia: La clínica solo recibiría ${clinicPercentage}% de ganancia`,
+      'warning',
+      5000
+    );
+  }
+  
+  console.log('✅ Distribución validada:', {
+    doctoraOrtodoncista: orthoPercentage + '%',
+    doctorExterno: externalPercentage + '%',
+    clinica: clinicPercentage + '%'
+  });
+  
+  return true;
+};
 
   // Manejar cambios en los pagos
   const handlePaymentChange = (field, value) => {
@@ -1225,7 +1251,7 @@ const calculateOrthoPayments = () => {
     setShowConvertModal(true);
   };
 
-  // Convertir cita en procedimiento COMPLETAMENTE CORREGIDO
+  // Convertir cita en procedimiento CORREGIDO
 const handleConvertToProcedure = async (e) => {
   e.preventDefault();
   
@@ -1253,7 +1279,6 @@ const handleConvertToProcedure = async (e) => {
       is_orthodontics: selectedAppointment.is_orthodontics,
       
       // ===== CANTIDADES ABONADAS =====
-      // Montos abonados en cada moneda
       total_cost: totals.grossCordobas, // Cantidad abonada en córdobas
       total_cost_USD: totals.grossDollars, // Cantidad abonada en dólares
       amount_cordobas: totals.grossCordobas, // Cantidad abonada en córdobas
@@ -1264,27 +1289,26 @@ const handleConvertToProcedure = async (e) => {
       payment_method_dollars: procedureForm.payment_method_dollars,
       
       // ===== DEDUCCIONES POS =====
-      pos_deduction_cordobas: totals.posDeductionCordobas, // Deducción POS de córdobas
-      pos_deduction_dollars: totals.posDeductionDollars, // Deducción POS de dólares
-      total_pos_deduction: totals.totalDeductions, // Total deducción POS en córdobas
+      pos_deduction_cordobas: totals.posDeductionCordobas,
+      pos_deduction_dollars: totals.posDeductionDollars,
+      total_pos_deduction: totals.totalDeductions,
       
       // ===== MONTOS NETOS (después de POS) =====
-      net_amount_cordobas: totals.netCordobas, // Neto en córdobas después de POS
-      net_amount_dollars: totals.netDollars, // Neto en dólares después de POS
+      net_amount_cordobas: totals.netCordobas,
+      net_amount_dollars: totals.netDollars,
       
       // ===== MONTOS BRUTOS (igual a abonado) =====
-      gross_amount_cordobas: totals.grossCordobas, // Bruto en córdobas
-      gross_amount_dollars: totals.grossDollars, // Bruto en dólares
+      gross_amount_cordobas: totals.grossCordobas,
+      gross_amount_dollars: totals.grossDollars,
       
       // ===== TOTAL DE LA CONSULTA (después de POS) =====
-      total_procedure: totals.netTotalCordobas, // Total consulta en córdobas
-      total_procedure_usd: totals.netTotalDollars, // Total consulta en dólares
+      total_procedure: totals.netTotalCordobas,
+      total_procedure_usd: totals.netTotalDollars,
       
       // ===== TIPO DE CAMBIO =====
-      exchange_rate_used: procedureForm.exchange_rate || currentSettings.exchange_rate,
+      exchange_rate: procedureForm.exchange_rate || currentSettings.exchange_rate,
       
       // ===== DOCTOR EXTERNO =====
-      external_doctor: procedureForm.external_doctor_name,
       theres_external_doctor: procedureForm.external_doctor,
       external_doctor_name: procedureForm.external_doctor_name,
       external_doctor_specialty: procedureForm.external_doctor_specialty,
@@ -1310,10 +1334,11 @@ const handleConvertToProcedure = async (e) => {
     
     // 1. PROCEDIMIENTOS GENERALES con doctor externo
     if (!selectedAppointment.is_orthodontics && procedureForm.external_doctor) {
+      const exchangeRate = procedureData.exchange_rate;
+      
       // Calcular pago al doctor externo
       let externalPaymentCordobas = 0;
       let externalPaymentUSD = 0;
-      const exchangeRate = procedureData.exchange_rate_used;
       
       if (procedureForm.external_doctor_payment_type === 'percentage') {
         const percentage = parseFloat(procedureForm.external_doctor_payment_value) || 0;
@@ -1371,6 +1396,24 @@ const handleConvertToProcedure = async (e) => {
       });
     }
     
+    // Asegurar que los campos numéricos sean números
+    const numericFields = [
+      'total_cost', 'total_cost_USD', 'amount_cordobas', 'amount_dollars',
+      'pos_deduction_cordobas', 'pos_deduction_dollars', 'total_pos_deduction',
+      'net_amount_cordobas', 'net_amount_dollars', 'gross_amount_cordobas', 'gross_amount_dollars',
+      'total_procedure', 'total_procedure_usd', 'exchange_rate',
+      'clinic_payment_cordobas', 'clinic_payment_dollars', 'doctor_payment_cordobas', 'doctor_payment_dollars',
+      'external_doctor_payment', 'external_doctor_payment_usd',
+      'clinic_payment_percentage', 'doctor_payment_percentage',
+      'ortho_doctor_percentage', 'external_doctor_percentage'
+    ];
+    
+    numericFields.forEach(field => {
+      if (procedureData[field] !== undefined && procedureData[field] !== null) {
+        procedureData[field] = parseFloat(procedureData[field]) || 0;
+      }
+    });
+    
     console.log('📤 Datos COMPLETOS a enviar al backend:', {
       abonadoCordobas: procedureData.total_cost,
       abonadoDolares: procedureData.total_cost_USD,
@@ -1414,18 +1457,21 @@ const handleConvertToProcedure = async (e) => {
     // Recargar citas
     fetchAppointments();
     
-    alert('✅ Procedimiento registrado exitosamente');
+    // Usar notificación en lugar de alert
+    addNotification('✅ Procedimiento registrado exitosamente', 'success', 5000);
     
-    // Redirigir
-    if (selectedAppointment.is_orthodontics) {
-      window.location.href = '/orthodontics';
-    } else {
-      window.location.href = '/procedures';
-    }
+    // Redirigir después de un breve retraso
+    setTimeout(() => {
+      if (selectedAppointment.is_orthodontics) {
+        window.location.href = '/orthodontics';
+      } else {
+        window.location.href = '/procedures';
+      }
+    }, 1500);
     
   } catch (error) {
     console.error('❌ Error al registrar procedimiento:', error);
-    alert(`❌ Error: ${error.message}`);
+    addNotification(`❌ Error: ${error.message}`, 'error', 7000);
   }
 };
 

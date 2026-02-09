@@ -257,10 +257,6 @@ export default function ProceduresPage() {
                 <h4><FontAwesomeIcon icon={faFileMedical} /> Información del Procedimiento</h4>
                 <div className="view-grid">
                   <div className="view-item">
-                    <span className="view-label">ID:</span>
-                    <span className="view-value">{selectedProcedure.procedure_ID}</span>
-                  </div>
-                  <div className="view-item">
                     <span className="view-label">Fecha del Procedimiento:</span>
                     <span className="view-value">{formatDisplayDate(selectedProcedure.procedure_date)}</span>
                   </div>

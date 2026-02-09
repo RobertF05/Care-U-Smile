@@ -1167,3 +1167,89 @@
     justify-content: center;
   }
 }
+
+/* 1. Mejorar contraste de texto */
+.view-label, .method-label, .step-label, .amount-label {
+  color: #2c3e50; /* Azul oscuro para mejor contraste */
+  font-weight: 600;
+}
+
+.view-value, .method-value, .step-value-cordobas, .amount-value {
+  color: #34495e; /* Gris oscuro */
+  font-weight: 500;
+}
+
+/* 2. Resaltar montos importantes */
+.final-cordobas, .final-dollars {
+  color: #27ae60; /* Verde para montos positivos */
+  font-weight: 700;
+  font-size: 1.2em;
+}
+
+.deduction {
+  color: #e74c3c; /* Rojo para deducciones */
+  font-weight: 600;
+}
+
+/* 3. Mejorar disposición en modales */
+.view-grid, .method-details, .breakdown-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+/* 4. Tarjetas con mejor separación */
+.payment-method-card, .breakdown-step, .summary-card {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+  transition: all 0.3s ease;
+}
+
+.payment-method-card:hover, .summary-card:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  transform: translateY(-2px);
+}
+
+/* 5. Indicadores claros para POS y doctor externo */
+.has-pos, .has-doctor {
+  padding: 0.25rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-left: 0.5rem;
+}
+
+.has-pos {
+  background-color: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffeaa7;
+}
+
+.has-doctor {
+  background-color: #d1ecf1;
+  color: #0c5460;
+  border: 1px solid #bee5eb;
+}
+
+/* 6. Mejorar tabla responsiva */
+@media (max-width: 768px) {
+  .table-responsive-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .procedures-table, .orthodontics-table {
+    min-width: 800px;
+  }
+  
+  .actions-cell {
+    position: sticky;
+    right: 0;
+    background: white;
+    box-shadow: -2px 0 5px rgba(0,0,0,0.1);
+  }
+}

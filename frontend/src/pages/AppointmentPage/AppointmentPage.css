@@ -2829,3 +2829,390 @@ input:checked + .slider:before {
     margin: 10px;
   }
 }
+
+/* 1. Mejorar diseño para móviles */
+@media (max-width: 768px) {
+  .appointment-card-content {
+    padding: 1rem;
+  }
+  
+  .appointment-main-row.compact-view {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  
+  .appointment-column {
+    width: 100% !important;
+    margin-bottom: 0.5rem;
+  }
+  
+  .appointment-actions-horizontal {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  
+  .action-btn-horizontal, .status-action-btn {
+    min-width: 120px;
+    flex: 1;
+  }
+}
+
+/* 2. Mejorar visibilidad de información financiera */
+.calculated-amounts, .distribution-summary {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 10px;
+  padding: 1.5rem;
+  margin: 1rem 0;
+  border: 2px solid #dee2e6;
+}
+
+.amount-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.amount-item.clinic {
+  background-color: #d4edda;
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+.amount-values {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+}
+
+.amount-cordobas {
+  color: #1a5276;
+  font-weight: 600;
+}
+
+.amount-dollars {
+  color: #7d6608;
+  font-size: 0.9em;
+}
+
+/* 3. Mejorar botones de filtro */
+.time-filter-btn.active, .status-filter-btn.active, .type-filter-btn.active {
+  transform: scale(1.05);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+  border: 2px solid currentColor !important;
+}
+
+/* 4. Mejorar modal de procedimiento */
+.large-modal {
+  max-width: 95%;
+  margin: 2vh auto;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.mixed-payment-section {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin: 1rem 0;
+}
+
+.payment-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 2rem;
+  margin: 1rem 0;
+}
+
+.totals-section {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-top: 1rem;
+  border: 1px solid #dee2e6;
+}
+
+.total-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #eee;
+}
+
+.total-row.total-procedure, .total-row.total-procedure-usd {
+  border-top: 2px solid #2c3e50;
+  margin-top: 0.5rem;
+  padding-top: 1rem;
+  font-size: 1.1em;
+}
+
+/* ========================================= */
+/* NUEVOS ESTILOS PARA NOTIFICACIONES Y MEJORAS */
+/* ========================================= */
+
+/* Contenedor de notificaciones */
+.notification-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 400px;
+}
+
+/* Estilos para los botones de división en ortodoncia */
+.split-type-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 15px 0;
+}
+
+.split-type-btn {
+  padding: 15px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  background: white;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.split-type-btn:hover {
+  border-color: #42A5F5;
+  background: #f5f9ff;
+}
+
+.split-type-btn.active {
+  border-color: #42A5F5;
+  background: #e3f2fd;
+  color: #1976d2;
+  font-weight: 600;
+}
+
+.split-type-btn svg {
+  font-size: 1.2rem;
+  margin-top: 2px;
+}
+
+.split-type-btn small {
+  display: block;
+  font-size: 0.85rem;
+  color: #666;
+  margin-top: 5px;
+  font-weight: normal;
+}
+
+/* Mejorar visualización de distribución */
+.distribution-summary {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 1rem 0;
+  border: 1px solid #e0e0e0;
+}
+
+.distribution-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.distribution-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 4px;
+}
+
+.distribution-item.clinic {
+  background: rgba(76, 175, 80, 0.1);
+  border-left: 3px solid #4CAF50;
+}
+
+.distribution-item.doctor {
+  background: rgba(156, 39, 176, 0.1);
+  border-left: 3px solid #9C27B0;
+}
+
+.distribution-total {
+  border-top: 2px solid #ddd;
+  padding-top: 10px;
+  margin-top: 10px;
+  font-weight: bold;
+}
+
+/* Calculated amounts section */
+.calculated-amounts {
+  background: #fff;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin: 1rem 0;
+  border: 1px solid #dee2e6;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.amounts-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.amount-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  border-radius: 6px;
+  background: #f8f9fa;
+}
+
+.amount-item.clinic {
+  background: #d4edda;
+  border-left: 4px solid #28a745;
+}
+
+.amount-values {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.amount-cordobas {
+  color: #1a5276;
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.amount-dollars {
+  color: #7d6608;
+  font-size: 0.9em;
+}
+
+/* Estilos para porcentajes de ortodoncia */
+.percentage-input-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.percentage-input-container input {
+  flex: 1;
+}
+
+.input-suffix {
+  padding: 0.75rem 1rem;
+  background: #f5f5f5;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  font-weight: 600;
+  color: #666;
+  min-width: 40px;
+  text-align: center;
+}
+
+/* Modal de auto-convert mejorado */
+.auto-convert-message {
+  text-align: center;
+  padding: 2rem;
+}
+
+.success-icon {
+  font-size: 4rem;
+  color: #66BB6A;
+  margin-bottom: 1.5rem;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+.auto-convert-actions {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin: 2rem 0;
+  flex-wrap: wrap;
+}
+
+.skip-option {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #e0e0e0;
+}
+
+.btn-skip {
+  background: none;
+  border: none;
+  color: #78909C;
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 0.5rem;
+  transition: all 0.3s ease;
+}
+
+.btn-skip:hover {
+  color: #EF5350;
+  text-decoration: underline;
+}
+
+.skip-option small {
+  display: block;
+  margin-top: 0.5rem;
+  color: #999;
+  font-size: 0.8rem;
+}
+
+/* Validación visual para porcentajes */
+.validation-message {
+  padding: 10px;
+  margin: 10px 0;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.validation-error {
+  background-color: #ffeaea;
+  border-left: 4px solid #f44336;
+  color: #d32f2f;
+}
+
+.validation-warning {
+  background-color: #fff8e1;
+  border-left: 4px solid #ff9800;
+  color: #f57c00;
+}
+
+.validation-success {
+  background-color: #e8f5e9;
+  border-left: 4px solid #4caf50;
+  color: #388e3c;
+}
+
+/* Responsive para notificaciones */
+@media (max-width: 768px) {
+  .notification-container {
+    left: 20px;
+    right: 20px;
+    max-width: none;
+  }
+  
+  .auto-convert-actions {
+    flex-direction: column;
+  }
+  
+  .split-type-buttons {
+    flex-direction: column;
+  }
+}

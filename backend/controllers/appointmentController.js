@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '../config/supabase.js';
-import Procedure from '../models/procedureModel.js'; // Ajusta la ruta según tu estructura
+import Procedure from '../models/procedureModel.js';
+import procedureController from './procedureController.js'; 
 
 const appointmentController = {
   getAll: async (req, res) => {
@@ -367,10 +368,7 @@ const appointmentController = {
     }
   },
 
-  // ============================================
-// CONVERTIR CITA EN PROCEDIMIENTO - VERSIÓN COMPLETA CORREGIDA
-// ============================================
-convertToProcedure: async (req, res) => {
+  convertToProcedure: async (req, res) => {
   try {
     const { id } = req.params;
     const procedureData = req.body;
@@ -435,129 +433,107 @@ convertToProcedure: async (req, res) => {
       console.log('⚠️ No se pudo cargar configuración, usando valor por defecto:', defaultExchangeRate);
     }
     
-    // Preparar datos para el procedimiento - COMPLETAMENTE CORREGIDO
-    const procedureToCreate = {
-      // Información básica
+    // Preparar datos para insertar - CORREGIDO con nombres de campos correctos
+    const procedureToInsert = {
+      // Información básica y referencias
       appointment_ID: id,
       Patient_ID: appointment.Patient_ID,
       procedure_date: appointment.appointment_date,
       is_orthodontics: appointment.is_orthodontics,
-      creation_date: new Date().toISOString().replace('Z', ''),
-      procedure_description: procedureData.procedure_description || appointment.query_type,
-      observations: procedureData.observations || appointment.observations || null,
+      creation_date: new Date().toISOString(),
+      procedure_description: procedureData.procedure_description || '',
+      observations: procedureData.observations || '',
       
       // ===== CANTIDADES ABONADAS =====
-      // Guardar lo abonado en cada moneda
-      total_cost: procedureData.total_cost || procedureData.amount_cordobas || 0,
-      total_cost_USD: procedureData.total_cost_USD || procedureData.amount_dollars || 0,
-      amount_cordobas: procedureData.amount_cordobas || procedureData.total_cost || 0,
-      amount_dollars: procedureData.amount_dollars || procedureData.total_cost_USD || 0,
+      total_cost: parseFloat(procedureData.total_cost) || 0,
+      total_cost_USD: parseFloat(procedureData.total_cost_USD) || 0,
+      amount_cordobas: parseFloat(procedureData.amount_cordobas) || 0,
+      amount_dollars: parseFloat(procedureData.amount_dollars) || 0,
       
       // Métodos de pago
       payment_method_cordobas: procedureData.payment_method_cordobas || 'Efectivo',
       payment_method_dollars: procedureData.payment_method_dollars || 'Efectivo',
       
       // ===== DEDUCCIONES POS =====
-      pos_deduction_cordobas: procedureData.pos_deduction_cordobas || 0,
-      pos_deduction_dollars: procedureData.pos_deduction_dollars || 0,
-      total_pos_deduction: procedureData.total_pos_deduction || 0,
+      pos_deduction_cordobas: parseFloat(procedureData.pos_deduction_cordobas) || 0,
+      pos_deduction_dollars: parseFloat(procedureData.pos_deduction_dollars) || 0,
+      total_pos_deduction: parseFloat(procedureData.total_pos_deduction) || 0,
       
-      // ===== MONTOS NETOS (después de POS) =====
-      net_amount_cordobas: procedureData.net_amount_cordobas || 
-        ((procedureData.total_cost || 0) - (procedureData.pos_deduction_cordobas || 0)),
-      net_amount_dollars: procedureData.net_amount_dollars || 
-        ((procedureData.total_cost_USD || 0) - (procedureData.pos_deduction_dollars || 0)),
+      // ===== MONTOS NETOS =====
+      net_amount_cordobas: parseFloat(procedureData.net_amount_cordobas) || 0,
+      net_amount_dollars: parseFloat(procedureData.net_amount_dollars) || 0,
       
-      // ===== MONTOS BRUTOS (igual a abonado) =====
-      gross_amount_cordobas: procedureData.gross_amount_cordobas || procedureData.total_cost || 0,
-      gross_amount_dollars: procedureData.gross_amount_dollars || procedureData.total_cost_USD || 0,
+      // ===== MONTOS BRUTOS =====
+      gross_amount_cordobas: parseFloat(procedureData.gross_amount_cordobas) || 0,
+      gross_amount_dollars: parseFloat(procedureData.gross_amount_dollars) || 0,
       
-      // ===== TOTAL DE LA CONSULTA (después de POS) =====
-      total_procedure: procedureData.total_procedure || 0,
-      total_procedure_usd: procedureData.total_procedure_usd || 0,
+      // ===== TOTALES DEL PROCEDIMIENTO =====
+      total_procedure: parseFloat(procedureData.total_procedure) || 0,
+      total_procedure_usd: parseFloat(procedureData.total_procedure_usd) || 0,
       
       // ===== TIPO DE CAMBIO =====
-      exchange_rate_used: procedureData.exchange_rate_used || defaultExchangeRate,
+      exchange_rate_used: parseFloat(procedureData.exchange_rate) || defaultExchangeRate, // ¡CORREGIDO!
+      
+      // ===== PAGOS =====
+      clinic_payment_cordobas: parseFloat(procedureData.clinic_payment_cordobas) || 0,
+      clinic_payment_dollars: parseFloat(procedureData.clinic_payment_dollars) || 0,
+      doctor_payment_cordobas: parseFloat(procedureData.doctor_payment_cordobas) || 0,
+      doctor_payment_dollars: parseFloat(procedureData.doctor_payment_dollars) || 0,
       
       // ===== DOCTOR EXTERNO =====
-      external_doctor: procedureData.external_doctor_name || null,
+      external_doctor: procedureData.external_doctor_name || '',
       theres_external_doctor: procedureData.theres_external_doctor || false,
-      external_doctor_name: procedureData.external_doctor_name || null,
-      external_doctor_specialty: procedureData.external_doctor_specialty || null,
+      external_doctor_name: procedureData.external_doctor_name || '',
+      external_doctor_specialty: procedureData.external_doctor_specialty || '',
       external_doctor_payment_type: procedureData.external_doctor_payment_type || 'fixed',
-      external_doctor_payment_value: procedureData.external_doctor_payment_value || 0,
+      external_doctor_payment_value: parseFloat(procedureData.external_doctor_payment_value) || 0,
       external_doctor_payment_currency: procedureData.external_doctor_payment_currency || 'C$',
-      external_doctor_payment: procedureData.external_doctor_payment || 0,
-      external_doctor_payment_usd: procedureData.external_doctor_payment_usd || 0,
+      external_doctor_payment: parseFloat(procedureData.external_doctor_payment) || 0,
+      external_doctor_payment_usd: parseFloat(procedureData.external_doctor_payment_usd) || 0,
       
       // ===== PORCENTAJES =====
-      clinic_payment_percentage: procedureData.clinic_payment_percentage || 
+      clinic_payment_percentage: parseFloat(procedureData.clinic_payment_percentage) || 
         (appointment.is_orthodontics ? 40 : 100),
-      doctor_payment_percentage: procedureData.doctor_payment_percentage || 
+      doctor_payment_percentage: parseFloat(procedureData.doctor_payment_percentage) || 
         (appointment.is_orthodontics ? 60 : 0),
-      
-      // ===== GANANCIAS CALCULADAS =====
-      clinic_payment_cordobas: procedureData.clinic_payment_cordobas || 0,
-      clinic_payment_dollars: procedureData.clinic_payment_dollars || 0,
-      doctor_payment_cordobas: procedureData.doctor_payment_cordobas || 0,
-      doctor_payment_dollars: procedureData.doctor_payment_dollars || 0,
-      
-      // ===== NUEVOS CAMPOS ORTODONCIA =====
-      ortho_doctor_percentage: procedureData.ortho_doctor_percentage || null,
-      external_doctor_percentage: procedureData.external_doctor_percentage || 0,
-      external_doctor_split_type: procedureData.external_doctor_split_type || 'from_clinic',
-      
-      // Campo de compatibilidad (antiguo)
-      payment_method: `${procedureData.payment_method_cordobas || 'Efectivo'} (C$), ${procedureData.payment_method_dollars || 'Efectivo'} (USD)`,
-      total_cost: procedureData.total_cost || 0, // Para compatibilidad
-      total_cost_USD: procedureData.total_cost_USD || 0 // Para compatibilidad
+      ortho_doctor_percentage: parseFloat(procedureData.ortho_doctor_percentage) || 
+        (appointment.is_orthodontics ? 60 : 0),
+      external_doctor_percentage: parseFloat(procedureData.external_doctor_percentage) || 0,
+      external_doctor_split_type: procedureData.external_doctor_split_type || 'from_clinic'
     };
     
-    // Validar que los cálculos sean consistentes
-    if (procedureToCreate.total_procedure === 0) {
-      // Calcular total si no se proporcionó
-      const cordobas = procedureToCreate.total_cost || 0;
-      const dollars = procedureToCreate.total_cost_USD || 0;
-      const exchangeRate = procedureToCreate.exchange_rate_used;
-      
-      // Restar deducciones POS
-      const netCordobas = cordobas - procedureToCreate.pos_deduction_cordobas;
-      const netDollars = dollars - procedureToCreate.pos_deduction_dollars;
-      
-      procedureToCreate.total_procedure = netCordobas + (netDollars * exchangeRate);
-      procedureToCreate.total_procedure_usd = netDollars + (netCordobas / exchangeRate);
-    }
-    
-    console.log('📊 Creando procedimiento con datos validados:', {
-      abonadoCordobas: procedureToCreate.total_cost,
-      abonadoDolares: procedureToCreate.total_cost_USD,
-      totalConsultaCordobas: procedureToCreate.total_procedure,
-      totalConsultaDolares: procedureToCreate.total_procedure_usd,
-      gananciaClinica: procedureToCreate.clinic_payment_cordobas,
-      gananciaDoctora: procedureToCreate.doctor_payment_cordobas,
-      pagoDoctorExterno: procedureToCreate.external_doctor_payment,
-      deduccionPOS: procedureToCreate.total_pos_deduction
+    console.log('📤 Insertando procedimiento con datos:', {
+      totalProcedure: procedureToInsert.total_procedure,
+      clinicPayment: procedureToInsert.clinic_payment_cordobas,
+      externalDoctorPayment: procedureToInsert.external_doctor_payment,
+      exchangeRateUsed: procedureToInsert.exchange_rate_used // ¡Verifica esto!
     });
+    
+    console.log('🔍 Campos a insertar:', Object.keys(procedureToInsert));
     
     // 2. Crear el procedimiento en la base de datos
     const { data: procedure, error: procedureError } = await supabaseAdmin
       .from('procedures')
-      .insert([procedureToCreate])
+      .insert([procedureToInsert])
       .select()
       .single();
     
     if (procedureError) {
       console.error('❌ Error al crear procedimiento:', procedureError);
+      console.error('❌ Detalles del error:', {
+        code: procedureError.code,
+        message: procedureError.message,
+        details: procedureError.details
+      });
       throw procedureError;
     }
     
     console.log('✅ Procedimiento creado:', {
       procedure_ID: procedure.procedure_ID,
-      total_cost: procedure.total_cost,
-      total_cost_USD: procedure.total_cost_USD,
       total_procedure: procedure.total_procedure,
       clinic_payment_cordobas: procedure.clinic_payment_cordobas,
-      external_doctor_payment: procedure.external_doctor_payment
+      external_doctor_payment: procedure.external_doctor_payment,
+      exchange_rate_used: procedure.exchange_rate_used
     });
     
     // 3. Actualizar estado de la cita a "completed" y marcar como registrada

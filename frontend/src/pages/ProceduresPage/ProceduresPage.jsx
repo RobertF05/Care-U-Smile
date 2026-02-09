@@ -1,4 +1,4 @@
-import React, { useContext, useState, useEffect } from "react";
+import React, { useContext, useState, useEffect, useRef } from "react";
 import { AppContext } from "../../context/AppContext";
 import { AuthContext } from "../../context/AuthContext";
 import { formatDate, formatCurrency } from "../../utils/formatters";
@@ -25,7 +25,9 @@ import {
   faHospitalUser,
   faFileInvoiceDollar,
   faChartLine,
-  faCalculator
+  faCalculator,
+  faChevronDown,
+  faChevronUp
 } from '@fortawesome/free-solid-svg-icons';
 import "./ProceduresPage.css";
 
@@ -56,6 +58,8 @@ export default function ProceduresPage() {
   const [localError, setLocalError] = useState("");
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [selectedProcedure, setSelectedProcedure] = useState(null);
+  const [isFiltersCollapsed, setIsFiltersCollapsed] = useState(false);
+  const filtersRef = useRef(null);
 
   useEffect(() => {
     if (user) {
@@ -216,6 +220,11 @@ export default function ProceduresPage() {
       console.error('Error formateando fecha:', error);
       return dateString;
     }
+  };
+
+  // Toggle para filtros desplegables
+  const toggleFilters = () => {
+    setIsFiltersCollapsed(!isFiltersCollapsed);
   };
 
   if (loading && procedures.length === 0) {
@@ -556,11 +565,18 @@ export default function ProceduresPage() {
           <div className="procedures-count">
             <span>{filteredProcedures.length}</span>
           </div>
+          <button 
+            className="collapse-filters-btn"
+            onClick={toggleFilters}
+          >
+            <FontAwesomeIcon icon={isFiltersCollapsed ? faChevronDown : faChevronUp} />
+            <span>{isFiltersCollapsed ? 'Mostrar filtros' : 'Ocultar filtros'}</span>
+          </button>
         </div>
       </div>
 
-      {/* Filtros */}
-      <div className="filters-container">
+      {/* Filtros - Colapsables */}
+      <div className={`filters-container ${isFiltersCollapsed ? 'collapsed' : ''}`} ref={filtersRef}>
         <div className="filter-group">
           <label>Periodo rápido:</label>
           <div className="time-filter-buttons">
@@ -639,7 +655,7 @@ export default function ProceduresPage() {
         </div>
       </div>
 
-      {/* BUSCADOR PRINCIPAL */}
+      {/* BUSCADOR PRINCIPAL - Siempre visible */}
       <div className="search-box-main-container">
         <div className="filter-group">
           <label className="filter-label">Buscar procedimientos:</label>
@@ -709,11 +725,23 @@ export default function ProceduresPage() {
                       <td className="description-cell">
                         <div className="description-content">
                           <strong>{procedure.procedure_description || "Sin descripción"}</strong>
+                          {hasExternalDoctor && (
+                            <small className="external-doctor-indicator">
+                              <FontAwesomeIcon icon={faUserDoctor} /> Con doctor externo
+                            </small>
+                          )}
                         </div>
                       </td>
                       
                       <td className="total-cordobas-cell">
-                        {formatCurrency(procedure.total_procedure || procedure.total_cost || 0)}
+                        <div className="total-with-indicators">
+                          {formatCurrency(procedure.total_procedure || procedure.total_cost || 0)}
+                          {hasPOS && (
+                            <small className="total-indicator pos-indicator">
+                              <FontAwesomeIcon icon={faCreditCard} />
+                            </small>
+                          )}
+                        </div>
                       </td>
                       
                       <td className="total-dollars-cell">
@@ -721,11 +749,9 @@ export default function ProceduresPage() {
                       </td>
                       
                       <td className="clinic-net-cell">
-                        <div className="net-amount-display">
-                          <div className="net-main-amount">
-                            {formatCurrency(clinicNetIncome)}
-                          </div>
-                          <div className="net-details">
+                        <div className="clinic-earnings">
+                          {formatCurrency(clinicNetIncome)}
+                          <div className="earnings-details">
                             {hasPOS && (
                               <small className="net-indicator has-pos">
                                 <FontAwesomeIcon icon={faCreditCard} /> POS

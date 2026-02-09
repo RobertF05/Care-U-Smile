@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from "react";
+import React, { useContext, useEffect, useState, useRef } from "react";
 import { AppContext } from "../../context/AppContext";
 import { AuthContext } from "../../context/AuthContext";
 import { formatDate, formatCurrency } from "../../utils/formatters";
@@ -29,7 +29,9 @@ import {
   faHandHoldingUsd,
   faUserMd,
   faBuilding,
-  faChartPie
+  faChartPie,
+  faChevronDown,
+  faChevronUp
 } from '@fortawesome/free-solid-svg-icons';
 import "./OrthodonticsPage.css";
 
@@ -60,6 +62,8 @@ export default function OrthodonticsPage() {
   const [localError, setLocalError] = useState("");
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [selectedOrthodontic, setSelectedOrthodontic] = useState(null);
+  const [isFiltersCollapsed, setIsFiltersCollapsed] = useState(false);
+  const filtersRef = useRef(null);
 
   useEffect(() => {
     if (user) {
@@ -253,6 +257,11 @@ export default function OrthodonticsPage() {
       console.error('Error formateando fecha:', error);
       return dateString;
     }
+  };
+
+  // Toggle para filtros desplegables
+  const toggleFilters = () => {
+    setIsFiltersCollapsed(!isFiltersCollapsed);
   };
 
   if (loading && orthodonticProcedures.length === 0) {
@@ -751,11 +760,18 @@ export default function OrthodonticsPage() {
             <FontAwesomeIcon icon={faTeeth} />
             <span>{filteredOrthodontics.length}</span>
           </div>
+          <button 
+            className="collapse-filters-btn"
+            onClick={toggleFilters}
+          >
+            <FontAwesomeIcon icon={isFiltersCollapsed ? faChevronDown : faChevronUp} />
+            <span>{isFiltersCollapsed ? 'Mostrar filtros' : 'Ocultar filtros'}</span>
+          </button>
         </div>
       </div>
 
-      {/* Filtros */}
-      <div className="filters-container">
+      {/* Filtros - Colapsables */}
+      <div className={`filters-container ${isFiltersCollapsed ? 'collapsed' : ''}`} ref={filtersRef}>
         <div className="filter-group">
           <label>Periodo rápido:</label>
           <div className="time-filter-buttons">
@@ -834,7 +850,7 @@ export default function OrthodonticsPage() {
         </div>
       </div>
 
-      {/* BUSCADOR PRINCIPAL */}
+      {/* BUSCADOR PRINCIPAL - Siempre visible */}
       <div className="search-box-main-container">
         <div className="filter-group">
           <label className="filter-label">Buscar ortodoncias:</label>

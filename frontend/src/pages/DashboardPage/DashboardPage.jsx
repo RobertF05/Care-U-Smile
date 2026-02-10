@@ -155,14 +155,6 @@ const DashboardPage = () => {
       icon: faClock, 
       color: '#EF5350',
       change: '-2'
-    },
-    { 
-      id: 6, 
-      title: 'Gastos Totales', 
-      value: formatCurrency(stats.totalExpenses || 0), 
-      icon: faReceipt, 
-      color: '#607D8B',
-      change: '-8%'
     }
   ];
 

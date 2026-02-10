@@ -1251,7 +1251,7 @@ const validateOrthoPercentages = () => {
     setShowConvertModal(true);
   };
 
-  // Convertir cita en procedimiento CORREGIDO
+  // Convertir cita en procedimiento CORREGIDO - SIN REDIRECCIÓN
 const handleConvertToProcedure = async (e) => {
   e.preventDefault();
   
@@ -1432,7 +1432,10 @@ const handleConvertToProcedure = async (e) => {
       procedureData
     );
     
-    // Resetear formulario
+    // 1. Cerrar el modal
+    setShowConvertModal(false);
+    
+    // 2. Resetear formulario
     setProcedureForm({
       procedure_description: '',
       amount_cordobas: '',
@@ -1454,20 +1457,14 @@ const handleConvertToProcedure = async (e) => {
       observations: ''
     });
     
-    // Recargar citas
+    // 3. Recargar citas para actualizar el estado
     fetchAppointments();
     
-    // Usar notificación en lugar de alert
+    // 4. Mostrar notificación de éxito
     addNotification('✅ Procedimiento registrado exitosamente', 'success', 5000);
     
-    // Redirigir después de un breve retraso
-    setTimeout(() => {
-      if (selectedAppointment.is_orthodontics) {
-        window.location.href = '/orthodontics';
-      } else {
-        window.location.href = '/procedures';
-      }
-    }, 1500);
+    // 5. Resetear la cita seleccionada
+    setSelectedAppointment(null);
     
   } catch (error) {
     console.error('❌ Error al registrar procedimiento:', error);
@@ -1717,25 +1714,6 @@ const handleConvertToProcedure = async (e) => {
         </div>
         
         <div className="stats-grid-container">
-          <div className="stat-card total">
-            <div className="stat-icon">
-              <FontAwesomeIcon icon={faCalendarAlt} />
-            </div>
-            <div className="stat-content">
-              <div className="stat-value">{stats.total}</div>
-              <div className="stat-label">Citas Totales</div>
-            </div>
-          </div>
-          
-          <div className="stat-card today">
-            <div className="stat-icon">
-              <FontAwesomeIcon icon={faCalendarDay} />
-            </div>
-            <div className="stat-content">
-              <div className="stat-value">{stats.today}</div>
-              <div className="stat-label">Hoy</div>
-            </div>
-          </div>
           
           <div className="stat-card pending">
             <div className="stat-icon">
@@ -2468,6 +2446,7 @@ const handleConvertToProcedure = async (e) => {
                 className="close-modal-btn"
                 onClick={() => {
                   setShowConvertModal(false);
+                  // Resetear el formulario
                   setProcedureForm({
                     procedure_description: '',
                     amount_cordobas: '',
@@ -2485,7 +2464,7 @@ const handleConvertToProcedure = async (e) => {
                     doctor_payment_percentage: currentSettings.doctor_payment,
                     ortho_doctor_percentage: currentSettings.doctor_payment,
                     external_doctor_percentage: 0,
-                    external_doctor_split_type: 'from_clinic',
+                    external_doctor_split_type: 'from_total',
                     observations: ''
                   });
                   setExternalDoctorPaymentCordobas(0);

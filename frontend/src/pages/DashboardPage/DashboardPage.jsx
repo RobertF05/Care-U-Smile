@@ -149,30 +149,6 @@ const DashboardPage = () => {
       change: '+5'
     },
     { 
-      id: 2, 
-      title: 'Citas Hoy', 
-      value: stats.todayAppointments || 0, 
-      icon: faCalendarCheck, 
-      color: '#4DB6AC',
-      change: '+3'
-    },
-    { 
-      id: 3, 
-      title: 'Ingresos Mes', 
-      value: formatCurrency(stats.monthlyIncome || 0), 
-      icon: faMoneyBillWave, 
-      color: '#9C27B0',
-      change: '+12%'
-    },
-    { 
-      id: 4, 
-      title: 'Procedimientos Totales', 
-      value: stats.totalProcedures || 0, 
-      icon: faTooth, 
-      color: '#FFA726',
-      change: '+15'
-    },
-    { 
       id: 5, 
       title: 'Pendientes', 
       value: stats.pendingProcedures || 0, 

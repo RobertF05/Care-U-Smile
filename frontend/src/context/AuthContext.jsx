@@ -10,9 +10,7 @@ export const AuthProvider = ({ children }) => {
   const { addNotification } = useNotification();
 
   // Determinar la URL base según el entorno
-  const API_BASE_URL = process.env.NODE_ENV === 'production' 
-    ? '' 
-    : 'http://localhost:3000';
+  const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
   // Verificar autenticación al cargar
   useEffect(() => {

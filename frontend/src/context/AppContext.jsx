@@ -42,53 +42,44 @@ export const AppProvider = ({ children }) => {
     totalExpenses: 0
   });
 
-  // Función genérica para fetch
   const apiFetch = async (endpoint, options = {}) => {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      console.log(`📤 Enviando solicitud a: /api${endpoint}`, options);
-      
-      // Obtener token si existe
-      const token = localStorage.getItem('token');
-      const headers = {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      };
-      
-      // Añadir token si existe
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-      
-      const response = await fetch(`/api${endpoint}`, {
-        headers,
-        ...options,
-      });
+  setLoading(true);
+  setError(null);
 
-      console.log(`📥 Respuesta recibida:`, response.status, response.statusText);
-      
-      const data = await response.json();
-      console.log('📄 Datos de respuesta:', data);
-      
-      if (!data.success) {
-        throw new Error(data.error || `Error en la solicitud (${response.status})`);
-      }
-      
-      return data;
-    } catch (error) {
-      console.error('❌ API Error completo:', {
-        endpoint,
-        error: error.message,
-        stack: error.stack
-      });
-      setError(error.message);
-      throw error;
-    } finally {
-      setLoading(false);
+  try {
+    const API_URL = import.meta.env.VITE_API_URL || '';
+
+    const token = localStorage.getItem('token');
+    const headers = {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    };
+
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
     }
-  };
+
+    const response = await fetch(`${API_URL}/api${endpoint}`, {
+      headers,
+      ...options,
+    });
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || `Error (${response.status})`);
+    }
+
+    return data;
+
+  } catch (error) {
+    setError(error.message);
+    throw error;
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   // Obtener configuración del sistema
   const getSystemSettings = async () => {

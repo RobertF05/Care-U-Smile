@@ -2,11 +2,11 @@
 import React, { useContext } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faBars, faUser } from '@fortawesome/free-solid-svg-icons';
-import { AuthContext } from '../../context/AuthContext'; // ✅ Importar AuthContext
+import { AuthContext } from '../../context/AuthContext';
 import './header.css';
 
 const Header = ({ toggleSidebar, sidebarActive }) => {
-  const { user } = useContext(AuthContext); // ✅ Obtener usuario del contexto
+  const { user } = useContext(AuthContext); 
 
   const handleLogoError = (e) => {
     e.target.style.display = 'none';
@@ -34,7 +34,6 @@ const Header = ({ toggleSidebar, sidebarActive }) => {
     return 'Usuario';
   };
 
-  // ✅ Función para formatear el tipo de usuario
   const getFormattedUserType = () => {
     if (!user || !user.user_type) return 'Odontólogo';
     
@@ -53,12 +52,10 @@ const Header = ({ toggleSidebar, sidebarActive }) => {
     return typeMap[user.user_type] || user.user_type;
   };
 
-  // ✅ Función para mostrar título (Dr./Dra.) según el tipo
   const getUserTitle = () => {
     const formattedType = getFormattedUserType().toLowerCase();
     
     if (formattedType.includes('odontólogo') || formattedType.includes('doctor')) {
-      // Aquí podrías añadir lógica para determinar género si lo tienes en el usuario
       return 'Dr. ';
     }
     
@@ -80,7 +77,7 @@ const Header = ({ toggleSidebar, sidebarActive }) => {
         <div className="logo-container">
           {/* Logo desde public/ */}
           <img 
-            src="/Farmacia Sory Logo.png" 
+            src="/2026web.png" //Ruta de la Imagen del Logo en public/
             alt="Care U Smile - Clínica Odontológica"
             className="logo-image"
             onError={handleLogoError}

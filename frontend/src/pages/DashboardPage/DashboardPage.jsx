@@ -367,12 +367,6 @@ const DashboardPage = () => {
             </h3>
             <div className="section-header-right">
               <span className="section-badge">{preparedProcedures.length}</span>
-              {/* Mostrar solo el total de ganancias de la clínica */}
-              <span className="total-amount-badge">
-                Total Clínica: {formatCurrency(
-                  preparedProcedures.reduce((sum, proc) => sum + proc.amount, 0)
-                )}
-              </span>
             </div>
           </div>
           <div className="section-content">

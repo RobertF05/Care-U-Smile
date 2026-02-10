@@ -283,8 +283,8 @@ const MonthlyClosingsPage = () => {
         total_expenses_usd: totalExpenses / exchangeRate,
         net_profit: netProfit,
         net_profit_usd: netProfit / exchangeRate,
-        total_external_doctor_payments: externalDoctorPayments, // AGREGADO
-        total_external_doctor_payments_usd: externalDoctorPayments / exchangeRate, // AGREGADO
+        total_external_doctor_payments: externalDoctorPayments,
+        total_external_doctor_payments_usd: externalDoctorPayments / exchangeRate,
         // Mantener los campos individuales para el desglose
         total_general_income: closing.total_general_income || 0,
         total_clinical_orthodontic_income: closing.total_clinical_orthodontic_income || 0,
@@ -305,7 +305,7 @@ const MonthlyClosingsPage = () => {
       date_sort: closing.closing_date,
       total_clinic_income: closing.total_clinic_income || 0,
       total_clinic_income_usd: (closing.total_clinic_income || 0) / exchangeRate,
-      total_expenses: 0, // Cierres diarios no incluyen gastos
+      total_expenses: 0,
       total_expenses_usd: 0,
       net_profit: closing.net_profit || closing.total_clinic_income || 0,
       net_profit_usd: (closing.net_profit || closing.total_clinic_income || 0) / exchangeRate,
@@ -407,7 +407,7 @@ const MonthlyClosingsPage = () => {
       
       console.log('📅 Período a calcular:', { startDate, endDate, type: newClosing.closing_type });
       
-      // Crear cierre - NO vamos a eliminar gastos
+      // Crear cierre
       const closingData = {
         month: newClosing.month,
         year: parseInt(newClosing.year),
@@ -415,7 +415,7 @@ const MonthlyClosingsPage = () => {
         endDate,
         closing_type: newClosing.closing_type,
         comentary: newClosing.comentary || '',
-        deleteVariableExpenses: false // Siempre false, no eliminamos gastos
+        deleteVariableExpenses: false
       };
       
       console.log('📤 Datos para crear cierre mensual:', closingData);
@@ -989,7 +989,7 @@ const MonthlyClosingsPage = () => {
                       </div>
                     )}
                     
-                    {/* Mostrar desglose básico - AGREGADO DOCTORES EXTERNOS */}
+                    {/* Mostrar desglose básico */}
                     <div className="closing-quick-stats">
                       {closing.type === 'monthly' && closing.sub_type === 'all' && (
                         <>
@@ -1013,7 +1013,7 @@ const MonthlyClosingsPage = () => {
                           <span>Clínica: {formatCurrency(closing.total_clinic_income, 'NIO', false)}</span>
                         </span>
                       )}
-                      {/* AGREGADO: Mostrar doctores externos si existen */}
+                      {/* Mostrar doctores externos si existen */}
                       {closing.total_external_doctor_payments > 0 && (
                         <span className="quick-stat external" title="Ver detalles de doctores externos">
                           <FontAwesomeIcon icon={faUserDoctor} />
@@ -1064,7 +1064,7 @@ const MonthlyClosingsPage = () => {
                       <FontAwesomeIcon icon={faListAlt} />
                       <span className="btn-tooltip">Excel Detallado</span>
                     </button>
-                    {/* AGREGADO: Botón para ver detalles de doctores externos */}
+                    {/* Botón para ver detalles de doctores externos */}
                     {closing.total_external_doctor_payments > 0 && (
                       <button 
                         className="action-btn external"
@@ -1143,7 +1143,7 @@ const MonthlyClosingsPage = () => {
                               </div>
                             </div>
                             
-                            {/* AGREGADO: Sección de doctores externos */}
+                            {/* Sección de doctores externos */}
                             {closing.total_external_doctor_payments > 0 && (
                               <div className="summary-section external-section">
                                 <div className="section-title">
@@ -1213,7 +1213,7 @@ const MonthlyClosingsPage = () => {
                               </div>
                             </div>
                             
-                            {/* AGREGADO: Doctores externos para general */}
+                            {/* Doctores externos para general */}
                             {closing.total_external_doctor_payments > 0 && (
                               <div className="summary-section external-section">
                                 <div className="section-title">
@@ -1276,7 +1276,7 @@ const MonthlyClosingsPage = () => {
                               </div>
                             </div>
                             
-                            {/* AGREGADO: Doctores externos para ortodoncia */}
+                            {/* Doctores externos para ortodoncia */}
                             {closing.total_external_doctor_payments > 0 && (
                               <div className="summary-section external-section">
                                 <div className="section-title">
@@ -1345,7 +1345,7 @@ const MonthlyClosingsPage = () => {
                           )}
                         </div>
                         
-                        {/* AGREGADO: Doctores externos para cierres diarios */}
+                        {/* Doctores externos para cierres diarios */}
                         {closing.total_external_doctor_payments > 0 && (
                           <div className="summary-section external-section">
                             <div className="section-title">
@@ -1388,7 +1388,7 @@ const MonthlyClosingsPage = () => {
                           </span>
                         </div>
                         
-                        {/* AGREGADO: Mostrar doctores externos en resumen final */}
+                        {/* Mostrar doctores externos en resumen final */}
                         {closing.total_external_doctor_payments > 0 && (
                           <div className="net-profit-item external-note">
                             <span className="net-profit-label">
@@ -1458,7 +1458,7 @@ const MonthlyClosingsPage = () => {
                         <FontAwesomeIcon icon={faFileExcel} />
                         Excel General
                       </button>
-                      {/* AGREGADO: Botón para exportar detalles de doctores externos */}
+                      {/* Botón para ver detalles de doctores externos */}
                       {closing.total_external_doctor_payments > 0 && (
                         <button 
                           className="secondary-btn small external"
@@ -1871,12 +1871,12 @@ const MonthlyClosingsPage = () => {
                   <div className="detail-item">
                     <span className="detail-label">Total pagado:</span>
                     <span className="detail-value external">
-                      {formatCurrency(externalDoctorDetails.total_payments_cordobas, 'NIO', true)}
+                      {formatCurrency(externalDoctorDetails.summary?.total_payments_cordobas || 0, 'NIO', true)}
                     </span>
                   </div>
                   <div className="detail-item">
                     <span className="detail-label">Cantidad de pagos:</span>
-                    <span className="detail-value">{externalDoctorDetails.count}</span>
+                    <span className="detail-value">{externalDoctorDetails.summary?.count || 0}</span>
                   </div>
                 </div>
               </div>
@@ -1888,64 +1888,50 @@ const MonthlyClosingsPage = () => {
                     <table>
                       <thead>
                         <tr>
+                          <th>Fecha</th>
                           <th>Procedimiento</th>
+                          <th>Paciente</th>
                           <th>Doctor</th>
-                          <th>Tipo de Pago</th>
-                          <th>Valor Original</th>
-                          <th>Valor en Córdobas</th>
-                          <th>Valor en Dólares</th>
+                          <th>Tipo</th>
+                          <th>Monto (C$)</th>
+                          <th>Monto ($)</th>
                         </tr>
                       </thead>
                       <tbody>
                         {externalDoctorDetails.payments.map((payment, index) => (
                           <tr key={index}>
+                            <td>{formatDate(payment.procedure_date)}</td>
                             <td>
                               <div className="procedure-info">
                                 <div className="procedure-id">#{payment.procedure_id}</div>
-                                <div className="procedure-desc">{payment.description}</div>
+                                <div className="procedure-desc">{payment.procedure_description}</div>
                               </div>
                             </td>
+                            <td>{payment.patient_name || 'No especificado'}</td>
                             <td>
                               <div className="doctor-info">
                                 <FontAwesomeIcon icon={faUserDoctor} />
-                                <span>{payment.doctor_name || 'Sin nombre'}</span>
+                                <span>{payment.doctor_name}</span>
                               </div>
                             </td>
                             <td>
                               <span className={`payment-type ${payment.payment_type}`}>
                                 {payment.payment_type === 'fixed' ? 'Monto Fijo' : 'Porcentaje'}
                               </span>
-                              <div className="payment-currency">{payment.currency}</div>
                             </td>
-                            <td>
-                              <div className="original-payment">
-                                {payment.currency === 'C$' ? 'C$' : '$'}
-                                {payment.payment_value?.toFixed(2) || '0.00'}
-                              </div>
-                            </td>
-                            <td>
-                              <div className="payment-amount">
-                                C${payment.payment_cordobas?.toFixed(2) || '0.00'}
-                              </div>
-                            </td>
-                            <td>
-                              <div className="payment-amount">
-                                ${payment.payment_usd?.toFixed(2) || '0.00'}
-                              </div>
-                            </td>
+                            <td>{formatCurrencySimple(payment.payment_cordobas, 'NIO')}</td>
+                            <td>{formatCurrencySimple(payment.payment_dollars, 'USD')}</td>
                           </tr>
                         ))}
                       </tbody>
                       <tfoot>
                         <tr>
-                          <td colSpan="4" className="total-label">
-                            <strong>Total General:</strong>
+                          <td colSpan="5" className="total-label"><strong>Total:</strong></td>
+                          <td className="total-amount">
+                            <strong>{formatCurrencySimple(externalDoctorDetails.summary?.total_payments_cordobas || 0, 'NIO')}</strong>
                           </td>
                           <td className="total-amount">
-                            <strong>C${externalDoctorDetails.total_payments_cordobas?.toFixed(2) || '0.00'}</strong>
-                          </td>
-                          <td className="total-amount">
-                            <strong>${externalDoctorDetails.total_payments_usd?.toFixed(2) || '0.00'}</strong>
+                            <strong>{formatCurrencySimple(externalDoctorDetails.summary?.total_payments_dollars || 0, 'USD')}</strong>
                           </td>
                         </tr>
                       </tfoot>
@@ -1959,62 +1945,12 @@ const MonthlyClosingsPage = () => {
                 )}
               </div>
 
-              <div className="detail-section">
-                <h4>Notas Importantes</h4>
-                <div className="notes-container">
-                  <div className="note-item important">
-                    <FontAwesomeIcon icon={faInfoCircle} />
-                    <div>
-                      <strong>IMPORTANTE:</strong> Estos pagos ya han sido deducidos de las ganancias 
-                      mostradas en el cierre. Representan pagos realizados a doctores externos que 
-                      colaboraron en los procedimientos durante este período.
-                    </div>
-                  </div>
-                  <div className="note-item">
-                    <FontAwesomeIcon icon={faCalculator} />
-                    <div>
-                      <strong>Cálculo:</strong> Los montos se calculan automáticamente desde los 
-                      procedimientos usando el campo <code>external_doctor_payment</code> y se 
-                      convierten a ambas monedas usando el tipo de cambio del sistema.
-                    </div>
-                  </div>
-                </div>
-              </div>
-
               <div className="modal-actions">
                 <button 
                   className="secondary-btn"
                   onClick={() => setShowExternalDoctorsModal(false)}
                 >
                   Cerrar
-                </button>
-                <button 
-                  className="primary-btn"
-                  onClick={() => {
-                    // Exportar a Excel
-                    const blob = new Blob([
-                      `Detalles de Pagos a Doctores Externos\n` +
-                      `Cierre: ${externalDoctorDetails.closingInfo.display_date}\n` +
-                      `Fecha: ${new Date().toLocaleDateString()}\n\n` +
-                      `Procedimiento,Doctor,Tipo Pago,Moneda Original,Valor Original,Córdobas,Dólares\n` +
-                      externalDoctorDetails.payments.map(p => 
-                        `"${p.description}","${p.doctor_name}","${p.payment_type}","${p.currency}","${p.payment_value}","${p.payment_cordobas}","${p.payment_usd}"`
-                      ).join('\n') + `\n\nTotal,,,,"C$${externalDoctorDetails.total_payments_cordobas}","$${externalDoctorDetails.total_payments_usd}"`
-                    ], { type: 'text/csv' });
-                    
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `doctores_externos_${externalDoctorDetails.closingInfo.display_date.replace(/[^a-zA-Z0-9]/g, '_')}.csv`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    window.URL.revokeObjectURL(url);
-                  }}
-                  disabled={!externalDoctorDetails.payments || externalDoctorDetails.payments.length === 0}
-                >
-                  <FontAwesomeIcon icon={faDownload} />
-                  Exportar a CSV
                 </button>
               </div>
             </div>
@@ -2159,7 +2095,7 @@ const MonthlyClosingsPage = () => {
                             </div>
                           </div>
 
-                          {/* AGREGADO: Sección de doctores externos */}
+                          {/* Sección de doctores externos */}
                           {selectedClosing.total_external_doctor_payments > 0 && (
                             <div className="breakdown-section external">
                               <h5>
@@ -2232,7 +2168,7 @@ const MonthlyClosingsPage = () => {
                             </div>
                           </div>
                           
-                          {/* AGREGADO: Doctores externos para general */}
+                          {/* Doctores externos para general */}
                           {selectedClosing.total_external_doctor_payments > 0 && (
                             <div className="breakdown-section external">
                               <h5>
@@ -2285,7 +2221,7 @@ const MonthlyClosingsPage = () => {
                             </div>
                           </div>
                           
-                          {/* AGREGADO: Doctores externos para ortodoncia */}
+                          {/* Doctores externos para ortodoncia */}
                           {selectedClosing.total_external_doctor_payments > 0 && (
                             <div className="breakdown-section external">
                               <h5>
@@ -2348,7 +2284,7 @@ const MonthlyClosingsPage = () => {
                         )}
                       </div>
 
-                      {/* AGREGADO: Doctores externos para cierres diarios */}
+                      {/* Doctores externos para cierres diarios */}
                       {selectedClosing.total_external_doctor_payments > 0 && (
                         <div className="breakdown-section external">
                           <h5>
@@ -2382,7 +2318,7 @@ const MonthlyClosingsPage = () => {
                       </span>
                     </div>
                     
-                    {/* AGREGADO: Mostrar deducción de doctores externos */}
+                    {/* Mostrar deducción de doctores externos */}
                     {selectedClosing.total_external_doctor_payments > 0 && (
                       <div className="breakdown-item external-note">
                         <span>

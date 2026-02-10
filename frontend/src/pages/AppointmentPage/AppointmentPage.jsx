@@ -306,7 +306,7 @@ const AppointmentPage = () => {
 
   // Estados
   const [timeFilter, setTimeFilter] = useState(TIME_FILTERS.ALL);
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('scheduled');
   const [typeFilter, setTypeFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(true);

@@ -331,7 +331,7 @@ create: async (req, res) => {
   }
 },
 
-// Agregar en monthlyClosingController.js
+// monthlyClosingController.js - Agregar esta función
 getExternalDoctorDetails: async (req, res) => {
   try {
     const { startDate, endDate, closing_type = 'all' } = req.query;
@@ -343,17 +343,76 @@ getExternalDoctorDetails: async (req, res) => {
       });
     }
     
-    const details = await MonthlyClosing.getExternalDoctorPayments(startDate, endDate);
+    // Obtener detalles de pagos a doctores externos
+    const { data: externalDoctors, error } = await supabaseAdmin
+      .from('procedures')
+      .select(`
+        procedure_ID,
+        procedure_date,
+        procedure_description,
+        Patient_ID,
+        patients!inner(first_name, first_last_name),
+        theres_external_doctor,
+        external_doctor_name,
+        external_doctor_payment,
+        external_doctor_payment_type,
+        external_doctor_payment_value,
+        external_doctor_payment_currency,
+        exchange_rate_used,
+        is_orthodontics
+      `)
+      .eq('theres_external_doctor', true)
+      .gte('procedure_date', startDate + 'T00:00:00')
+      .lte('procedure_date', endDate + 'T23:59:59')
+      .order('procedure_date', { ascending: false });
     
-    // Filtrar por tipo si es necesario
+    if (error) throw error;
+    
+    // Filtrar por tipo de cierre si es necesario
+    let filteredDoctors = externalDoctors;
     if (closing_type !== 'all') {
-      // Necesitarías una función para obtener procedimientos por tipo
-      // y luego filtrar los pagos de doctores externos
+      const isOrtho = closing_type === 'orthodontics';
+      filteredDoctors = externalDoctors.filter(doc => doc.is_orthodontics === isOrtho);
     }
+    
+    // Calcular totales
+    const totalCordobas = filteredDoctors.reduce((sum, doc) => {
+      return sum + (parseFloat(doc.external_doctor_payment) || 0);
+    }, 0);
+    
+    // Obtener tipo de cambio para cálculo en dólares
+    const settings = await getSystemSettings();
+    const exchangeRate = settings?.exchange_rate || 36.5;
+    const totalDollars = totalCordobas / exchangeRate;
+    
+    // Preparar datos para respuesta
+    const details = filteredDoctors.map(doc => ({
+      procedure_id: doc.procedure_ID,
+      procedure_date: doc.procedure_date,
+      procedure_description: doc.procedure_description,
+      patient_name: `${doc.patients?.first_name || ''} ${doc.patients?.first_last_name || ''}`.trim(),
+      doctor_name: doc.external_doctor_name || 'No especificado',
+      payment_cordobas: parseFloat(doc.external_doctor_payment) || 0,
+      payment_dollars: (parseFloat(doc.external_doctor_payment) || 0) / exchangeRate,
+      payment_type: doc.external_doctor_payment_type || 'fixed',
+      payment_value: doc.external_doctor_payment_value,
+      currency: doc.external_doctor_payment_currency || 'C$',
+      is_orthodontics: doc.is_orthodontics,
+      exchange_rate_used: doc.exchange_rate_used || exchangeRate
+    }));
     
     res.json({ 
       success: true, 
-      data: details 
+      data: {
+        payments: details,
+        summary: {
+          total_payments_cordobas: totalCordobas,
+          total_payments_dollars: totalDollars,
+          count: details.length,
+          count_orthodontics: details.filter(d => d.is_orthodontics).length,
+          count_general: details.filter(d => !d.is_orthodontics).length
+        }
+      }
     });
   } catch (error) {
     console.error('Error al obtener detalles de doctores externos:', error);

@@ -757,46 +757,9 @@ const MonthlyClosingsPage = () => {
             <FontAwesomeIcon icon={faCalculator} className="header-icon" />
             Cierres Financieros
           </h2>
-          <p className="subtitle">
-            Gestión de cierres mensuales y diarios - Tipo de cambio: C${exchangeRate.toFixed(2)} = $1
-          </p>
-          <div className="clinic-info">
-            <span className="info-item">
-              <FontAwesomeIcon icon={faPercentage} />
-              <span>Clínica: {clinicPercentage}%</span>
-            </span>
-            <span className="info-item">
-              <FontAwesomeIcon icon={faUserMd} />
-              <span>Doctora: {doctorPercentage}%</span>
-            </span>
-            <span className="info-item">
-              <FontAwesomeIcon icon={faUserDoctor} />
-              <span>Doctores externos: Deducidos automáticamente</span>
-            </span>
-            <span className="info-item">
-              <FontAwesomeIcon icon={faExchangeAlt} />
-              <span>Tipo cambio: C${exchangeRate.toFixed(2)}</span>
-            </span>
-          </div>
         </div>
         <div className="header-right">
           <div className="btn-group">
-            <button 
-              className="secondary-btn"
-              onClick={() => handleExportExcelGeneral('monthly')}
-              title="Exportar cierres mensuales a Excel"
-            >
-              <FontAwesomeIcon icon={faFileExcel} />
-              Excel Mensual
-            </button>
-            <button 
-              className="secondary-btn"
-              onClick={() => handleExportExcelGeneral('daily')}
-              title="Exportar cierres diarios a Excel"
-            >
-              <FontAwesomeIcon icon={faFileExcel} />
-              Excel Diario
-            </button>
             <button 
               className="secondary-btn"
               onClick={() => setShowCreateDailyModal(true)}
@@ -1583,29 +1546,6 @@ const MonthlyClosingsPage = () => {
                 />
               </div>
 
-              <div className="form-note important">
-                <FontAwesomeIcon icon={faInfoCircle} />
-                <div>
-                  <strong>IMPORTANTE - CÁLCULOS CORRECTOS:</strong>
-                  <ul>
-                    <li>✅ Usa <strong>clinic_payment_cordobas/dollars</strong> para ganancia clínica</li>
-                    <li>✅ Usa <strong>doctor_payment_cordobas/dollars</strong> para ganancia doctora</li>
-                    <li>✅ Usa <strong>external_doctor_payment</strong> para pagos externos</li>
-                    <li>✅ <strong>NO usa total_procedure</strong> (es lo que paga el paciente)</li>
-                    <li>✅ Incluye automáticamente <strong>pagos a doctores externos</strong> en el resumen</li>
-                    {newClosing.closing_type === 'all' && (
-                      <>
-                        <li>✅ Incluye <strong>TODOS los gastos fijos</strong> del período</li>
-                        <li>✅ Incluye <strong>TODOS los gastos variables</strong> del período</li>
-                        <li>⚠️ Los gastos <strong>NO se marcan como procesados</strong></li>
-                      </>
-                    )}
-                    <li>💱 Tipo de cambio: C${exchangeRate.toFixed(2)} = $1</li>
-                    <li>✅ Todos los cálculos son sobre <strong>GANANCIAS NETAS</strong></li>
-                  </ul>
-                </div>
-              </div>
-
               <div className="form-actions">
                 <button 
                   type="button" 
@@ -1780,23 +1720,6 @@ const MonthlyClosingsPage = () => {
                   </div>
                 </div>
               )}
-
-              <div className="form-note">
-                <FontAwesomeIcon icon={faInfoCircle} />
-                <div>
-                  <strong>INFORMACIÓN IMPORTANTE:</strong> 
-                  <ul>
-                    <li>✅ Calcula sobre <strong>ganancias netas</strong> (no sobre pagos de pacientes)</li>
-                    <li>✅ Usa <strong>clinic_payment_cordobas/dollars</strong> para ganancia clínica</li>
-                    <li>✅ Usa <strong>doctor_payment_cordobas/dollars</strong> para ganancia doctora</li>
-                    <li>✅ Incluye automáticamente <strong>pagos a doctores externos</strong> si existen</li>
-                    <li>❌ <strong>NO incluye gastos</strong> en cierres diarios</li>
-                    <li>💱 Tipo de cambio: C${exchangeRate.toFixed(2)} = $1</li>
-                    <li>⚠️ No se pueden crear dos cierres para la misma fecha y tipo</li>
-                    <li>⚠️ Puede crear cierres diarios incluso si no hay procedimientos</li>
-                  </ul>
-                </div>
-              </div>
 
               <div className="form-actions">
                 <button 
@@ -2037,21 +1960,6 @@ const MonthlyClosingsPage = () => {
               <div className="detail-section">
                 <h4>Resumen Financiero Detallado</h4>
                 <div className="financial-breakdown">
-                  
-                  {/* Nota importante */}
-                  <div className="breakdown-note important">
-                    <FontAwesomeIcon icon={faInfoCircle} />
-                    <div>
-                      <strong>NOTA:</strong> Todos los montos mostrados son <strong>ganancias netas</strong> 
-                      calculadas directamente desde la base de datos usando los campos correctos:
-                      <ul>
-                        <li><code>clinic_payment_cordobas/dollars</code> para ganancia clínica</li>
-                        <li><code>doctor_payment_cordobas/dollars</code> para ganancia doctora</li>
-                        <li><code>external_doctor_payment</code> para pagos externos</li>
-                        <li><strong>NO</strong> se usa <code>total_procedure</code> (pagos de pacientes)</li>
-                      </ul>
-                    </div>
-                  </div>
                   
                   {selectedClosing.type === 'monthly' ? (
                     // Resumen mensual

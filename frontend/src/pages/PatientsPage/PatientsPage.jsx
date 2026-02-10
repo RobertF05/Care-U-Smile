@@ -1000,7 +1000,6 @@ export default function PatientsPage() {
                   <th>Cédula</th>
                   <th>Teléfono</th>
                   <th>Edad</th>
-                  <th>Fecha de Registro</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
@@ -1023,9 +1022,6 @@ export default function PatientsPage() {
                     </td>
                     <td>
                       {patient.birthdate ? `${calculateAge(patient.birthdate)} años` : "N/A"}
-                    </td>
-                    <td>
-                      {patient.creation_date ? formatDate(patient.creation_date) : "N/A"}
                     </td>
                     <td className="actions-cell">
                       <button 

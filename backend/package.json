@@ -2,6 +2,9 @@
   "name": "care-u-smile-backend",
   "version": "1.0.0",
   "type": "module",
+  "engines": {
+  "node": "20.x"
+  },
   "description": "Backend para sistema de clínica dental Care U Smile",
   "main": "server.js",
   "scripts": {

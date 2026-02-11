@@ -68,10 +68,10 @@ create: async (req, res) => {
     } = patientData;
     
     // Validar datos personales requeridos
-    if (!personalData.first_name || !personalData.first_last_name || !personalData.identification) {
+    if (!personalData.first_name || !personalData.first_last_name) {
       return res.status(400).json({
         success: false,
-        error: 'Nombre, apellido e identificación son requeridos'
+        error: 'Nombre y apellido son requeridos'
       });
     }
     
@@ -113,7 +113,8 @@ create: async (req, res) => {
           emergency_contact_relationship,
           emergency_contact_phone,
           oral_health_status,
-          last_dental_visit,
+          // Asegurar que string vacío se convierta a null
+          last_dental_visit: last_dental_visit ? last_dental_visit : null,
           medical_conditions,
           allergies,
           current_medications,
@@ -125,7 +126,6 @@ create: async (req, res) => {
           substance_frequency,
           general_notes
         };
-        
         medicalInfo = await PatientMedicalInfo.create(patient.Patient_ID, medicalData);
       } catch (medicalError) {
         console.error('Error al crear información médica:', medicalError);

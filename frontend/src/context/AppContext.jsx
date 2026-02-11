@@ -59,13 +59,28 @@ export const AppProvider = ({ children }) => {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
+    console.log(`🌐 Enviando request a: ${API_URL}/api${endpoint}`);
+    
     const response = await fetch(`${API_URL}/api${endpoint}`, {
       headers,
       ...options,
     });
 
-    const data = await response.json();
+    // Verificar si la respuesta es JSON
+    const contentType = response.headers.get('content-type');
+    let data;
+    
+    if (contentType && contentType.includes('application/json')) {
+      data = await response.json();
+    } else {
+      const text = await response.text();
+      console.error('❌ La respuesta no es JSON:', text);
+      throw new Error(`Respuesta inesperada del servidor (${response.status})`);
+    }
 
+    console.log(`📥 Respuesta del backend (${response.status}):`, data);
+
+    // Si el backend indica error, lanzar excepción
     if (!data.success) {
       throw new Error(data.error || `Error (${response.status})`);
     }
@@ -73,7 +88,13 @@ export const AppProvider = ({ children }) => {
     return data;
 
   } catch (error) {
-    setError(error.message);
+    console.error('❌ Error en apiFetch:', {
+      endpoint,
+      error: error.message,
+      stack: error.stack
+    });
+    
+    // No establecer error global aquí, dejarlo que cada función lo maneje
     throw error;
   } finally {
     setLoading(false);
@@ -127,22 +148,51 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  const createPatient = async (patientData) => {
-    try {
-      const data = await apiFetch('/patients', {
-        method: 'POST',
-        body: JSON.stringify(patientData),
-      });
-      
+  // AppContext.jsx - Modificar la función createPatient
+const createPatient = async (patientData) => {
+  try {
+    console.log('📝 Datos del paciente a crear:', patientData);
+    
+    // IMPORTANTE: Convertir birthdate string vacío a null
+    const formattedPatientData = {
+      ...patientData,
+      birthdate: patientData.birthdate ? patientData.birthdate : null,
+      // Asegurar que number_phone sea numérico o null
+      number_phone: patientData.number_phone ? 
+        Number(patientData.number_phone) : null
+    };
+    
+    console.log('📤 Enviando al backend:', formattedPatientData);
+    
+    const data = await apiFetch('/patients', {
+      method: 'POST',
+      body: JSON.stringify(formattedPatientData),
+    });
+    
+    console.log('✅ Paciente creado exitosamente:', data);
+    
+    // Solo agregar al estado si hay data.data
+    if (data.data) {
       setPatients(prev => [...prev, data.data]);
       setStats(prev => ({ ...prev, totalPatients: prev.totalPatients + 1 }));
-      
-      return data;
-    } catch (error) {
-      console.error('Error creando paciente:', error);
-      return { success: false, error: error.message };
     }
-  };
+    
+    return data;
+  } catch (error) {
+    console.error('❌ Error detallado creando paciente:', {
+      error: error.message,
+      patientData,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Retornar un objeto con success: false para que el frontend pueda manejarlo
+    return { 
+      success: false, 
+      error: error.message || 'Error al crear paciente',
+      details: 'Verificar consola para más detalles'
+    };
+  }
+};
 
   const updatePatient = async (id, patientData) => {
     try {

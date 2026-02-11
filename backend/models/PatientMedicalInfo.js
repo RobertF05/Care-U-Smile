@@ -31,54 +31,90 @@ const PatientMedicalInfo = {
 
   // Crear información médica
   async create(patientId, medicalData) {
-    const { data, error } = await supabaseAdmin
-      .from('patient_medical_info')
-      .insert([{
-        Patient_ID: patientId,
-        ...medicalData,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }])
-      .select()
-      .single();
-    
-    if (error) throw error;
-    
-    return {
-      ...data,
-      created_at_display: formatNicaraguaDateTime(data.created_at),
-      updated_at_display: formatNicaraguaDateTime(data.updated_at),
-      last_dental_visit_display: data.last_dental_visit ? 
-        formatNicaraguaDate(data.last_dental_visit) : null
-    };
-  },
-
-  // Actualizar información médica
-  async update(patientId, medicalData) {
-    const existing = await this.getByPatientId(patientId);
-    
-    if (existing) {
+    try {
       const { data, error } = await supabaseAdmin
         .from('patient_medical_info')
-        .update({
-          ...medicalData,
+        .insert([{
+          Patient_ID: patientId,
+          emergency_contact_name: medicalData.emergency_contact_name || null,
+          emergency_contact_relationship: medicalData.emergency_contact_relationship || null,
+          emergency_contact_phone: medicalData.emergency_contact_phone || null,
+          oral_health_status: medicalData.oral_health_status || null,
+          // IMPORTANTE: Manejar string vacío como null
+          last_dental_visit: medicalData.last_dental_visit ? 
+            medicalData.last_dental_visit : null,
+          medical_conditions: medicalData.medical_conditions || null,
+          allergies: medicalData.allergies || null,
+          current_medications: medicalData.current_medications || null,
+          previous_anesthesia: medicalData.previous_anesthesia || false,
+          anesthesia_notes: medicalData.anesthesia_notes || null,
+          smokes: medicalData.smokes || false,
+          drinks_alcohol: medicalData.drinks_alcohol || false,
+          other_substances: medicalData.other_substances || null,
+          substance_frequency: medicalData.substance_frequency || null,
+          general_notes: medicalData.general_notes || null,
+          created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
-        })
-        .eq('Patient_ID', patientId)
+        }])
         .select()
         .single();
       
       if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error al crear información médica:', error);
+      throw error;
+    }
+  },
+
+  // Actualizar información médica
+  async update(patientId, medicalData) {
+    try {
+      // Verificar si existe información médica para este paciente
+      const { data: existingInfo, error: checkError } = await supabaseAdmin
+        .from('patient_medical_info')
+        .select('medical_info_id')
+        .eq('Patient_ID', patientId)
+        .single();
       
-      return {
-        ...data,
-        created_at_display: formatNicaraguaDateTime(data.created_at),
-        updated_at_display: formatNicaraguaDateTime(data.updated_at),
-        last_dental_visit_display: data.last_dental_visit ? 
-          formatNicaraguaDate(data.last_dental_visit) : null
-      };
-    } else {
-      return await this.create(patientId, medicalData);
+      let data;
+      
+      if (checkError && checkError.code === 'PGRST116') {
+        // No existe, crear nueva
+        data = await this.create(patientId, medicalData);
+      } else {
+        // Existe, actualizar
+        const updateData = {
+          updated_at: new Date().toISOString()
+        };
+        
+        // Solo actualizar campos que fueron enviados
+        Object.keys(medicalData).forEach(key => {
+          if (medicalData[key] !== undefined) {
+            // Manejar especialmente last_dental_visit
+            if (key === 'last_dental_visit') {
+              updateData[key] = medicalData[key] ? medicalData[key] : null;
+            } else {
+              updateData[key] = medicalData[key];
+            }
+          }
+        });
+        
+        const { data: updatedData, error } = await supabaseAdmin
+          .from('patient_medical_info')
+          .update(updateData)
+          .eq('Patient_ID', patientId)
+          .select()
+          .single();
+        
+        if (error) throw error;
+        data = updatedData;
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Error al actualizar información médica:', error);
+      throw error;
     }
   },
 

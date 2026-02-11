@@ -231,102 +231,120 @@ export default function PatientsPage() {
 
   // Validar formulario
   const validateForm = () => {
-    if (!formData.first_name || !formData.first_last_name || !formData.identification) {
-      showNotification("Nombre, apellido y cédula son campos obligatorios", "error");
+    if (!formData.first_name || !formData.first_last_name) {
+      showNotification("Nombre y apellido son campos obligatorios", "error");
       return false;
     }
     return true;
   };
 
-  // Guardar paciente (agregar o editar)
-  const handleSavePatient = async () => {
-    if (!validateForm()) return;
+  // PatientsPage.jsx - Modificar handleSavePatient
+const handleSavePatient = async () => {
+  if (!validateForm()) return;
 
-    try {
-      // Separar datos personales y médicos
-      const { 
-        emergency_contact_name,
-        emergency_contact_relationship,
-        emergency_contact_phone,
-        oral_health_status,
-        last_dental_visit,
-        medical_conditions,
-        allergies,
-        current_medications,
-        previous_anesthesia,
-        anesthesia_notes,
-        smokes,
-        drinks_alcohol,
-        other_substances,
-        substance_frequency,
-        general_notes,
-        ...patientData 
-      } = formData;
+  try {
+    // Separar datos personales y médicos
+    const { 
+      emergency_contact_name,
+      emergency_contact_relationship,
+      emergency_contact_phone,
+      oral_health_status,
+      last_dental_visit,
+      medical_conditions,
+      allergies,
+      current_medications,
+      previous_anesthesia,
+      anesthesia_notes,
+      smokes,
+      drinks_alcohol,
+      other_substances,
+      substance_frequency,
+      general_notes,
+      ...patientData 
+    } = formData;
 
-      // Preparar datos personales
-      const personalData = {
-        ...patientData,
-        number_phone: patientData.number_phone ? Number(patientData.number_phone) : null
-      };
+    console.log('📋 Datos del formulario:', formData);
+    
+    // Preparar datos personales con birthdate como null si está vacío
+    const personalData = {
+      ...patientData,
+      birthdate: patientData.birthdate ? patientData.birthdate : null,
+      number_phone: patientData.number_phone ? 
+        Number(patientData.number_phone) : null
+    };
 
-      // Preparar datos médicos
-      const medicalInfoData = {
-        emergency_contact_name,
-        emergency_contact_relationship,
-        emergency_contact_phone,
-        oral_health_status,
-        last_dental_visit,
-        medical_conditions,
-        allergies,
-        current_medications,
-        previous_anesthesia,
-        anesthesia_notes,
-        smokes,
-        drinks_alcohol,
-        other_substances,
-        substance_frequency,
-        general_notes
-      };
+    console.log('👤 Datos personales preparados:', personalData);
+    
+    // Preparar datos médicos con last_dental_visit como null si está vacío
+    const medicalInfoData = {
+      emergency_contact_name,
+      emergency_contact_relationship,
+      emergency_contact_phone,
+      oral_health_status,
+      last_dental_visit: last_dental_visit ? last_dental_visit : null,
+      medical_conditions,
+      allergies,
+      current_medications,
+      previous_anesthesia,
+      anesthesia_notes,
+      smokes,
+      drinks_alcohol,
+      other_substances,
+      substance_frequency,
+      general_notes
+    };
 
-      let result;
-      if (editingPatient) {
-        // Actualizar datos personales
-        result = await updatePatient(editingPatient.Patient_ID, personalData);
+    console.log('🏥 Datos médicos preparados:', medicalInfoData);
+
+    let result;
+    if (editingPatient) {
+      // Actualizar datos personales
+      result = await updatePatient(editingPatient.Patient_ID, personalData);
+      
+      // Actualizar información médica (usar PUT para upsert)
+      if (result.success) {
+        await updatePatientMedicalInfo(editingPatient.Patient_ID, medicalInfoData);
+      }
+    } else {
+      // Crear paciente - Solo enviar datos personales primero
+      result = await createPatient(personalData);
+      
+      console.log('📦 Resultado de createPatient:', result);
+      
+      if (result.success && result.data && result.data.Patient_ID) {
+        const patientId = result.data.Patient_ID;
         
-        // Actualizar información médica (usar PUT para upsert)
-        if (result.success) {
-          await updatePatientMedicalInfo(editingPatient.Patient_ID, medicalInfoData);
-        }
-      } else {
-        // Crear paciente
-        result = await createPatient(personalData);
-        
-        // Crear información médica si hay datos
+        // Verificar si hay datos médicos para crear
         const hasMedicalData = Object.values(medicalInfoData).some(value => 
           value !== "" && value !== false && value !== null && value !== undefined
         );
         
-        if (result.success && result.data.Patient_ID && hasMedicalData) {
-          await createPatientMedicalInfo(result.data.Patient_ID, medicalInfoData);
+        if (hasMedicalData) {
+          console.log('📝 Creando información médica para paciente ID:', patientId);
+          await createPatientMedicalInfo(patientId, medicalInfoData);
         }
       }
-
-      if (result.success) {
-        showNotification(
-          editingPatient 
-            ? "Paciente actualizado exitosamente" 
-            : "Paciente agregado exitosamente"
-        );
-        closeModal();
-        fetchPatients();
-      } else {
-        showNotification(result.error || "Error al guardar paciente", "error");
-      }
-    } catch (error) {
-      showNotification("Error al guardar paciente: " + error.message, "error");
-      console.error("Error saving patient:", error);
     }
-  };
+
+    if (result.success) {
+      showNotification(
+        editingPatient 
+          ? "Paciente actualizado exitosamente" 
+          : "Paciente agregado exitosamente"
+      );
+      closeModal();
+      fetchPatients();
+    } else {
+      // Mostrar error específico del backend
+      const errorMessage = result.error || "Error al guardar paciente";
+      showNotification(errorMessage, "error");
+      console.error('❌ Error en handleSavePatient:', result);
+    }
+  } catch (error) {
+    showNotification("Error al guardar paciente: " + error.message, "error");
+    console.error("Error saving patient:", error);
+  }
+};
 
   // Confirmar eliminación
   const confirmDelete = (patient) => {
@@ -659,13 +677,12 @@ export default function PatientsPage() {
 
               <div className="form-row">
                 <div className="form-group">
-                  <label>Cédula o Identificación *</label>
+                  <label>Cédula o Identificación</label>
                   <input
                     type="text"
                     name="identification"
                     value={formData.identification}
                     onChange={handleFormChange}
-                    required
                   />
                 </div>
                 

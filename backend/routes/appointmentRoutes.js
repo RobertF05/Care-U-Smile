@@ -10,5 +10,6 @@ router.put('/:id', appointmentController.update);
 router.delete('/:id', appointmentController.delete);
 router.get('/date/:date', appointmentController.getByDate);
 router.post('/:id/convert-to-procedure', appointmentController.convertToProcedure);
+router.put('/:id/unregister', appointmentController.unregisterAppointment);
 
 export default router;

@@ -284,89 +284,120 @@ const appointmentController = {
     }
   },
 
-  // Actualizar cita
-  update: async (req, res) => {
-    try {
-      const { id } = req.params;
-      const appointmentData = req.body;
-      
-      console.log('📝 Actualizando cita:', { id, appointmentData });
-      
-      const { data: existingAppointment, error: checkError } = await supabaseAdmin
-        .from('clinical_appointments')
-        .select('appointment_ID, is_registered, appointment_date')
-        .eq('appointment_ID', id)
-        .single();
-      
-      if (checkError || !existingAppointment) {
-        return res.status(404).json({ 
-          success: false, 
-          error: 'Cita no encontrada' 
-        });
-      }
-      
-      if (existingAppointment.is_registered && appointmentData.state !== 'cancelled') {
-        return res.status(400).json({ 
-          success: false, 
-          error: 'No se puede editar una cita que ya ha sido registrada como procedimiento' 
-        });
-      }
-      
-      const updateData = { ...appointmentData };
-      if (updateData.appointment_date) {
-        console.log('📅 Procesando fecha para actualizar:', updateData.appointment_date);
-        
-        const newDate = new Date(updateData.appointment_date);
-        
-        if (isNaN(newDate.getTime())) {
-          return res.status(400).json({ 
-            success: false, 
-            error: 'Fecha/hora inválida' 
-          });
-        }
-        
-        updateData.appointment_date = newDate.toISOString().replace('Z', '');
-      }
+  // ============================================
+// ACTUALIZAR CITA - VERSIÓN ULTRA SIMPLE (PONER AL INICIO DEL CONTROLLER)
+// ============================================
+update: async (req, res) => {
+  try {
+    const { id } = req.params;
+    const appointmentData = req.body;
+    
+    console.log('🚨🚨🚨 UPDATE CITAS - INICIANDO 🚨🚨🚨');
+    console.log('📝 ID:', id);
+    console.log('📝 Datos:', JSON.stringify(appointmentData, null, 2));
+    
+    // ✅ CASO ESPECIAL: DESREGISTRAR (is_registered: false)
+    if (appointmentData.is_registered === false) {
+      console.log(`🎯 CASO ESPECIAL: Desregistrando cita ${id}`);
       
       const { data, error } = await supabaseAdmin
         .from('clinical_appointments')
-        .update(updateData)
+        .update({ is_registered: false })
         .eq('appointment_ID', id)
         .select()
         .single();
       
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Error en Supabase:', error);
+        return res.status(500).json({ success: false, error: error.message });
+      }
       
-      const fechaBD = new Date(data.appointment_date);
-      const formattedDate = fechaBD.toLocaleString('es-NI', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: true
-      });
+      console.log('✅ Cita desregistrada exitosamente:', data);
       
-      const formattedAppointment = {
-        ...data,
-        appointment_date: formattedDate,
-        is_registered: data.is_registered || false
-      };
-      
-      res.json({ 
+      return res.json({ 
         success: true, 
-        message: 'Cita actualizada exitosamente',
-        data: formattedAppointment 
-      });
-    } catch (error) {
-      console.error('Error al actualizar cita:', error);
-      res.status(500).json({ 
-        success: false, 
-        error: 'Error al actualizar cita' 
+        message: 'Cita desregistrada exitosamente',
+        data
       });
     }
-  },
+    
+    // Si no es desregistrar, continuar con validaciones normales
+    console.log('⏭️ No es desregistrar, validando...');
+    
+    const { data: existingAppointment, error: checkError } = await supabaseAdmin
+      .from('clinical_appointments')
+      .select('is_registered')
+      .eq('appointment_ID', id)
+      .single();
+    
+    if (checkError || !existingAppointment) {
+      return res.status(404).json({ success: false, error: 'Cita no encontrada' });
+    }
+    
+    if (existingAppointment.is_registered) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'No se puede editar una cita que ya ha sido registrada como procedimiento' 
+      });
+    }
+    
+    // Actualización normal
+    const updateData = { ...appointmentData };
+    if (updateData.appointment_date) {
+      updateData.appointment_date = new Date(updateData.appointment_date).toISOString().replace('Z', '');
+    }
+    
+    const { data, error } = await supabaseAdmin
+      .from('clinical_appointments')
+      .update(updateData)
+      .eq('appointment_ID', id)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    
+    res.json({ success: true, message: 'Cita actualizada exitosamente', data });
+    
+  } catch (error) {
+    console.error('❌ Error en update:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+},
+
+// ============================================
+// ENDPOINT ESPECIAL PARA DESREGISTRAR CITA (SIN VALIDACIONES)
+// ============================================
+unregisterAppointment: async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    console.log(`🎯 ENDPOINT ESPECIAL: Desregistrando cita ${id}`);
+    
+    const { data, error } = await supabaseAdmin
+      .from('clinical_appointments')
+      .update({ is_registered: false })
+      .eq('appointment_ID', id)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('❌ Error en Supabase:', error);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+    
+    console.log('✅ Cita desregistrada exitosamente:', data.appointment_ID);
+    
+    res.json({ 
+      success: true, 
+      message: 'Cita desregistrada exitosamente',
+      data
+    });
+    
+  } catch (error) {
+    console.error('❌ Error en unregisterAppointment:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+},
 
   convertToProcedure: async (req, res) => {
   try {

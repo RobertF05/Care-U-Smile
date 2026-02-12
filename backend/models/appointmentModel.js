@@ -155,31 +155,27 @@ const Appointment = {
     };
   },
 
-  // Actualizar cita
   async update(id, appointmentData) {
-    // Si se actualiza la fecha, convertir a UTC
-    const updateData = { ...appointmentData };
-    if (updateData.appointment_date) {
-      updateData.appointment_date = toUTCFromNicaragua(updateData.appointment_date).toISOString();
-      console.log('Actualizando fecha a UTC:', updateData.appointment_date);
-    }
-    
-    const { data, error } = await supabaseAdmin
-      .from('clinical_appointments')
-      .update(updateData)
-      .eq('appointment_ID', id)
-      .select()
-      .single();
-    
-    if (error) throw error;
-    
-    return {
-      ...data,
-      appointment_date: formatNicaraguaDateTime(data.appointment_date),
-      appointment_date_utc: data.appointment_date,
-      is_registered: data.is_registered || false
-    };
-  },
+  const updateData = { ...appointmentData };
+  if (updateData.appointment_date) {
+    updateData.appointment_date = toUTCFromNicaragua(updateData.appointment_date).toISOString();
+  }
+  
+  const { data, error } = await supabaseAdmin
+    .from('clinical_appointments')
+    .update(updateData)
+    .eq('appointment_ID', id)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  
+  return {
+    ...data,
+    appointment_date: formatNicaraguaDateTime(data.appointment_date),
+    is_registered: data.is_registered || false
+  };
+},
 
   // Eliminar cita
   async delete(id) {

@@ -2,12 +2,14 @@ import React, { useContext, useEffect, useState, useRef } from "react";
 import { AppContext } from "../../context/AppContext";
 import { AuthContext } from "../../context/AuthContext";
 import { formatDate, formatCurrency } from "../../utils/formatters";
+import { useNotification } from '../../context/NotificationContext';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
   faFilter,
   faTimes,
   faSearch,
   faEye,
+  faTrash,
   faUserDoctor,
   faFileMedical,
   faHospitalUser,
@@ -31,7 +33,8 @@ import {
   faBuilding,
   faChartPie,
   faChevronDown,
-  faChevronUp
+  faChevronUp,
+  faQuestionCircle
 } from '@fortawesome/free-solid-svg-icons';
 import "./OrthodonticsPage.css";
 
@@ -50,8 +53,11 @@ export default function OrthodonticsPage() {
     fetchOrthodontics,
     loading,
     error: contextError,
-    clearError
+    clearError,
+    apiFetch
   } = useContext(AppContext);
+  
+  const { addNotification } = useNotification();
   
   const [search, setSearch] = useState("");
   const [timeFilter, setTimeFilter] = useState(TIME_FILTERS.ALL);
@@ -63,6 +69,7 @@ export default function OrthodonticsPage() {
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [selectedOrthodontic, setSelectedOrthodontic] = useState(null);
   const [isFiltersCollapsed, setIsFiltersCollapsed] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
   const filtersRef = useRef(null);
 
   useEffect(() => {
@@ -132,6 +139,56 @@ export default function OrthodonticsPage() {
     setViewModalOpen(false);
     setSelectedOrthodontic(null);
   };
+
+  // ===========================================
+// FUNCIÓN PARA ELIMINAR ORTODONCIA - CORREGIDA
+// ===========================================
+const confirmDelete = (orthodontic) => {
+  setDeleteConfirm({
+    id: orthodontic.procedure_ID,
+    name: orthodontic.procedure_description || 'Tratamiento de ortodoncia',
+    patientName: orthodontic.patient_name,
+    appointmentId: orthodontic.appointment_ID // <-- Guardar el appointment_ID
+  });
+};
+
+const handleDeleteOrthodontic = async () => {
+  if (!deleteConfirm) return;
+  
+  try {
+    // Eliminar el tratamiento de ortodoncia
+    const deleteResponse = await apiFetch(`/procedures/${deleteConfirm.id}`, {
+      method: 'DELETE'
+    });
+    
+    if (deleteResponse.success) {
+      // Si la ortodoncia tenía una cita asociada, actualizar is_registered a false
+      if (deleteConfirm.appointmentId) {
+        try {
+          await apiFetch(`/appointments/${deleteConfirm.appointmentId}`, {
+            method: 'PUT',
+            body: JSON.stringify({ is_registered: false })
+          });
+          console.log(`✅ Cita ${deleteConfirm.appointmentId} actualizada: is_registered = false`);
+        } catch (appointmentError) {
+          console.error('⚠️ No se pudo actualizar la cita:', appointmentError);
+          addNotification('⚠️ Ortodoncia eliminada pero no se pudo actualizar la cita', 'warning', 5000);
+        }
+      }
+      
+      addNotification('✅ Tratamiento de ortodoncia eliminado exitosamente', 'success', 5000);
+      setDeleteConfirm(null);
+      await loadOrthodontics(); // Recargar la lista
+    } else {
+      throw new Error(deleteResponse.error || 'Error al eliminar tratamiento de ortodoncia');
+    }
+    
+  } catch (error) {
+    console.error('❌ Error al eliminar ortodoncia:', error);
+    addNotification(`❌ Error: ${error.message}`, 'error', 7000);
+    setDeleteConfirm(null);
+  }
+};
 
   // CALCULO CORREGIDO PARA ORTODONCIA
   const calculateOrthodonticEarnings = (orthodontic) => {
@@ -291,7 +348,63 @@ export default function OrthodonticsPage() {
 
   return (
     <div className="orthodontics-container">
-      {/* Modal para VER ortodoncia (solo lectura) */}
+      {/* =========================================== */}
+      {/* MODAL DE CONFIRMACIÓN DE ELIMINACIÓN */}
+      {/* =========================================== */}
+      {deleteConfirm && (
+        <div className="modal-overlay confirm-modal-overlay">
+          <div className="modal-content confirm-modal delete-confirm-modal">
+            <div className="modal-header">
+              <h3>
+                <FontAwesomeIcon icon={faQuestionCircle} />
+                Confirmar Eliminación
+              </h3>
+              <button 
+                className="close-modal-btn"
+                onClick={() => setDeleteConfirm(null)}
+              >
+                <FontAwesomeIcon icon={faTimes} />
+              </button>
+            </div>
+            
+            <div className="confirm-modal-body">
+              <div className="confirm-icon delete-icon">
+                <FontAwesomeIcon icon={faTrash} />
+              </div>
+              <p className="confirm-message">
+                ¿Estás seguro de que deseas eliminar este tratamiento de ortodoncia?
+              </p>
+              <p className="confirm-detail">
+                <strong>Descripción:</strong> {deleteConfirm.name}
+              </p>
+              <p className="confirm-detail">
+                <strong>Paciente:</strong> {deleteConfirm.patientName}
+              </p>
+              <p className="warning-text">Esta acción no se puede deshacer.</p>
+            </div>
+
+            <div className="confirm-modal-actions">
+              <button 
+                className="btn-cancel"
+                onClick={() => setDeleteConfirm(null)}
+              >
+                Cancelar
+              </button>
+              <button 
+                className="btn-confirm delete"
+                onClick={handleDeleteOrthodontic}
+              >
+                <FontAwesomeIcon icon={faTrash} />
+                Sí, Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================== */}
+      {/* MODAL PARA VER ORTODONCIA (solo lectura) */}
+      {/* =========================================== */}
       {viewModalOpen && selectedOrthodontic && (
         <div className="modal-backdrop" onClick={closeViewModal}>
           <div className="modal-content view-modal" onClick={e => e.stopPropagation()}>
@@ -970,6 +1083,14 @@ export default function OrthodonticsPage() {
                         >
                           <FontAwesomeIcon icon={faEye} />
                           Ver
+                        </button>
+                        <button 
+                          className="btn-delete"
+                          onClick={() => confirmDelete(orthodontic)}
+                          title="Eliminar tratamiento de ortodoncia"
+                        >
+                          <FontAwesomeIcon icon={faTrash} />
+                          Eliminar
                         </button>
                       </td>
                     </tr>

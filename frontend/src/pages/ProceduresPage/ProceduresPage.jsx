@@ -676,39 +676,65 @@ const handleSaveEdit = async () => {
 };
 
   // ===========================================
-  // FUNCIONES PARA ELIMINAR CON CONFIRMACIÓN
-  // ===========================================
+// FUNCIÓN PARA ELIMINAR PROCEDIMIENTO - CORREGIDA
+// ===========================================
+const confirmDelete = (procedure) => {
+  setDeleteConfirm({
+    id: procedure.procedure_ID,
+    name: procedure.procedure_description || 'Procedimiento',
+    patientName: procedure.patient_name,
+    appointmentId: procedure.appointment_ID // <-- Guardar el appointment_ID
+  });
+};
 
-  const confirmDelete = (procedure) => {
-    setDeleteConfirm({
-      id: procedure.procedure_ID,
-      name: procedure.procedure_description || 'Procedimiento',
-      patientName: procedure.patient_name
+// ============================================
+// FUNCIÓN PARA ELIMINAR PROCEDIMIENTO - VERSIÓN CON ENDPOINT ESPECIAL
+// ============================================
+const handleDeleteProcedure = async () => {
+  if (!deleteConfirm) return;
+  
+  try {
+    // 1. Eliminar el procedimiento
+    const deleteResponse = await apiFetch(`/procedures/${deleteConfirm.id}`, {
+      method: 'DELETE'
     });
-  };
-
-  const handleDeleteProcedure = async () => {
-    if (!deleteConfirm) return;
     
-    try {
-      const response = await apiFetch(`/procedures/${deleteConfirm.id}`, {
-        method: 'DELETE'
-      });
-      
-      if (response.success) {
-        addNotification('✅ Procedimiento eliminado exitosamente', 'success', 5000);
-        setDeleteConfirm(null);
-        await loadProcedures(); // Recargar la lista
-      } else {
-        throw new Error(response.error || 'Error al eliminar procedimiento');
+    if (deleteResponse.success) {
+      // 2. Si el procedimiento tenía una cita asociada, desregistrarla
+      if (deleteConfirm.appointmentId) {
+        try {
+          // 🔥 USAR ENDPOINT ESPECIAL PARA DESREGISTRAR
+          const updateResponse = await apiFetch(`/appointments/${deleteConfirm.appointmentId}/unregister`, {
+            method: 'PUT',
+            body: JSON.stringify({ is_registered: false })
+          });
+          
+          if (updateResponse.success) {
+            console.log(`✅ Cita ${deleteConfirm.appointmentId} desregistrada exitosamente`);
+            addNotification('✅ Cita actualizada correctamente', 'success', 3000);
+          } else {
+            console.error('⚠️ Error al desregistrar cita:', updateResponse.error);
+            addNotification('⚠️ Procedimiento eliminado pero hubo un problema con la cita', 'warning', 5000);
+          }
+        } catch (appointmentError) {
+          console.error('⚠️ Error al desregistrar cita:', appointmentError);
+          addNotification('⚠️ Procedimiento eliminado pero no se pudo actualizar la cita', 'warning', 5000);
+        }
       }
       
-    } catch (error) {
-      console.error('❌ Error al eliminar procedimiento:', error);
-      addNotification(`❌ Error: ${error.message}`, 'error', 7000);
+      addNotification('✅ Procedimiento eliminado exitosamente', 'success', 5000);
       setDeleteConfirm(null);
+      await loadProcedures();
+    } else {
+      throw new Error(deleteResponse.error || 'Error al eliminar procedimiento');
     }
-  };
+    
+  } catch (error) {
+    console.error('❌ Error al eliminar procedimiento:', error);
+    addNotification(`❌ Error: ${error.message}`, 'error', 7000);
+    setDeleteConfirm(null);
+  }
+};
 
   // ===========================================
   // FUNCIONES DE CÁLCULO PARA MOSTRAR
@@ -1882,6 +1908,14 @@ const handleSaveEdit = async () => {
                         >
                           <FontAwesomeIcon icon={faEye} />
                           Ver
+                        </button>
+                        <button 
+                          className="btn-edit"
+                          onClick={() => openEditModal(procedure)}
+                          title="Editar procedimiento"
+                        >
+                          <FontAwesomeIcon icon={faEdit} />
+                          Editar
                         </button>
                         <button 
                           className="btn-delete"

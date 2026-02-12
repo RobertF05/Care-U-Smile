@@ -59,36 +59,20 @@ export const AppProvider = ({ children }) => {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    // ────────────────────────────────────────────────
-    // LOG 1: Qué se está enviando (método, endpoint, headers)
+    // Log de la petición
     console.log(`🌐 apiFetch → Preparando petición:`, {
       method: options.method || 'GET',
       url: `${API_URL}/api${endpoint}`,
       hasBody: !!options.body,
-      headers: Object.keys(headers), // solo nombres para no exponer token
     });
 
-    // ────────────────────────────────────────────────
-    // LOG 2: Mostrar el BODY completo ANTES de enviarlo (si existe)
+    // Log del body si existe
     if (options.body) {
       try {
         const bodyParsed = JSON.parse(options.body);
-        console.log(`📤 apiFetch → BODY que se va a enviar a ${endpoint}:`, bodyParsed);
-
-        // Alerta específica si exchange_rate está presente
-        if ('exchange_rate' in bodyParsed) {
-          console.warn(
-            `⚠️ ALERTA: 'exchange_rate' se está enviando en esta petición a ${endpoint}`,
-            bodyParsed.exchange_rate
-          );
-        }
-
-        // Opcional: también alerta si aparece exchange_rate_used mal escrito o duplicado
-        if ('exchange_rate' in bodyParsed && 'exchange_rate_used' in bodyParsed) {
-          console.warn('⚠️ Ambos campos exchange_rate y exchange_rate_used están presentes!');
-        }
+        console.log(`📤 apiFetch → BODY a ${endpoint}:`, bodyParsed);
       } catch (parseErr) {
-        console.warn('No se pudo parsear el body para depuración:', parseErr);
+        console.warn('No se pudo parsear el body:', parseErr);
       }
     }
 
@@ -110,10 +94,13 @@ export const AppProvider = ({ children }) => {
 
     console.log(`📥 apiFetch ← Respuesta de ${endpoint} (${response.status}):`, data);
 
-    if (!data.success) {
-      throw new Error(data.error || `Error (${response.status})`);
+    // ⚠️ IMPORTANTE: NO lanzar error cuando success: false
+    // Solo lanzar error si hay un problema de red o servidor (status >= 500)
+    if (!response.ok && response.status >= 500) {
+      throw new Error(data.error || `Error del servidor (${response.status})`);
     }
 
+    // Devolver la respuesta tal cual, incluso si success: false
     return data;
 
   } catch (error) {

@@ -1101,3 +1101,163 @@
 .medical-info-section h4 {
   background: linear-gradient(90deg, #4DB6AC, #E0F2F1);
 }
+
+/* Modal de confirmación de guardado */
+.confirm-modal .info-text {
+  color: #42A5F5;
+  font-weight: 500;
+  margin: 10px 0;
+  font-size: 14px;
+  background-color: rgba(66, 165, 245, 0.1);
+  padding: 10px;
+  border-radius: 6px;
+  border-left: 3px solid #42A5F5;
+}
+
+/* Mejora para el modal de confirmación */
+.confirm-modal {
+  max-width: 450px;
+  text-align: center;
+}
+
+.confirm-modal h3 {
+  color: #42A5F5;
+  margin-bottom: 20px;
+}
+
+.confirm-modal p {
+  color: #37474F;
+  font-size: 15px;
+  line-height: 1.6;
+  margin-bottom: 15px;
+}
+
+.confirm-modal strong {
+  color: #42A5F5;
+}
+
+/* Animación para el modal de confirmación */
+.confirm-modal {
+  animation: confirmSlideIn 0.2s ease;
+}
+
+@keyframes confirmSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Estilo para notificación de tipo info */
+.notification.info {
+  background-color: #42A5F5;
+  border-left: 4px solid #1E88E5;
+}
+
+/* Z-index hierarchy */
+.modal-backdrop {
+  z-index: 2000;
+}
+
+/* Backdrops específicos para cada tipo de modal */
+.form-modal-backdrop {
+  z-index: 2000;
+}
+
+.delete-confirm-backdrop,
+.save-confirm-backdrop,
+.close-confirm-backdrop {
+  z-index: 3000 !important; /* Siempre por encima del formulario */
+}
+
+/* Asegurar que el contenido del modal de confirmación esté por encima */
+.delete-confirm-backdrop .modal-content,
+.save-confirm-backdrop .modal-content,
+.close-confirm-backdrop .modal-content {
+  z-index: 3001;
+  position: relative;
+}
+
+/* Modal de confirmación de cancelar/cerrar */
+.close-confirm-backdrop .confirm-modal h3 {
+  color: #FF9800; /* Color naranja para advertencia de cancelación */
+}
+
+.close-confirm-backdrop .confirm-modal .btn-confirm {
+  background-color: #FF9800;
+}
+
+.close-confirm-backdrop .confirm-modal .btn-confirm:hover {
+  background-color: #F57C00;
+}
+
+.close-confirm-backdrop .confirm-modal .btn-cancel {
+  background-color: #42A5F5;
+  color: white;
+  border: none;
+}
+
+.close-confirm-backdrop .confirm-modal .btn-cancel:hover {
+  background-color: #1E88E5;
+}
+
+/* Modal de confirmación de guardado */
+.save-confirm-backdrop .confirm-modal .info-text {
+  color: #42A5F5;
+  font-weight: 500;
+  margin: 10px 0;
+  font-size: 14px;
+  background-color: rgba(66, 165, 245, 0.1);
+  padding: 10px;
+  border-radius: 6px;
+  border-left: 3px solid #42A5F5;
+}
+
+/* Mejora para el modal de confirmación */
+.confirm-modal {
+  max-width: 450px;
+  text-align: center;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3) !important;
+}
+
+.confirm-modal h3 {
+  color: #42A5F5;
+  margin-bottom: 20px;
+}
+
+.confirm-modal p {
+  color: #37474F;
+  font-size: 15px;
+  line-height: 1.6;
+  margin-bottom: 15px;
+}
+
+.confirm-modal strong {
+  color: #42A5F5;
+}
+
+/* Animación para el modal de confirmación */
+.confirm-modal {
+  animation: confirmSlideIn 0.2s ease;
+}
+
+@keyframes confirmSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Estilo para notificación de tipo info */
+.notification.info {
+  background-color: #42A5F5;
+  border-left: 4px solid #1E88E5;
+}

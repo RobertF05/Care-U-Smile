@@ -1354,3 +1354,1016 @@
     box-shadow: -2px 0 5px rgba(0,0,0,0.1);
   }
 }
+
+/* ============================================
+   NUEVOS ESTILOS PARA PROCEDIMENTS PAGE
+   - Botones Editar/Eliminar
+   - Modales de confirmación
+   - Modal de edición (como el de conversión)
+   - Estados de carga y notificaciones
+   ============================================ */
+
+/* ============================================
+   BOTONES DE ACCIÓN EN TABLA
+   ============================================ */
+
+/* Botón Editar */
+.btn-edit {
+  background: linear-gradient(135deg, #FFA726 0%, #FB8C00 100%);
+  color: white;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 80px;
+  justify-content: center;
+}
+
+.btn-edit:hover {
+  background: linear-gradient(135deg, #FB8C00 0%, #F57C00 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(255, 167, 38, 0.3);
+}
+
+.btn-edit svg {
+  font-size: 14px;
+}
+
+/* Botón Eliminar */
+.btn-delete {
+  background: linear-gradient(135deg, #EF5350 0%, #E53935 100%);
+  color: white;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 80px;
+  justify-content: center;
+}
+
+.btn-delete:hover {
+  background: linear-gradient(135deg, #E53935 0%, #D32F2F 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(239, 83, 80, 0.3);
+}
+
+.btn-delete svg {
+  font-size: 14px;
+}
+
+/* Contenedor de acciones en móvil */
+@media (max-width: 768px) {
+  .actions-cell {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .btn-view,
+  .btn-edit,
+  .btn-delete {
+    width: 100%;
+    min-width: auto;
+    padding: 10px;
+    justify-content: center;
+  }
+}
+
+/* ============================================
+   MODALES DE CONFIRMACIÓN
+   ============================================ */
+
+/* Overlay para modales de confirmación - Z-index mayor */
+.confirm-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000 !important;
+  padding: 20px;
+  backdrop-filter: blur(4px);
+}
+
+/* Modal de confirmación */
+.confirm-modal {
+  max-width: 450px;
+  width: 90%;
+  background: white;
+  border-radius: 20px;
+  padding: 0;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: confirmSlideIn 0.3s cubic-bezier(0.21, 1.11, 0.35, 1.11);
+}
+
+.confirm-modal .modal-header {
+  background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+  padding: 1.5rem 1.5rem 1rem;
+  border-bottom: 2px solid #dee2e6;
+  position: relative;
+}
+
+.confirm-modal .modal-header h3 {
+  color: #42A5F5;
+  font-size: 1.4rem;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+}
+
+.confirm-modal .close-modal-btn {
+  position: absolute;
+  right: 1.5rem;
+  top: 1.5rem;
+  background: rgba(0,0,0,0.05);
+  border: none;
+  color: #6c757d;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.confirm-modal .close-modal-btn:hover {
+  background: rgba(0,0,0,0.1);
+  color: #343a40;
+  transform: rotate(90deg);
+}
+
+/* Cuerpo del modal de confirmación */
+.confirm-modal-body {
+  padding: 2rem 1.5rem;
+  text-align: center;
+}
+
+.confirm-icon {
+  font-size: 4rem;
+  margin-bottom: 1.5rem;
+  animation: pulse 1.5s infinite;
+}
+
+.confirm-icon svg {
+  color: #42A5F5;
+}
+
+.confirm-icon.warning-icon svg {
+  color: #FF9800;
+}
+
+.confirm-icon.delete-icon svg {
+  color: #EF5350;
+}
+
+.confirm-icon.procedure-icon svg {
+  color: #9C27B0;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+.confirm-message {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #37474F;
+  margin-bottom: 1rem;
+  line-height: 1.5;
+}
+
+.confirm-detail {
+  color: #42A5F5;
+  font-weight: 500;
+  margin: 0.5rem 0;
+  padding: 0.5rem;
+  background: rgba(66, 165, 245, 0.1);
+  border-radius: 8px;
+  display: inline-block;
+}
+
+/* Detalles de confirmación */
+.confirm-details {
+  background: #f8f9fa;
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-top: 1.25rem;
+  border: 1px solid #e9ecef;
+  text-align: left;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.detail-row:last-child {
+  border-bottom: none;
+}
+
+.detail-label {
+  color: #6c757d;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.detail-value {
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.detail-value.amount-cordobas {
+  color: #1a5276;
+}
+
+.detail-value.amount-dollars {
+  color: #7d6608;
+}
+
+/* Texto de advertencia */
+.warning-text {
+  color: #EF5350;
+  font-weight: 600;
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: rgba(239, 83, 80, 0.1);
+  border-radius: 8px;
+  border-left: 4px solid #EF5350;
+  font-size: 0.9rem;
+}
+
+/* Acciones del modal de confirmación */
+.confirm-modal-actions {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: #f8f9fa;
+  border-top: 2px solid #dee2e6;
+}
+
+.confirm-modal-actions .btn-confirm {
+  background: linear-gradient(135deg, #42A5F5, #1E88E5);
+  color: white;
+  border: none;
+  padding: 0.8rem 2rem;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(66, 165, 245, 0.2);
+}
+
+.confirm-modal-actions .btn-confirm:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(66, 165, 245, 0.3);
+}
+
+.confirm-modal-actions .btn-confirm.warning {
+  background: linear-gradient(135deg, #FF9800, #F57C00);
+  box-shadow: 0 4px 12px rgba(255, 152, 0, 0.2);
+}
+
+.confirm-modal-actions .btn-confirm.delete {
+  background: linear-gradient(135deg, #EF5350, #E53935);
+  box-shadow: 0 4px 12px rgba(239, 83, 80, 0.2);
+}
+
+.confirm-modal-actions .btn-cancel {
+  background: white;
+  color: #6c757d;
+  border: 2px solid #dee2e6;
+  padding: 0.8rem 2rem;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.confirm-modal-actions .btn-cancel:hover {
+  background: #e9ecef;
+  color: #495057;
+  border-color: #ced4da;
+  transform: translateY(-2px);
+}
+
+/* Animación para modales de confirmación */
+@keyframes confirmSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ============================================
+   MODAL DE EDICIÓN (GRANDE - COMO CONVERSIÓN)
+   ============================================ */
+
+/* Modal grande para edición de procedimientos */
+.large-modal {
+  max-width: 1000px !important;
+  width: 95%;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 0;
+  background: white;
+}
+
+.large-modal .modal-header {
+  background: linear-gradient(135deg, #FFA726, #FB8C00);
+  padding: 1.5rem 2rem;
+  border-bottom: none;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.large-modal .modal-header h3 {
+  color: white;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 1.6rem;
+  font-weight: 600;
+}
+
+.large-modal .modal-header h3 svg {
+  color: white;
+}
+
+.large-modal .close-modal-btn {
+  background: rgba(255,255,255,0.2);
+  color: white;
+  border: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.large-modal .close-modal-btn:hover {
+  background: rgba(255,255,255,0.3);
+  transform: rotate(90deg);
+}
+
+/* Información de la cita/procedimiento en modal */
+.appointment-info {
+  background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+  padding: 1.5rem 2rem;
+  margin: 0;
+  border-bottom: 2px solid #dee2e6;
+}
+
+.appointment-info h4 {
+  color: #2c3e50;
+  font-size: 1.1rem;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.appointment-info p {
+  margin: 0.5rem 0;
+  color: #495057;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.appointment-info p strong {
+  min-width: 120px;
+  color: #37474F;
+}
+
+/* Formulario de procedimiento */
+.procedure-form {
+  padding: 2rem;
+}
+
+.form-section {
+  background: white;
+  border-radius: 16px;
+  padding: 1.75rem;
+  margin-bottom: 2rem;
+  border: 2px solid #e9ecef;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+}
+
+.form-section h4 {
+  color: #42A5F5;
+  font-size: 1.2rem;
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 0.75rem;
+  border-bottom: 2px solid #e3f2fd;
+}
+
+.form-section h5 {
+  color: #4DB6AC;
+  font-size: 1rem;
+  margin-top: 0;
+  margin-bottom: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Campos de formulario mejorados */
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.form-group label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 0.9rem;
+}
+
+.form-group label svg {
+  color: #42A5F5;
+  font-size: 0.9rem;
+}
+
+.form-input,
+.form-select,
+.form-textarea {
+  width: 100%;
+  padding: 0.8rem 1rem;
+  border: 2px solid #e9ecef;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  color: #2c3e50;
+  background: white;
+  transition: all 0.3s ease;
+}
+
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
+  outline: none;
+  border-color: #42A5F5;
+  box-shadow: 0 0 0 4px rgba(66, 165, 245, 0.1);
+}
+
+.form-textarea {
+  resize: vertical;
+  min-height: 100px;
+}
+
+.form-help-text {
+  display: block;
+  margin-top: 0.5rem;
+  color: #6c757d;
+  font-size: 0.8rem;
+}
+
+/* Sección de pagos mixtos */
+.mixed-payment-section {
+  background: #f8f9fa;
+  border-radius: 16px;
+  padding: 1.75rem;
+  margin-top: 1rem;
+  border: 2px solid #e9ecef;
+}
+
+.payment-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  margin-bottom: 1.5rem;
+}
+
+.payment-column {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  border: 2px solid #e9ecef;
+  transition: all 0.3s ease;
+}
+
+.payment-column:hover {
+  border-color: #42A5F5;
+  box-shadow: 0 4px 12px rgba(66, 165, 245, 0.1);
+}
+
+/* Sección de totales */
+.totals-section {
+  background: white;
+  border-radius: 16px;
+  padding: 1.75rem;
+  margin-top: 1.5rem;
+  border: 2px solid #e3f2fd;
+}
+
+.total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.total-row:last-child {
+  border-bottom: none;
+}
+
+.total-label {
+  color: #495057;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.total-value {
+  font-weight: 700;
+  color: #2c3e50;
+  font-size: 1rem;
+}
+
+.total-row.deduction-row .total-label,
+.total-row.deduction-row .total-value {
+  color: #E53935;
+}
+
+.total-row.total-procedure {
+  border-top: 3px solid #42A5F5;
+  margin-top: 0.75rem;
+  padding-top: 1rem;
+  font-size: 1.1rem;
+}
+
+.total-row.total-procedure .total-label,
+.total-row.total-procedure .total-value {
+  color: #42A5F5;
+  font-weight: 700;
+}
+
+.total-row.total-procedure-usd {
+  background: #e8f5e9;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  margin-top: 0.5rem;
+}
+
+.total-row.total-procedure-usd .total-value {
+  color: #2E7D32;
+}
+
+.total-breakdown {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #fff8e1;
+  border-radius: 8px;
+  border-left: 4px solid #FFC107;
+  font-size: 0.85rem;
+  color: #856404;
+}
+
+/* Información de deducción */
+.deduction-info {
+  background: #fff3e0;
+  border-radius: 8px;
+  padding: 0.75rem;
+  margin-top: 0.75rem;
+  border-left: 4px solid #FF9800;
+  font-size: 0.8rem;
+}
+
+.warning-text {
+  color: #E53935 !important;
+  font-weight: 600;
+}
+
+/* Sección de doctor externo */
+.external-doctor-section {
+  background: white;
+  border-radius: 12px;
+  padding: 1.75rem;
+  margin-top: 1rem;
+  border: 2px solid #4DB6AC;
+  animation: slideDown 0.3s ease;
+}
+
+.toggle-section {
+  margin-bottom: 1rem;
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  font-weight: 600;
+  color: #2c3e50;
+  padding: 0.5rem 0;
+}
+
+.toggle-label input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: #4DB6AC;
+}
+
+/* Botones de tipo de pago */
+.payment-type-buttons {
+  display: flex;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.payment-type-btn {
+  flex: 1;
+  padding: 0.8rem 1rem;
+  border: 2px solid #e9ecef;
+  background: white;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.payment-type-btn:hover {
+  border-color: #4DB6AC;
+  background: #e0f2f1;
+  color: #00695C;
+}
+
+.payment-type-btn.active {
+  border-color: #4DB6AC;
+  background: #4DB6AC;
+  color: white;
+}
+
+/* Contenedor de entrada de pago */
+.payment-input-container {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.currency-select {
+  padding: 0.8rem;
+  border: 2px solid #e9ecef;
+  border-radius: 10px;
+  background: white;
+  font-weight: 600;
+  min-width: 80px;
+  cursor: pointer;
+}
+
+.currency-select:focus {
+  outline: none;
+  border-color: #4DB6AC;
+}
+
+.input-suffix {
+  padding: 0.8rem 1.2rem;
+  background: #f8f9fa;
+  border: 2px solid #e9ecef;
+  border-radius: 10px;
+  font-weight: 700;
+  color: #495057;
+  min-width: 60px;
+  text-align: center;
+}
+
+/* Acciones del formulario */
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1.5rem;
+  margin-top: 2.5rem;
+  padding-top: 2rem;
+  border-top: 3px solid #e9ecef;
+}
+
+.form-actions .btn-submit {
+  background: linear-gradient(135deg, #42A5F5, #1E88E5);
+  color: white;
+  border: none;
+  padding: 0.8rem 2.5rem;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 4px 12px rgba(66, 165, 245, 0.2);
+}
+
+.form-actions .btn-submit:hover:not(:disabled) {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(66, 165, 245, 0.3);
+}
+
+.form-actions .btn-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.form-actions .btn-cancel {
+  background: white;
+  color: #6c757d;
+  border: 2px solid #dee2e6;
+  padding: 0.8rem 2rem;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.form-actions .btn-cancel:hover {
+  background: #f8f9fa;
+  border-color: #ced4da;
+  color: #495057;
+  transform: translateY(-2px);
+}
+
+/* ============================================
+   NOTIFICACIONES
+   ============================================ */
+
+.notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 1rem 1.5rem;
+  border-radius: 12px;
+  color: white;
+  font-weight: 600;
+  z-index: 9999;
+  animation: slideInRight 0.3s ease, fadeOut 0.3s ease 4.7s forwards;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  max-width: 400px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.95rem;
+}
+
+.notification.success {
+  background: linear-gradient(135deg, #4DB6AC, #26A69A);
+  border-left: 6px solid #00796B;
+}
+
+.notification.error {
+  background: linear-gradient(135deg, #EF5350, #E53935);
+  border-left: 6px solid #C62828;
+}
+
+.notification.warning {
+  background: linear-gradient(135deg, #FFA726, #FB8C00);
+  border-left: 6px solid #EF6C00;
+}
+
+.notification.info {
+  background: linear-gradient(135deg, #42A5F5, #1E88E5);
+  border-left: 6px solid #0D47A1;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  to {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+}
+
+/* ============================================
+   RESPONSIVE PARA MODALES DE EDICIÓN
+   ============================================ */
+
+@media (max-width: 992px) {
+  .large-modal {
+    max-width: 95% !important;
+    margin: 10px;
+  }
+  
+  .payment-row {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+  
+  .payment-type-buttons {
+    flex-direction: column;
+  }
+  
+  .form-actions {
+    flex-direction: column;
+  }
+  
+  .form-actions .btn-submit,
+  .form-actions .btn-cancel {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 768px) {
+  .large-modal .modal-header h3 {
+    font-size: 1.3rem;
+  }
+  
+  .appointment-info p {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  
+  .appointment-info p strong {
+    min-width: auto;
+  }
+  
+  .payment-input-container {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .currency-select {
+    width: 100%;
+  }
+  
+  .input-suffix {
+    width: 100%;
+  }
+  
+  .confirm-modal-actions {
+    flex-direction: column;
+  }
+  
+  .confirm-modal-actions .btn-confirm,
+  .confirm-modal-actions .btn-cancel {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .large-modal {
+    padding: 0;
+  }
+  
+  .procedure-form {
+    padding: 1.5rem;
+  }
+  
+  .form-section {
+    padding: 1.25rem;
+  }
+  
+  .mixed-payment-section {
+    padding: 1.25rem;
+  }
+  
+  .payment-column {
+    padding: 1.25rem;
+  }
+  
+  .total-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  
+  .total-value {
+    align-self: flex-end;
+  }
+}
+
+/* ============================================
+   ANIMACIONES ADICIONALES
+   ============================================ */
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ============================================
+   ESTILOS PARA CAMPOS REQUERIDOS
+   ============================================ */
+
+.form-input:required,
+.form-select:required,
+.form-textarea:required {
+  border-left: 4px solid #42A5F5;
+}
+
+.form-input:invalid,
+.form-select:invalid,
+.form-textarea:invalid {
+  border-color: #EF5350;
+}
+
+.form-input:focus:invalid,
+.form-select:focus:invalid,
+.form-textarea:focus:invalid {
+  border-color: #EF5350;
+  box-shadow: 0 0 0 4px rgba(239, 83, 80, 0.1);
+}
+
+/* ============================================
+   ESTILOS PARA SCROLLBAR EN MODALES GRANDES
+   ============================================ */
+
+.large-modal::-webkit-scrollbar {
+  width: 10px;
+}
+
+.large-modal::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 5px;
+}
+
+.large-modal::-webkit-scrollbar-thumb {
+  background: #BDBDBD;
+  border-radius: 5px;
+}
+
+.large-modal::-webkit-scrollbar-thumb:hover {
+  background: #9E9E9E;
+}

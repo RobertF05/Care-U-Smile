@@ -3216,3 +3216,393 @@ input:checked + .slider:before {
     flex-direction: column;
   }
 }
+
+/* Modal de confirmación */
+.confirm-modal-overlay {
+  z-index: 3000 !important;
+}
+
+.confirm-modal {
+  max-width: 450px;
+  text-align: center;
+  animation: confirmSlideIn 0.3s ease;
+}
+
+.confirm-modal .modal-header {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.confirm-modal .modal-header h3 {
+  color: #42A5F5;
+  font-size: 1.3rem;
+}
+
+.confirm-modal-body {
+  padding: 1rem 0;
+}
+
+.confirm-icon {
+  font-size: 3.5rem;
+  color: #42A5F5;
+  margin-bottom: 1rem;
+}
+
+.confirm-icon.warning-icon {
+  color: #FF9800;
+}
+
+.confirm-icon.procedure-icon {
+  color: #9C27B0;
+}
+
+.confirm-message {
+  font-size: 1.1rem;
+  color: #37474F;
+  margin-bottom: 1rem;
+  line-height: 1.5;
+}
+
+.confirm-detail {
+  color: #42A5F5;
+  font-weight: 600;
+  margin-top: 0.5rem;
+}
+
+.confirm-details {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 1rem;
+  text-align: left;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.detail-row:last-child {
+  border-bottom: none;
+}
+
+.detail-label {
+  color: #78909C;
+  font-weight: 500;
+}
+
+.detail-value {
+  font-weight: 600;
+  color: #37474F;
+}
+
+.detail-value.amount-cordobas {
+  color: #1a5276;
+}
+
+.detail-value.amount-dollars {
+  color: #7d6608;
+}
+
+.orthodontics-badge .detail-value {
+  background: rgba(77, 182, 172, 0.1);
+  color: #4DB6AC;
+  padding: 0.3rem 0.8rem;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.confirm-modal-actions {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 2px solid #e0e0e0;
+}
+
+.confirm-modal-actions .btn-confirm {
+  background: linear-gradient(135deg, #42A5F5, #1E88E5);
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.confirm-modal-actions .btn-confirm:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(66, 165, 245, 0.3);
+}
+
+.confirm-modal-actions .btn-confirm.warning {
+  background: linear-gradient(135deg, #FF9800, #F57C00);
+}
+
+.confirm-modal-actions .btn-cancel {
+  background: #f5f5f5;
+  color: #78909C;
+  border: 1px solid #e0e0e0;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.confirm-modal-actions .btn-cancel:hover {
+  background: #e0e0e0;
+  color: #37474F;
+}
+
+.warning-text {
+  color: #EF5350;
+  font-weight: 500;
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+}
+
+/* Modal de cierre */
+.close-confirm-modal .confirm-icon.warning-icon {
+  color: #FF9800;
+}
+
+.close-confirm-modal .btn-confirm.warning {
+  background: linear-gradient(135deg, #FF9800, #F57C00);
+}
+
+/* Estadísticas dentro de filtros */
+.filter-stats-section {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 2px solid #e0e0e0;
+}
+
+.stats-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.stats-header h4 {
+  color: #37474F;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+}
+
+.stat-item {
+  background: white;
+  border-radius: 12px;
+  padding: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  border: 2px solid transparent;
+  transition: all 0.3s ease;
+}
+
+.stat-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.stat-item.total {
+  border-color: #42A5F5;
+}
+
+.stat-item.today {
+  border-color: #4DB6AC;
+}
+
+.stat-item.pending {
+  border-color: #FFA726;
+}
+
+.stat-item.completed {
+  border-color: #66BB6A;
+}
+
+.stat-item.orthodontics {
+  border-color: #4DB6AC;
+}
+
+.stat-item.general {
+  border-color: #42A5F5;
+}
+
+.stat-item .stat-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+}
+
+.stat-item.total .stat-icon {
+  background: rgba(66, 165, 245, 0.1);
+  color: #42A5F5;
+}
+
+.stat-item.today .stat-icon {
+  background: rgba(77, 182, 172, 0.1);
+  color: #4DB6AC;
+}
+
+.stat-item.pending .stat-icon {
+  background: rgba(255, 167, 38, 0.1);
+  color: #FFA726;
+}
+
+.stat-item.completed .stat-icon {
+  background: rgba(102, 187, 106, 0.1);
+  color: #66BB6A;
+}
+
+.stat-item.orthodontics .stat-icon {
+  background: rgba(77, 182, 172, 0.1);
+  color: #4DB6AC;
+}
+
+.stat-item.general .stat-icon {
+  background: rgba(66, 165, 245, 0.1);
+  color: #42A5F5;
+}
+
+.stat-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-info .stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #37474F;
+  line-height: 1.2;
+}
+
+.stat-info .stat-label {
+  font-size: 0.8rem;
+  color: #78909C;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+/* Animación para modales */
+@keyframes confirmSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Responsive para las estadísticas */
+@media (max-width: 768px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .stat-item {
+    padding: 1rem;
+  }
+  
+  .stat-item .stat-icon {
+    width: 40px;
+    height: 40px;
+    font-size: 1.2rem;
+  }
+  
+  .stat-info .stat-value {
+    font-size: 1.2rem;
+  }
+  
+  .confirm-modal-actions {
+    flex-direction: column;
+  }
+  
+  .confirm-modal-actions .btn-confirm,
+  .confirm-modal-actions .btn-cancel {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .confirm-modal {
+    width: 95%;
+    padding: 1.5rem;
+  }
+}
+
+/* Ajustes para el buscador principal */
+.search-box-main-container {
+  background: var(--bg-secondary);
+  border-radius: var(--border-radius-lg);
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  border: 1px solid var(--border-color);
+}
+
+.search-box-main {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.search-input-main {
+  width: 100%;
+  padding: 0.85rem 1rem 0.85rem 3rem;
+  border: 2px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  font-size: 1rem;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+}
+
+.search-input-main:focus {
+  outline: none;
+  border-color: var(--primary-blue);
+  box-shadow: 0 0 0 3px rgba(66, 165, 245, 0.1);
+}
+
+.search-help-text {
+  display: block;
+  margin-top: 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-style: italic;
+}

@@ -17,6 +17,7 @@ import {
 import { AuthContext } from '../../context/AuthContext.jsx';
 import { AppContext } from '../../context/AppContext.jsx';
 import { formatCurrency, formatDate } from '../../utils/formatters.js';
+import './DashboardPage.css';
 
 const DashboardPage = () => {
   const { user } = useContext(AuthContext);
@@ -32,6 +33,8 @@ const DashboardPage = () => {
   } = useContext(AppContext);
 
   const [expandedStats, setExpandedStats] = useState(false);
+  const [expandedAppointments, setExpandedAppointments] = useState(false); 
+  const [expandedProcedures, setExpandedProcedures] = useState(false);
   const [recentCompletedProcedures, setRecentCompletedProcedures] = useState([]);
   const [loadingProcedures, setLoadingProcedures] = useState(false);
 
@@ -146,7 +149,7 @@ const DashboardPage = () => {
       value: stats.totalPatients || 0, 
       icon: faUsers, 
       color: '#2196F3',
-      change: '+5'
+      change: ''
     },
     { 
       id: 5, 
@@ -154,7 +157,7 @@ const DashboardPage = () => {
       value: stats.pendingProcedures || 0, 
       icon: faClock, 
       color: '#EF5350',
-      change: '-2'
+      change: ''
     }
   ];
 
@@ -185,7 +188,7 @@ const DashboardPage = () => {
       dateTimeDisplay: formatDateTime(apt.appointment_date),
       procedure: apt.query_type || 'Consulta',
       status: apt.state || 'scheduled',
-      notes: apt.observations || '' // Removido: identification
+      notes: apt.observations || ''
     }));
 
   // Preparar datos de procedimientos completados para mostrar
@@ -193,7 +196,6 @@ const DashboardPage = () => {
     id: proc.procedure_ID || proc.id || Math.random(),
     patient: proc.patient_name || proc.patients?.first_name || 'Paciente',
     description: proc.procedure_description || 'Procedimiento dental',
-    // Para ortodoncia, usar solo la porción de la clínica
     amount: proc.is_orthodontics 
       ? (proc.clinic_portion || (proc.total_procedure * 0.4) || 0)
       : (proc.total_procedure || proc.total_cost || 0),
@@ -205,12 +207,10 @@ const DashboardPage = () => {
     date: formatDateTime(proc.procedure_date),
     type: proc.procedure_type || (proc.is_orthodontics ? 'Ortodoncia' : 'General'),
     isOrthodontics: proc.is_orthodontics || false,
-    // Para ortodoncia, mostrar desglose
     clinicPortion: proc.clinic_portion || 0,
     doctorPortion: proc.doctor_portion || 0,
     clinicPortionFormatted: formatCurrency(proc.clinic_portion || 0),
     doctorPortionFormatted: formatCurrency(proc.doctor_portion || 0),
-    // Removidos: paymentMethod y patientIdentification
   }));
 
   if (loading && !stats.totalPatients) {
@@ -228,7 +228,6 @@ const DashboardPage = () => {
     <div className="page-content">
       <div className="dashboard-header">
         <div className="welcome-section">
-          {/* ✅ Mostrar username si existe, de lo contrario email */}
           <h1>Bienvenido, {user?.username || user?.name || user?.email || 'Doctor'}</h1>
           <p className="dashboard-subtitle">
             <FontAwesomeIcon icon={faSmile} style={{ marginRight: '8px' }} />
@@ -242,68 +241,72 @@ const DashboardPage = () => {
         </div>
       </div>
       
-      {/* Estadísticas desplegables */}
-      <div className={`appointments-stats ${expandedStats ? 'expanded' : ''}`}>
-        <div className="stats-header-mobile" onClick={() => setExpandedStats(!expandedStats)}>
-          <div className="stats-header-content">
-            <h3 className="stats-title">
+      {/* Estadísticas desplegables - Siempre con header clickeable */}
+      <div className="dashboard-section collapsible-section">
+        <div className="section-header clickable-header" onClick={() => setExpandedStats(!expandedStats)}>
+          <div className="section-header-content">
+            <h3 className="section-title">
               <FontAwesomeIcon icon={faChartBar} />
               Estadísticas del Dashboard
             </h3>
-            <div className="stats-summary-mobile">
-              <span className="stat-summary-item">Pacientes: {stats.totalPatients || 0}</span>
-              <span className="stat-summary-item">Citas hoy: {stats.todayAppointments || 0}</span>
-              <span className="stat-summary-item">Ingresos: {formatCurrency(stats.monthlyIncome || 0)}</span>
-            </div>
           </div>
           <FontAwesomeIcon 
             icon={expandedStats ? faChevronUp : faChevronDown} 
-            className="stats-toggle-icon"
+            className="toggle-icon"
           />
         </div>
         
-        <div className="stats-grid-container">
-          {dashboardStats.map((stat) => (
-            <div key={stat.id} className="dashboard-card">
-              <div className="card-header">
-                <div className="card-icon-wrapper" style={{ backgroundColor: `${stat.color}20` }}>
-                  <FontAwesomeIcon icon={stat.icon} style={{ color: stat.color }} />
+        <div className={`section-content ${expandedStats ? 'expanded' : 'collapsed'}`}>
+          <div className="stats-grid-container">
+            {dashboardStats.map((stat) => (
+              <div key={stat.id} className="dashboard-card">
+                <div className="card-header">
+                  <div className="card-icon-wrapper" style={{ backgroundColor: `${stat.color}20` }}>
+                    <FontAwesomeIcon icon={stat.icon} style={{ color: stat.color }} />
+                  </div>
+                  <h3 className="card-title">{stat.title}</h3>
                 </div>
-                <h3 className="card-title">{stat.title}</h3>
-              </div>
-              <div className="card-body">
-                <div className="card-value">{stat.value}</div>
-                <div className="card-change" style={{ color: stat.change.startsWith('+') ? '#4CAF50' : '#F44336' }}>
-                  {stat.change}
+                <div className="card-body">
+                  <div className="card-value">{stat.value}</div>
+                  <div className="card-change" style={{ color: stat.change.startsWith('+') ? '#4CAF50' : '#F44336' }}>
+                    {stat.change}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
       
-      {/* Secciones inferiores */}
+      {/* Secciones desplegables para Citas y Procedimientos */}
       <div className="dashboard-sections">
-        {/* Próximas Citas de Hoy */}
-        <div className="section">
-          <div className="section-header">
-            <div className="section-header-left">
-              <h3>
-                <FontAwesomeIcon icon={faCalendarCheck} style={{ marginRight: '10px' }} />
+        {/* Próximas Citas de Hoy - Desplegable */}
+        <div className="dashboard-section collapsible-section">
+          <div className="section-header clickable-header" onClick={() => setExpandedAppointments(!expandedAppointments)}>
+            <div className="section-header-content">
+              <h3 className="section-title">
+                <FontAwesomeIcon icon={faCalendarCheck} />
                 Próximas Citas de Hoy
               </h3>
-              <span className="current-time-display">
-                <FontAwesomeIcon icon={faClock} style={{ marginRight: '5px' }} />
-                {new Date().toLocaleTimeString('es-NI', { 
-                  hour: '2-digit', 
-                  minute: '2-digit',
-                  hour12: true 
-                })}
-              </span>
+              <div className="section-summary">
+                <span className="summary-item">
+                  <FontAwesomeIcon icon={faClock} />
+                  {new Date().toLocaleTimeString('es-NI', { 
+                    hour: '2-digit', 
+                    minute: '2-digit',
+                    hour12: true 
+                  })}
+                </span>
+                <span className="summary-badge">{upcomingAppointments.length}</span>
+              </div>
             </div>
-            <span className="section-badge">{upcomingAppointments.length}</span>
+            <FontAwesomeIcon 
+              icon={expandedAppointments ? faChevronUp : faChevronDown} 
+              className="toggle-icon"
+            />
           </div>
-          <div className="section-content">
+          
+          <div className={`section-content ${expandedAppointments ? 'expanded' : 'collapsed'}`}>
             {upcomingAppointments.length > 0 ? (
               <div className="appointments-list">
                 {upcomingAppointments.map((appointment) => (
@@ -320,7 +323,6 @@ const DashboardPage = () => {
                     <div className="appointment-info">
                       <div className="patient-name">
                         <strong>{appointment.patient}</strong>
-                        {/* Removido: ID del paciente */}
                       </div>
                       <div className="appointment-details">
                         <span className="procedure">
@@ -358,18 +360,25 @@ const DashboardPage = () => {
           </div>
         </div>
         
-        {/* Últimos Procedimientos Completados */}
-        <div className="section">
-          <div className="section-header">
-            <h3>
-              <FontAwesomeIcon icon={faTooth} style={{ marginRight: '10px' }} />
-              Últimos Procedimientos Completados
-            </h3>
-            <div className="section-header-right">
-              <span className="section-badge">{preparedProcedures.length}</span>
+        {/* Últimos Procedimientos Completados - Desplegable */}
+        <div className="dashboard-section collapsible-section">
+          <div className="section-header clickable-header" onClick={() => setExpandedProcedures(!expandedProcedures)}>
+            <div className="section-header-content">
+              <h3 className="section-title">
+                <FontAwesomeIcon icon={faTooth} />
+                Últimos Procedimientos Completados
+              </h3>
+              <div className="section-summary">
+                <span className="summary-badge">{preparedProcedures.length}</span>
+              </div>
             </div>
+            <FontAwesomeIcon 
+              icon={expandedProcedures ? faChevronUp : faChevronDown} 
+              className="toggle-icon"
+            />
           </div>
-          <div className="section-content">
+          
+          <div className={`section-content ${expandedProcedures ? 'expanded' : 'collapsed'}`}>
             {loadingProcedures ? (
               <div className="loading-procedures">
                 <div className="spinner-small"></div>
@@ -389,10 +398,8 @@ const DashboardPage = () => {
                       <div className="procedure-header">
                         <div className="procedure-patient">
                           <strong>{procedure.patient}</strong>
-                          {/* Removido: ID del paciente */}
                         </div>
                         <div className="procedure-amount-section">
-                          {/* Mostrar solo la porción de la clínica para ortodoncia */}
                           <span className="procedure-amount" title={`Ganancia Clínica: ${procedure.formattedAmount}`}>
                             {procedure.formattedAmount}
                           </span>
@@ -423,7 +430,6 @@ const DashboardPage = () => {
                             <FontAwesomeIcon icon={faClock} style={{ marginRight: '3px' }} />
                             {procedure.date}
                           </span>
-                          {/* Removido: Método de pago */}
                         </div>
                       </div>
                     </div>

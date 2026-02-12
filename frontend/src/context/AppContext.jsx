@@ -59,17 +59,47 @@ export const AppProvider = ({ children }) => {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    console.log(`🌐 Enviando request a: ${API_URL}/api${endpoint}`);
-    
+    // ────────────────────────────────────────────────
+    // LOG 1: Qué se está enviando (método, endpoint, headers)
+    console.log(`🌐 apiFetch → Preparando petición:`, {
+      method: options.method || 'GET',
+      url: `${API_URL}/api${endpoint}`,
+      hasBody: !!options.body,
+      headers: Object.keys(headers), // solo nombres para no exponer token
+    });
+
+    // ────────────────────────────────────────────────
+    // LOG 2: Mostrar el BODY completo ANTES de enviarlo (si existe)
+    if (options.body) {
+      try {
+        const bodyParsed = JSON.parse(options.body);
+        console.log(`📤 apiFetch → BODY que se va a enviar a ${endpoint}:`, bodyParsed);
+
+        // Alerta específica si exchange_rate está presente
+        if ('exchange_rate' in bodyParsed) {
+          console.warn(
+            `⚠️ ALERTA: 'exchange_rate' se está enviando en esta petición a ${endpoint}`,
+            bodyParsed.exchange_rate
+          );
+        }
+
+        // Opcional: también alerta si aparece exchange_rate_used mal escrito o duplicado
+        if ('exchange_rate' in bodyParsed && 'exchange_rate_used' in bodyParsed) {
+          console.warn('⚠️ Ambos campos exchange_rate y exchange_rate_used están presentes!');
+        }
+      } catch (parseErr) {
+        console.warn('No se pudo parsear el body para depuración:', parseErr);
+      }
+    }
+
     const response = await fetch(`${API_URL}/api${endpoint}`, {
       headers,
       ...options,
     });
 
-    // Verificar si la respuesta es JSON
     const contentType = response.headers.get('content-type');
     let data;
-    
+
     if (contentType && contentType.includes('application/json')) {
       data = await response.json();
     } else {
@@ -78,9 +108,8 @@ export const AppProvider = ({ children }) => {
       throw new Error(`Respuesta inesperada del servidor (${response.status})`);
     }
 
-    console.log(`📥 Respuesta del backend (${response.status}):`, data);
+    console.log(`📥 apiFetch ← Respuesta de ${endpoint} (${response.status}):`, data);
 
-    // Si el backend indica error, lanzar excepción
     if (!data.success) {
       throw new Error(data.error || `Error (${response.status})`);
     }
@@ -93,8 +122,6 @@ export const AppProvider = ({ children }) => {
       error: error.message,
       stack: error.stack
     });
-    
-    // No establecer error global aquí, dejarlo que cada función lo maneje
     throw error;
   } finally {
     setLoading(false);

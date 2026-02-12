@@ -55,6 +55,10 @@ export default function PatientsPage() {
   const [patientMedicalInfo, setPatientMedicalInfo] = useState(null);
   const [notification, setNotification] = useState({ show: false, message: "", type: "" });
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  // Estados para confirmación de guardado
+  const [saveConfirm, setSaveConfirm] = useState(null);
+  // Estado para confirmación de cancelar/cerrar
+  const [closeConfirm, setCloseConfirm] = useState(null);
 
   // Cargar pacientes al montar el componente
   useEffect(() => {
@@ -84,6 +88,33 @@ export default function PatientsPage() {
     setTimeout(() => {
       setNotification({ show: false, message: "", type: "" });
     }, 3000);
+  };
+
+  // Verificar si hay cambios en el formulario
+  const hasFormChanges = () => {
+    if (!modalOpen) return false;
+
+    if (editingPatient) {
+      // Comparar con datos originales del paciente
+      return Object.keys(formData).some(key => {
+        if (key === 'birthdate') {
+          const formDate = formData[key] || null;
+          const patientDate = editingPatient[key] ? editingPatient[key].split('T')[0] : null;
+          return formDate !== patientDate;
+        }
+        // Para campos médicos que no están en el objeto patient
+        if (!(key in editingPatient)) {
+          return formData[key] !== "" && formData[key] !== false;
+        }
+        return formData[key] !== (editingPatient[key] || "");
+      });
+    } else {
+      // Para creación, verificar si hay algún campo lleno
+      return Object.keys(formData).some(key => {
+        const value = formData[key];
+        return value !== "" && value !== false;
+      });
+    }
   };
 
   // Manejar cambios en el formulario
@@ -188,7 +219,22 @@ export default function PatientsPage() {
     }
   };
 
-  // Cerrar modal de edición
+  // SOLICITAR CONFIRMACIÓN PARA CERRAR
+  const requestCloseModal = () => {
+    if (hasFormChanges()) {
+      setCloseConfirm({
+        action: "cerrar",
+        message: editingPatient 
+          ? "Tienes cambios sin guardar. ¿Estás seguro de que deseas cancelar la edición?"
+          : "Tienes información sin guardar. ¿Estás seguro de que deseas cancelar la creación?"
+      });
+    } else {
+      // Si no hay cambios, cerrar directamente
+      closeModal();
+    }
+  };
+
+  // Cerrar modal de edición (sin confirmación, uso interno)
   const closeModal = () => {
     setModalOpen(null);
     setEditingPatient(null);
@@ -220,6 +266,13 @@ export default function PatientsPage() {
       general_notes: ""
     });
     setPatientMedicalInfo(null);
+    setSaveConfirm(null);
+    setCloseConfirm(null);
+  };
+
+  // Cancelar cierre (volver al formulario)
+  const cancelClose = () => {
+    setCloseConfirm(null);
   };
 
   // Cerrar modal de vista
@@ -238,113 +291,154 @@ export default function PatientsPage() {
     return true;
   };
 
-  // PatientsPage.jsx - Modificar handleSavePatient
-const handleSavePatient = async () => {
-  if (!validateForm()) return;
-
-  try {
-    // Separar datos personales y médicos
-    const { 
-      emergency_contact_name,
-      emergency_contact_relationship,
-      emergency_contact_phone,
-      oral_health_status,
-      last_dental_visit,
-      medical_conditions,
-      allergies,
-      current_medications,
-      previous_anesthesia,
-      anesthesia_notes,
-      smokes,
-      drinks_alcohol,
-      other_substances,
-      substance_frequency,
-      general_notes,
-      ...patientData 
-    } = formData;
-
-    console.log('📋 Datos del formulario:', formData);
+  // MOSTRAR CONFIRMACIÓN DE GUARDADO
+  const confirmSave = () => {
+    if (!validateForm()) return;
     
-    // Preparar datos personales con birthdate como null si está vacío
-    const personalData = {
-      ...patientData,
-      birthdate: patientData.birthdate ? patientData.birthdate : null,
-      number_phone: patientData.number_phone ? 
-        Number(patientData.number_phone) : null
-    };
-
-    console.log('👤 Datos personales preparados:', personalData);
-    
-    // Preparar datos médicos con last_dental_visit como null si está vacío
-    const medicalInfoData = {
-      emergency_contact_name,
-      emergency_contact_relationship,
-      emergency_contact_phone,
-      oral_health_status,
-      last_dental_visit: last_dental_visit ? last_dental_visit : null,
-      medical_conditions,
-      allergies,
-      current_medications,
-      previous_anesthesia,
-      anesthesia_notes,
-      smokes,
-      drinks_alcohol,
-      other_substances,
-      substance_frequency,
-      general_notes
-    };
-
-    console.log('🏥 Datos médicos preparados:', medicalInfoData);
-
-    let result;
+    // Verificar si hay cambios (solo para edición)
     if (editingPatient) {
-      // Actualizar datos personales
-      result = await updatePatient(editingPatient.Patient_ID, personalData);
-      
-      // Actualizar información médica (usar PUT para upsert)
-      if (result.success) {
-        await updatePatientMedicalInfo(editingPatient.Patient_ID, medicalInfoData);
+      const hasChanges = Object.keys(formData).some(key => {
+        if (key === 'birthdate') {
+          const formDate = formData[key] || null;
+          const patientDate = editingPatient[key] ? editingPatient[key].split('T')[0] : null;
+          return formDate !== patientDate;
+        }
+        // Para campos médicos que no están en el objeto patient
+        if (!(key in editingPatient)) {
+          return formData[key] !== "" && formData[key] !== false;
+        }
+        return formData[key] !== (editingPatient[key] || "");
+      });
+
+      if (!hasChanges) {
+        showNotification("No hay cambios para guardar", "info");
+        return;
       }
-    } else {
-      // Crear paciente - Solo enviar datos personales primero
-      result = await createPatient(personalData);
+    }
+
+    // Mostrar confirmación
+    setSaveConfirm({
+      action: editingPatient ? "actualizar" : "crear",
+      patientName: editingPatient 
+        ? formatFullName(editingPatient)
+        : `${formData.first_name || ''} ${formData.first_last_name || ''}`.trim() || "nuevo paciente"
+    });
+  };
+
+  // CANCELAR GUARDADO
+  const cancelSave = () => {
+    setSaveConfirm(null);
+  };
+
+  // EJECUTAR GUARDADO (cuando se confirma)
+  const handleSavePatient = async () => {
+    if (!saveConfirm) return;
+
+    try {
+      // Separar datos personales y médicos
+      const { 
+        emergency_contact_name,
+        emergency_contact_relationship,
+        emergency_contact_phone,
+        oral_health_status,
+        last_dental_visit,
+        medical_conditions,
+        allergies,
+        current_medications,
+        previous_anesthesia,
+        anesthesia_notes,
+        smokes,
+        drinks_alcohol,
+        other_substances,
+        substance_frequency,
+        general_notes,
+        ...patientData 
+      } = formData;
+
+      console.log('📋 Datos del formulario:', formData);
       
-      console.log('📦 Resultado de createPatient:', result);
+      // Preparar datos personales con birthdate como null si está vacío
+      const personalData = {
+        ...patientData,
+        birthdate: patientData.birthdate ? patientData.birthdate : null,
+        number_phone: patientData.number_phone ? 
+          Number(patientData.number_phone) : null
+      };
+
+      console.log('👤 Datos personales preparados:', personalData);
       
-      if (result.success && result.data && result.data.Patient_ID) {
-        const patientId = result.data.Patient_ID;
+      // Preparar datos médicos con last_dental_visit como null si está vacío
+      const medicalInfoData = {
+        emergency_contact_name,
+        emergency_contact_relationship,
+        emergency_contact_phone,
+        oral_health_status,
+        last_dental_visit: last_dental_visit ? last_dental_visit : null,
+        medical_conditions,
+        allergies,
+        current_medications,
+        previous_anesthesia,
+        anesthesia_notes,
+        smokes,
+        drinks_alcohol,
+        other_substances,
+        substance_frequency,
+        general_notes
+      };
+
+      console.log('🏥 Datos médicos preparados:', medicalInfoData);
+
+      let result;
+      if (editingPatient) {
+        // Actualizar datos personales
+        result = await updatePatient(editingPatient.Patient_ID, personalData);
         
-        // Verificar si hay datos médicos para crear
-        const hasMedicalData = Object.values(medicalInfoData).some(value => 
-          value !== "" && value !== false && value !== null && value !== undefined
-        );
+        // Actualizar información médica (usar PUT para upsert)
+        if (result.success) {
+          await updatePatientMedicalInfo(editingPatient.Patient_ID, medicalInfoData);
+        }
+      } else {
+        // Crear paciente - Solo enviar datos personales primero
+        result = await createPatient(personalData);
         
-        if (hasMedicalData) {
-          console.log('📝 Creando información médica para paciente ID:', patientId);
-          await createPatientMedicalInfo(patientId, medicalInfoData);
+        console.log('📦 Resultado de createPatient:', result);
+        
+        if (result.success && result.data && result.data.Patient_ID) {
+          const patientId = result.data.Patient_ID;
+          
+          // Verificar si hay datos médicos para crear
+          const hasMedicalData = Object.values(medicalInfoData).some(value => 
+            value !== "" && value !== false && value !== null && value !== undefined
+          );
+          
+          if (hasMedicalData) {
+            console.log('📝 Creando información médica para paciente ID:', patientId);
+            await createPatientMedicalInfo(patientId, medicalInfoData);
+          }
         }
       }
-    }
 
-    if (result.success) {
-      showNotification(
-        editingPatient 
-          ? "Paciente actualizado exitosamente" 
-          : "Paciente agregado exitosamente"
-      );
-      closeModal();
-      fetchPatients();
-    } else {
-      // Mostrar error específico del backend
-      const errorMessage = result.error || "Error al guardar paciente";
-      showNotification(errorMessage, "error");
-      console.error('❌ Error en handleSavePatient:', result);
+      if (result.success) {
+        showNotification(
+          editingPatient 
+            ? "Paciente actualizado exitosamente" 
+            : "Paciente agregado exitosamente"
+        );
+        setSaveConfirm(null);
+        closeModal();
+        fetchPatients();
+      } else {
+        const errorMessage = result.error || "Error al guardar paciente";
+        showNotification(errorMessage, "error");
+        console.error('❌ Error en handleSavePatient:', result);
+        setSaveConfirm(null);
+      }
+    } catch (error) {
+      showNotification("Error al guardar paciente: " + error.message, "error");
+      console.error("Error saving patient:", error);
+      setSaveConfirm(null);
     }
-  } catch (error) {
-    showNotification("Error al guardar paciente: " + error.message, "error");
-    console.error("Error saving patient:", error);
-  }
-};
+  };
 
   // Confirmar eliminación
   const confirmDelete = (patient) => {
@@ -411,7 +505,7 @@ const handleSavePatient = async () => {
 
       {/* Modal de confirmación de eliminación */}
       {deleteConfirm && (
-        <div className="modal-backdrop" onClick={() => setDeleteConfirm(null)}>
+        <div className="modal-backdrop delete-confirm-backdrop" onClick={() => setDeleteConfirm(null)}>
           <div className="modal-content confirm-modal" onClick={e => e.stopPropagation()}>
             <h3>Confirmar Eliminación</h3>
             <p>¿Estás seguro de que deseas eliminar al paciente <strong>{deleteConfirm.name}</strong>?</p>
@@ -422,6 +516,49 @@ const handleSavePatient = async () => {
               </button>
               <button className="btn-cancel" onClick={() => setDeleteConfirm(null)}>
                 Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmación de guardado */}
+      {saveConfirm && (
+        <div className="modal-backdrop save-confirm-backdrop" onClick={cancelSave}>
+          <div className="modal-content confirm-modal" onClick={e => e.stopPropagation()}>
+            <h3>Confirmar {saveConfirm.action === "actualizar" ? "Actualización" : "Creación"}</h3>
+            <p>
+              ¿Estás seguro de que deseas <strong>{saveConfirm.action}</strong> al paciente{' '}
+              <strong>{saveConfirm.patientName}</strong>?
+            </p>
+            {saveConfirm.action === "actualizar" && (
+              <p className="info-text">Los datos del paciente serán actualizados con la información proporcionada.</p>
+            )}
+            <div className="modal-actions">
+              <button className="btn-confirm" onClick={handleSavePatient}>
+                Sí, {saveConfirm.action === "actualizar" ? "Actualizar" : "Crear"}
+              </button>
+              <button className="btn-cancel" onClick={cancelSave}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmación para cerrar/cancelar */}
+      {closeConfirm && (
+        <div className="modal-backdrop close-confirm-backdrop" onClick={cancelClose}>
+          <div className="modal-content confirm-modal" onClick={e => e.stopPropagation()}>
+            <h3>¿Cancelar cambios?</h3>
+            <p>{closeConfirm.message}</p>
+            <p className="warning-text">Los cambios no guardados se perderán.</p>
+            <div className="modal-actions">
+              <button className="btn-confirm" onClick={closeModal}>
+                Sí, Cancelar
+              </button>
+              <button className="btn-cancel" onClick={cancelClose}>
+                Seguir Editando
               </button>
             </div>
           </div>
@@ -621,7 +758,7 @@ const handleSavePatient = async () => {
 
       {/* Modal para AGREGAR/EDITAR paciente */}
       {modalOpen && (
-        <div className="modal-backdrop" onClick={closeModal}>
+        <div className="modal-backdrop form-modal-backdrop">
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <h3>{editingPatient ? "Editar Paciente" : "Agregar Nuevo Paciente"}</h3>
             
@@ -937,10 +1074,10 @@ const handleSavePatient = async () => {
             </div>
 
             <div className="modal-actions">
-              <button className="btn-confirm" onClick={handleSavePatient}>
+              <button className="btn-confirm" onClick={confirmSave}>
                 {editingPatient ? "Actualizar Paciente" : "Agregar Paciente"}
               </button>
-              <button className="btn-cancel" onClick={closeModal}>
+              <button className="btn-cancel" onClick={requestCloseModal}>
                 Cancelar
               </button>
             </div>

@@ -175,49 +175,99 @@ export default function PatientsPage() {
     setModalOpen("add");
   };
 
-  // Abrir modal para editar paciente - VERSIÓN CORREGIDA (SIN TIMEOUT)
+  // Abrir modal para editar paciente - VERSIÓN CORREGIDA
 const openEditModal = async (patient) => {
   setEditingPatient(patient);
   
-  // Primero cargar los datos básicos del paciente
-  setFormData({
-    first_name: patient.first_name || "",
-    middle_name: patient.middle_name || "",
-    first_last_name: patient.first_last_name || "",
-    second_last_name: patient.second_last_name || "",
-    identification: patient.identification || "",
-    number_phone: patient.number_phone || "",
-    email: patient.email || "",
-    profession: patient.profession || "",
-    address: patient.address || "",
-    birthdate: patient.birthdate ? patient.birthdate.split('T')[0] : "",
-    // Resetear TODOS los campos médicos a vacío
-    emergency_contact_name: "",
-    emergency_contact_relationship: "",
-    emergency_contact_phone: "",
-    oral_health_status: "",
-    last_dental_visit: "",
-    medical_conditions: "",
-    allergies: "",
-    current_medications: "",
-    previous_anesthesia: false,
-    anesthesia_notes: "",
-    smokes: false,
-    drinks_alcohol: false,
-    other_substances: "",
-    substance_frequency: "",
-    general_notes: "",
-    odontogram_1: "",
-    odontogram_2: "",
-    odontogram_3: "",
-    odontogram_4: ""
-  });
+  // Cargar información médica PRIMERO (antes de abrir el modal)
+  try {
+    const result = await getPatientMedicalInfo(patient.Patient_ID);
+    
+    // Preparar los datos del formulario con TODO (paciente + info médica)
+    setFormData({
+      // Datos personales del paciente
+      first_name: patient.first_name || "",
+      middle_name: patient.middle_name || "",
+      first_last_name: patient.first_last_name || "",
+      second_last_name: patient.second_last_name || "",
+      identification: patient.identification || "",
+      number_phone: patient.number_phone || "",
+      email: patient.email || "",
+      profession: patient.profession || "",
+      address: patient.address || "",
+      birthdate: patient.birthdate ? patient.birthdate.split('T')[0] : "",
+      
+      // Información médica (si existe)
+      emergency_contact_name: result.success && result.data ? result.data.emergency_contact_name || "" : "",
+      emergency_contact_relationship: result.success && result.data ? result.data.emergency_contact_relationship || "" : "",
+      emergency_contact_phone: result.success && result.data ? result.data.emergency_contact_phone || "" : "",
+      oral_health_status: result.success && result.data ? result.data.oral_health_status || "" : "",
+      last_dental_visit: result.success && result.data && result.data.last_dental_visit ? result.data.last_dental_visit.split('T')[0] : "",
+      medical_conditions: result.success && result.data ? result.data.medical_conditions || "" : "",
+      allergies: result.success && result.data ? result.data.allergies || "" : "",
+      current_medications: result.success && result.data ? result.data.current_medications || "" : "",
+      previous_anesthesia: result.success && result.data ? result.data.previous_anesthesia || false : false,
+      anesthesia_notes: result.success && result.data ? result.data.anesthesia_notes || "" : "",
+      smokes: result.success && result.data ? result.data.smokes || false : false,
+      drinks_alcohol: result.success && result.data ? result.data.drinks_alcohol || false : false,
+      other_substances: result.success && result.data ? result.data.other_substances || "" : "",
+      substance_frequency: result.success && result.data ? result.data.substance_frequency || "" : "",
+      general_notes: result.success && result.data ? result.data.general_notes || "" : "",
+      
+      // Odontograma
+      odontogram_1: result.success && result.data ? result.data.odontogram_1 || "" : "",
+      odontogram_2: result.success && result.data ? result.data.odontogram_2 || "" : "",
+      odontogram_3: result.success && result.data ? result.data.odontogram_3 || "" : "",
+      odontogram_4: result.success && result.data ? result.data.odontogram_4 || "" : ""
+    });
+    
+    // Guardar la información médica en el estado para el modal de vista
+    if (result.success && result.data) {
+      setPatientMedicalInfo(result.data);
+    } else {
+      setPatientMedicalInfo(null);
+    }
+    
+  } catch (error) {
+    console.error("Error cargando información médica:", error);
+    // Si hay error, al menos cargar los datos del paciente
+    setFormData({
+      first_name: patient.first_name || "",
+      middle_name: patient.middle_name || "",
+      first_last_name: patient.first_last_name || "",
+      second_last_name: patient.second_last_name || "",
+      identification: patient.identification || "",
+      number_phone: patient.number_phone || "",
+      email: patient.email || "",
+      profession: patient.profession || "",
+      address: patient.address || "",
+      birthdate: patient.birthdate ? patient.birthdate.split('T')[0] : "",
+      // El resto vacío
+      emergency_contact_name: "",
+      emergency_contact_relationship: "",
+      emergency_contact_phone: "",
+      oral_health_status: "",
+      last_dental_visit: "",
+      medical_conditions: "",
+      allergies: "",
+      current_medications: "",
+      previous_anesthesia: false,
+      anesthesia_notes: "",
+      smokes: false,
+      drinks_alcohol: false,
+      other_substances: "",
+      substance_frequency: "",
+      general_notes: "",
+      odontogram_1: "",
+      odontogram_2: "",
+      odontogram_3: "",
+      odontogram_4: ""
+    });
+    setPatientMedicalInfo(null);
+  }
   
-  // ABRIR EL MODAL PRIMERO
+  // FINALMENTE abrir el modal
   setModalOpen("edit");
-  
-  // Cargar información médica (usando await y llamando directamente)
-  await loadMedicalInfo(patient.Patient_ID);
 };
 
   // Abrir modal para ver paciente (solo lectura)
@@ -784,16 +834,6 @@ const loadMedicalInfo = async (patientId) => {
                     </div>
                   </div>
 
-                  {/* Notas Generales */}
-                  {patientMedicalInfo.general_notes && (
-                    <div className="view-subsection">
-                      <h5>Notas Adicionales</h5>
-                      <div className="view-item full-width">
-                        <span className="view-value multiline">{patientMedicalInfo.general_notes}</span>
-                      </div>
-                    </div>
-                  )}
-
                   {/* SECCIÓN DE ODONTOGRAMA - VERSIÓN VERTICAL */}
                   <div className="view-subsection odontogram-view-section">
                     <h4 className="odontogram-title">Odontograma</h4>
@@ -848,6 +888,17 @@ const loadMedicalInfo = async (patientId) => {
                       </div>
                     </div>
                   </div>
+
+                  {/* Notas Generales */}
+                  {patientMedicalInfo.general_notes && (
+                    <div className="view-subsection">
+                      <h5>Notas Adicionales</h5>
+                      <div className="view-item full-width">
+                        <span className="view-value multiline">{patientMedicalInfo.general_notes}</span>
+                      </div>
+                    </div>
+                  )}
+
                 </div>
               )}
 

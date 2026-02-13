@@ -227,66 +227,77 @@ const getCurrentDateTimeForInput = () => {
   return `${year}-${month}-${day}T${hours}:${minutes}`;
 };
 
+// frontend/src/pages/AppointmentPage/AppointmentPage.jsx
+
+// frontend/src/pages/AppointmentPage/AppointmentPage.jsx
+
 const prepareForDateTimeInput = (dateString) => {
   if (!dateString) return getCurrentDateTimeForInput();
   
+  console.log('📅 Preparando para input:', dateString);
+  
   try {
-    if (dateString.includes(', ') && (dateString.includes('p. m.') || dateString.includes('a. m.'))) {
+    // Formato que devuelve el backend: "24/02/2026, 10:00:00 a. m." o "24/02/2026, 02:30:00 p. m."
+    // Patrón: dd/mm/yyyy, hh:mm:ss a. m. o p. m.
+    const regex = /(\d{2})\/(\d{2})\/(\d{4}),\s*(\d{1,2}):(\d{2}):\d{2}\s+([ap])\.\s*m\./i;
+    const match = dateString.match(regex);
+    
+    if (match) {
+      const day = match[1];
+      const month = match[2];
+      const year = match[3];
+      let hour = parseInt(match[4]);
+      const minute = match[5];
+      const ampm = match[6].toLowerCase();
+      
+      // Convertir a formato 24h
+      if (ampm === 'p' && hour < 12) hour += 12;
+      if (ampm === 'a' && hour === 12) hour = 0;
+      
+      // Formato para datetime-local: YYYY-MM-DDTHH:mm
+      const result = `${year}-${month}-${day}T${String(hour).padStart(2, '0')}:${minute}`;
+      console.log('✅ Parseado exitosamente:', result);
+      return result;
+    }
+    
+    // Si no es el formato esperado, intentar con el método anterior
+    console.log('⚠️ No coincidió con el regex, intentando método alternativo');
+    
+    // Intento alternativo: dividir por coma
+    if (dateString.includes(', ')) {
       const parts = dateString.split(', ');
       if (parts.length === 2) {
-        const [datePart, timePart] = parts;
-        const [day, month, year] = datePart.split('/');
+        const [datePart, timePartFull] = parts;
         
-        const timeMatch = timePart.match(/(\d{1,2}):(\d{2}):(\d{2}) ([ap])\. m\./i);
-        if (timeMatch) {
-          const hour = parseInt(timeMatch[1]);
-          const minute = timeMatch[2];
-          const ampm = timeMatch[4].toLowerCase();
+        // Parsear fecha (dd/mm/yyyy)
+        const dateParts = datePart.split('/');
+        if (dateParts.length === 3) {
+          const [day, month, year] = dateParts;
           
-          let hour24 = hour;
-          if (ampm === 'p') {
-            if (hour24 < 12) {
-              hour24 += 12;
-            }
-          } else {
-            if (hour24 === 12) {
-              hour24 = 0;
-            }
+          // Parsear hora
+          const timeMatch = timePartFull.match(/(\d{1,2}):(\d{2}):\d{2}\s+([ap])\.\s*m\./i);
+          if (timeMatch) {
+            let hour = parseInt(timeMatch[1]);
+            const minute = timeMatch[2];
+            const ampm = timeMatch[3].toLowerCase();
+            
+            if (ampm === 'p' && hour < 12) hour += 12;
+            if (ampm === 'a' && hour === 12) hour = 0;
+            
+            const result = `${year}-${month}-${day}T${String(hour).padStart(2, '0')}:${minute}`;
+            console.log('✅ Parseado (método alternativo):', result);
+            return result;
           }
-          
-          return `${year}-${month}-${day}T${String(hour24).padStart(2, '0')}:${minute}`;
         }
       }
     }
     
-    if (dateString.includes('T')) {
-      const date = new Date(dateString);
-      if (!isNaN(date.getTime())) {
-        const year = date.getUTCFullYear();
-        const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-        const day = String(date.getUTCDate()).padStart(2, '0');
-        const hours = String(date.getUTCHours()).padStart(2, '0');
-        const minutes = String(date.getUTCMinutes()).padStart(2, '0');
-        
-        return `${year}-${month}-${day}T${hours}:${minutes}`;
-      }
-    }
-    
-    const date = new Date(dateString);
-    if (!isNaN(date.getTime())) {
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      const hours = String(date.getHours()).padStart(2, '0');
-      const minutes = String(date.getMinutes()).padStart(2, '0');
-      
-      return `${year}-${month}-${day}T${hours}:${minutes}`;
-    }
-    
+    // Si todo falla, retornar fecha actual pero con un warning
+    console.warn('❌ No se pudo parsear la fecha, usando fecha actual:', dateString);
     return getCurrentDateTimeForInput();
     
   } catch (error) {
-    console.error('Error preparando fecha para input:', error, dateString);
+    console.error('❌ Error en prepareForDateTimeInput:', error, dateString);
     return getCurrentDateTimeForInput();
   }
 };
@@ -1363,62 +1374,73 @@ const AppointmentPage = () => {
     }
   };
 
-  // Función para abrir modal de edición
-  const handleOpenEditModal = (appointment) => {
-    if (!canEditAppointment(appointment)) {
-      addNotification('No se puede editar esta cita. Solo se pueden editar citas pendientes sin procedimientos.', 'error', 5000);
-      return;
-    }
-    
-    setEditingAppointment(appointment);
-    
-    const appointmentDateForInput = prepareForDateTimeInput(appointment.appointment_date);
-    
-    setEditFormData({
-      appointment_date: appointmentDateForInput,
-      query_type: appointment.query_type || '',
-      observations: appointment.observations || '',
-      is_orthodontics: appointment.is_orthodontics || false
-    });
-    setShowEditModal(true);
-  };
+  // frontend/src/pages/AppointmentPage/AppointmentPage.jsx
 
-  // Función para guardar cambios en la cita
-  const handleSaveEditAppointment = async (e) => {
-    e.preventDefault();
+const handleOpenEditModal = (appointment) => {
+  if (!canEditAppointment(appointment)) {
+    addNotification('No se puede editar esta cita. Solo se pueden editar citas pendientes sin procedimientos.', 'error', 5000);
+    return;
+  }
+  
+  setEditingAppointment(appointment);
+  
+  // Aquí es donde se llama a prepareForDateTimeInput
+  const appointmentDateForInput = prepareForDateTimeInput(appointment.appointment_date);
+  
+  console.log('📅 Fecha original (formateada):', appointment.appointment_date);
+  console.log('📅 Fecha para input:', appointmentDateForInput);
+  
+  setEditFormData({
+    appointment_date: appointmentDateForInput,
+    query_type: appointment.query_type || '',
+    observations: appointment.observations || '',
+    is_orthodontics: appointment.is_orthodontics || false
+  });
+  setShowEditModal(true);
+};
+
+  // frontend/src/pages/AppointmentPage/AppointmentPage.jsx
+
+// Función para guardar cambios en la cita
+const handleSaveEditAppointment = async (e) => {
+  e.preventDefault();
+  
+  if (!editingAppointment) return;
+  
+  try {
+    // Obtener la fecha y hora del input datetime-local (YA ESTÁ EN HORA NICARAGUA)
+    let dateTimeString = editFormData.appointment_date;
     
-    if (!editingAppointment) return;
-    
-    try {
-      let dateTimeString = editFormData.appointment_date;
-      
-      if (dateTimeString.length === 16) {
-        dateTimeString += ':00';
-      }
-      
-      const localDate = new Date(dateTimeString);
-      const isoString = localDate.toISOString().replace('Z', '');
-      
-      const updateData = {
-        appointment_date: isoString,
-        query_type: editFormData.query_type,
-        is_orthodontics: editFormData.is_orthodontics,
-        observations: editFormData.observations || null
-      };
-      
-      console.log('📝 Actualizando cita con datos:', updateData);
-      
-      await updateAppointment(editingAppointment.appointment_ID, updateData);
-      
-      fetchAppointments();
-      addNotification('✅ Cita actualizada exitosamente', 'success', 5000);
-      
-    } catch (error) {
-      console.error('Error al actualizar cita:', error);
-      addNotification(`❌ Error al actualizar la cita: ${error.message}`, 'error', 7000);
-      throw error;
+    // Asegurar que tenga segundos (el formato que espera el backend)
+    if (dateTimeString.length === 16) {
+      dateTimeString += ':00';
     }
-  };
+    
+    // IMPORTANTE: NO convertir a UTC aquí. Enviar la hora de Nicaragua tal cual.
+    // El backend (appointmentController.update) llamará a toUTCFromNicaragua.
+    console.log('📝 Enviando fecha/hora Nicaragua al backend:', dateTimeString);
+    
+    const updateData = {
+      appointment_date: dateTimeString, // Enviar la cadena original del input
+      query_type: editFormData.query_type,
+      is_orthodontics: editFormData.is_orthodontics,
+      observations: editFormData.observations || null
+    };
+    
+    // Llamar a la función del contexto que ya usa el modelo con toUTCFromNicaragua
+    await updateAppointment(editingAppointment.appointment_ID, updateData);
+    
+    await fetchAppointments();
+    addNotification('✅ Cita actualizada exitosamente', 'success', 5000);
+    closeAppointmentModal(); // Cerrar modal después de guardar
+    
+  } catch (error) {
+    console.error('❌ Error al actualizar cita:', error);
+    addNotification(`❌ Error al actualizar la cita: ${error.message}`, 'error', 7000);
+    // No cerrar el modal para que el usuario pueda corregir
+    throw error;
+  }
+};
 
   // Abrir modal para convertir cita
   const openConvertModal = (appointment) => {

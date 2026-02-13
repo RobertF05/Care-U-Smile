@@ -48,7 +48,13 @@ export default function PatientsPage() {
     drinks_alcohol: false,
     other_substances: "",
     substance_frequency: "",
-    general_notes: ""
+    general_notes: "",
+    
+    // Nuevos campos de odontograma
+    odontogram_1: "",
+    odontogram_2: "",
+    odontogram_3: "",
+    odontogram_4: ""
   });
   const [editingPatient, setEditingPatient] = useState(null);
   const [viewingPatient, setViewingPatient] = useState(null);
@@ -59,6 +65,12 @@ export default function PatientsPage() {
   const [saveConfirm, setSaveConfirm] = useState(null);
   // Estado para confirmación de cancelar/cerrar
   const [closeConfirm, setCloseConfirm] = useState(null);
+
+  // CONSTANTE PARA EL LINK DE GOOGLE DRIVE
+  // ===================================================
+  // TODO: Reemplazar con el enlace real de Google Drive
+  // ===================================================
+  const GOOGLE_DRIVE_CLINICAL_FILES_URL = ""; // Agrega aquí el link de Google Drive
 
   // Cargar pacientes al montar el componente
   useEffect(() => {
@@ -154,46 +166,59 @@ export default function PatientsPage() {
       drinks_alcohol: false,
       other_substances: "",
       substance_frequency: "",
-      general_notes: ""
+      general_notes: "",
+      odontogram_1: "",
+      odontogram_2: "",
+      odontogram_3: "",
+      odontogram_4: ""
     });
     setModalOpen("add");
   };
 
-  // Abrir modal para editar paciente
-  const openEditModal = (patient) => {
-    setEditingPatient(patient);
-    setFormData({
-      first_name: patient.first_name || "",
-      middle_name: patient.middle_name || "",
-      first_last_name: patient.first_last_name || "",
-      second_last_name: patient.second_last_name || "",
-      identification: patient.identification || "",
-      number_phone: patient.number_phone || "",
-      email: patient.email || "",
-      profession: patient.profession || "",
-      address: patient.address || "",
-      birthdate: patient.birthdate ? patient.birthdate.split('T')[0] : "",
-      emergency_contact_name: "",
-      emergency_contact_relationship: "",
-      emergency_contact_phone: "",
-      oral_health_status: "",
-      last_dental_visit: "",
-      medical_conditions: "",
-      allergies: "",
-      current_medications: "",
-      previous_anesthesia: false,
-      anesthesia_notes: "",
-      smokes: false,
-      drinks_alcohol: false,
-      other_substances: "",
-      substance_frequency: "",
-      general_notes: ""
-    });
-    
-    // Cargar información médica si existe
-    loadMedicalInfo(patient.Patient_ID);
-    setModalOpen("edit");
-  };
+  // Abrir modal para editar paciente - VERSIÓN CORREGIDA (SIN TIMEOUT)
+const openEditModal = async (patient) => {
+  setEditingPatient(patient);
+  
+  // Primero cargar los datos básicos del paciente
+  setFormData({
+    first_name: patient.first_name || "",
+    middle_name: patient.middle_name || "",
+    first_last_name: patient.first_last_name || "",
+    second_last_name: patient.second_last_name || "",
+    identification: patient.identification || "",
+    number_phone: patient.number_phone || "",
+    email: patient.email || "",
+    profession: patient.profession || "",
+    address: patient.address || "",
+    birthdate: patient.birthdate ? patient.birthdate.split('T')[0] : "",
+    // Resetear TODOS los campos médicos a vacío
+    emergency_contact_name: "",
+    emergency_contact_relationship: "",
+    emergency_contact_phone: "",
+    oral_health_status: "",
+    last_dental_visit: "",
+    medical_conditions: "",
+    allergies: "",
+    current_medications: "",
+    previous_anesthesia: false,
+    anesthesia_notes: "",
+    smokes: false,
+    drinks_alcohol: false,
+    other_substances: "",
+    substance_frequency: "",
+    general_notes: "",
+    odontogram_1: "",
+    odontogram_2: "",
+    odontogram_3: "",
+    odontogram_4: ""
+  });
+  
+  // ABRIR EL MODAL PRIMERO
+  setModalOpen("edit");
+  
+  // Cargar información médica (usando await y llamando directamente)
+  await loadMedicalInfo(patient.Patient_ID);
+};
 
   // Abrir modal para ver paciente (solo lectura)
   const openViewModal = async (patient) => {
@@ -204,20 +229,49 @@ export default function PatientsPage() {
     setViewModalOpen(true);
   };
 
-  // Cargar información médica
-  const loadMedicalInfo = async (patientId) => {
-    try {
-      const result = await getPatientMedicalInfo(patientId);
-      if (result.success && result.data) {
-        setPatientMedicalInfo(result.data);
-      } else {
-        setPatientMedicalInfo(null);
+  // Cargar información médica - VERSIÓN CORREGIDA
+const loadMedicalInfo = async (patientId) => {
+  try {
+    const result = await getPatientMedicalInfo(patientId);
+    if (result.success && result.data) {
+      setPatientMedicalInfo(result.data);
+      
+      // Cargar los datos médicos en el formulario SIEMPRE que estemos en modo edición
+      if (modalOpen === "edit") {
+        console.log("📥 Cargando información médica en formulario:", result.data);
+        
+        setFormData(prev => ({
+          ...prev,
+          emergency_contact_name: result.data.emergency_contact_name || "",
+          emergency_contact_relationship: result.data.emergency_contact_relationship || "",
+          emergency_contact_phone: result.data.emergency_contact_phone || "",
+          oral_health_status: result.data.oral_health_status || "",
+          last_dental_visit: result.data.last_dental_visit ? result.data.last_dental_visit.split('T')[0] : "",
+          medical_conditions: result.data.medical_conditions || "",
+          allergies: result.data.allergies || "",
+          current_medications: result.data.current_medications || "",
+          previous_anesthesia: result.data.previous_anesthesia || false,
+          anesthesia_notes: result.data.anesthesia_notes || "",
+          smokes: result.data.smokes || false,
+          drinks_alcohol: result.data.drinks_alcohol || false,
+          other_substances: result.data.other_substances || "",
+          substance_frequency: result.data.substance_frequency || "",
+          general_notes: result.data.general_notes || "",
+          // Cargar odontograma
+          odontogram_1: result.data.odontogram_1 || "",
+          odontogram_2: result.data.odontogram_2 || "",
+          odontogram_3: result.data.odontogram_3 || "",
+          odontogram_4: result.data.odontogram_4 || ""
+        }));
       }
-    } catch (error) {
-      console.error("Error cargando información médica:", error);
+    } else {
       setPatientMedicalInfo(null);
     }
-  };
+  } catch (error) {
+    console.error("Error cargando información médica:", error);
+    setPatientMedicalInfo(null);
+  }
+};
 
   // SOLICITAR CONFIRMACIÓN PARA CERRAR
   const requestCloseModal = () => {
@@ -263,7 +317,11 @@ export default function PatientsPage() {
       drinks_alcohol: false,
       other_substances: "",
       substance_frequency: "",
-      general_notes: ""
+      general_notes: "",
+      odontogram_1: "",
+      odontogram_2: "",
+      odontogram_3: "",
+      odontogram_4: ""
     });
     setPatientMedicalInfo(null);
     setSaveConfirm(null);
@@ -352,6 +410,10 @@ export default function PatientsPage() {
         other_substances,
         substance_frequency,
         general_notes,
+        odontogram_1,
+        odontogram_2,
+        odontogram_3,
+        odontogram_4,
         ...patientData 
       } = formData;
 
@@ -383,7 +445,12 @@ export default function PatientsPage() {
         drinks_alcohol,
         other_substances,
         substance_frequency,
-        general_notes
+        general_notes,
+        // Nuevos campos de odontograma
+        odontogram_1,
+        odontogram_2,
+        odontogram_3,
+        odontogram_4
       };
 
       console.log('🏥 Datos médicos preparados:', medicalInfoData);
@@ -726,6 +793,61 @@ export default function PatientsPage() {
                       </div>
                     </div>
                   )}
+
+                  {/* SECCIÓN DE ODONTOGRAMA - VERSIÓN VERTICAL */}
+                  <div className="view-subsection odontogram-view-section">
+                    <h4 className="odontogram-title">Odontograma</h4>
+                    
+                    <div className="odontogram-vertical-view">
+                      {/* Sección 1 - Superior Derecho */}
+                      <div className="odontogram-segment-horizontal">
+                        <div className="odontogram-header">1. Superior Derecho</div>
+                        <div className="odontogram-content-horizontal">
+                          {patientMedicalInfo.odontogram_1 ? (
+                            <div className="odontogram-text-display">{patientMedicalInfo.odontogram_1}</div>
+                          ) : (
+                            <p className="odontogram-empty">Sin datos</p>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Sección 2 - Superior Izquierdo */}
+                      <div className="odontogram-segment-horizontal">
+                        <div className="odontogram-header">2. Superior Izquierdo</div>
+                        <div className="odontogram-content-horizontal">
+                          {patientMedicalInfo.odontogram_2 ? (
+                            <div className="odontogram-text-display">{patientMedicalInfo.odontogram_2}</div>
+                          ) : (
+                            <p className="odontogram-empty">Sin datos</p>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Sección 3 - Inferior Izquierdo */}
+                      <div className="odontogram-segment-horizontal">
+                        <div className="odontogram-header">3. Inferior Izquierdo</div>
+                        <div className="odontogram-content-horizontal">
+                          {patientMedicalInfo.odontogram_3 ? (
+                            <div className="odontogram-text-display">{patientMedicalInfo.odontogram_3}</div>
+                          ) : (
+                            <p className="odontogram-empty">Sin datos</p>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Sección 4 - Inferior Derecho */}
+                      <div className="odontogram-segment-horizontal">
+                        <div className="odontogram-header">4. Inferior Derecho</div>
+                        <div className="odontogram-content-horizontal">
+                          {patientMedicalInfo.odontogram_4 ? (
+                            <div className="odontogram-text-display">{patientMedicalInfo.odontogram_4}</div>
+                          ) : (
+                            <p className="odontogram-empty">Sin datos</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -759,318 +881,391 @@ export default function PatientsPage() {
       {/* Modal para AGREGAR/EDITAR paciente */}
       {modalOpen && (
         <div className="modal-backdrop form-modal-backdrop">
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
+          <div className="modal-content form-modal" onClick={e => e.stopPropagation()}>
             <h3>{editingPatient ? "Editar Paciente" : "Agregar Nuevo Paciente"}</h3>
             
-            {/* Sección de información personal */}
-            <div className="personal-info-section">
-              <h4>Información Personal</h4>
-              
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Primer Nombre *</label>
-                  <input
-                    type="text"
-                    name="first_name"
-                    value={formData.first_name}
-                    onChange={handleFormChange}
-                    required
-                  />
-                </div>
+            <div className="form-scroll-container">
+              {/* Sección de información personal */}
+              <div className="personal-info-section">
+                <h4>Información Personal</h4>
                 
-                <div className="form-group">
-                  <label>Segundo Nombre</label>
-                  <input
-                    type="text"
-                    name="middle_name"
-                    value={formData.middle_name}
-                    onChange={handleFormChange}
-                  />
-                </div>
-              </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Primer Apellido *</label>
-                  <input
-                    type="text"
-                    name="first_last_name"
-                    value={formData.first_last_name}
-                    onChange={handleFormChange}
-                    required
-                  />
-                </div>
-                
-                <div className="form-group">
-                  <label>Segundo Apellido</label>
-                  <input
-                    type="text"
-                    name="second_last_name"
-                    value={formData.second_last_name}
-                    onChange={handleFormChange}
-                  />
-                </div>
-              </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Cédula o Identificación</label>
-                  <input
-                    type="text"
-                    name="identification"
-                    value={formData.identification}
-                    onChange={handleFormChange}
-                  />
-                </div>
-                
-                <div className="form-group">
-                  <label>Fecha de Nacimiento</label>
-                  <input
-                    type="date"
-                    name="birthdate"
-                    value={formData.birthdate}
-                    onChange={handleFormChange}
-                  />
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label>Teléfono</label>
-                <input
-                  type="tel"
-                  name="number_phone"
-                  value={formData.number_phone}
-                  onChange={handleFormChange}
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Correo Electrónico</label>
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleFormChange}
-                />
-              </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Profesión</label>
-                  <input
-                    type="text"
-                    name="profession"
-                    value={formData.profession}
-                    onChange={handleFormChange}
-                  />
-                </div>
-              </div>
-
-              <div className="form-group address-field">
-                <label>Dirección</label>
-                <textarea
-                  name="address"
-                  value={formData.address}
-                  onChange={handleFormChange}
-                  rows="3"
-                  className="address-textarea"
-                />
-              </div>
-            </div>
-
-            {/* Sección de información médica */}
-            <div className="medical-info-section">
-              <h4>Información Médica y de Emergencia</h4>
-              
-              {/* Contacto de Emergencia */}
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Contacto de Emergencia (Nombre)</label>
-                  <input
-                    type="text"
-                    name="emergency_contact_name"
-                    value={formData.emergency_contact_name}
-                    onChange={handleFormChange}
-                    placeholder="Nombre del contacto"
-                  />
-                </div>
-                
-                <div className="form-group">
-                  <label>Parentesco</label>
-                  <input
-                    type="text"
-                    name="emergency_contact_relationship"
-                    value={formData.emergency_contact_relationship}
-                    onChange={handleFormChange}
-                    placeholder="Ej: Padre, Madre, Cónyuge"
-                  />
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label>Teléfono de Emergencia</label>
-                <input
-                  type="tel"
-                  name="emergency_contact_phone"
-                  value={formData.emergency_contact_phone}
-                  onChange={handleFormChange}
-                  placeholder="Número de teléfono"
-                />
-              </div>
-              
-              {/* Salud Bucal */}
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Salud Bucal</label>
-                  <select
-                    name="oral_health_status"
-                    value={formData.oral_health_status}
-                    onChange={handleFormChange}
-                  >
-                    <option value="">Seleccionar...</option>
-                    <option value="buena">Buena</option>
-                    <option value="regular">Regular</option>
-                    <option value="mala">Mala</option>
-                  </select>
-                </div>
-                
-                <div className="form-group">
-                  <label>Última Visita al Odontólogo</label>
-                  <input
-                    type="date"
-                    name="last_dental_visit"
-                    value={formData.last_dental_visit}
-                    onChange={handleFormChange}
-                  />
-                </div>
-              </div>
-              
-              {/* Historial Médico */}
-              <div className="form-group">
-                <label>Enfermedades Importantes</label>
-                <textarea
-                  name="medical_conditions"
-                  value={formData.medical_conditions}
-                  onChange={handleFormChange}
-                  rows="2"
-                  placeholder="¿Padece o ha padecido alguna enfermedad que considere importante dar a conocer?"
-                />
-              </div>
-              
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Alergias a Medicamentos</label>
-                  <textarea
-                    name="allergies"
-                    value={formData.allergies}
-                    onChange={handleFormChange}
-                    rows="2"
-                    placeholder="¿Es alérgico a algún medicamento?"
-                  />
-                </div>
-                
-                <div className="form-group">
-                  <label>Medicamentos Actuales</label>
-                  <textarea
-                    name="current_medications"
-                    value={formData.current_medications}
-                    onChange={handleFormChange}
-                    rows="2"
-                    placeholder="¿Está tomando algún medicamento?"
-                  />
-                </div>
-              </div>
-              
-              {/* Anestesia */}
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="checkbox-label">
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Primer Nombre *</label>
                     <input
-                      type="checkbox"
-                      name="previous_anesthesia"
-                      checked={formData.previous_anesthesia}
+                      type="text"
+                      name="first_name"
+                      value={formData.first_name}
+                      onChange={handleFormChange}
+                      required
+                    />
+                  </div>
+                  
+                  <div className="form-group">
+                    <label>Segundo Nombre</label>
+                    <input
+                      type="text"
+                      name="middle_name"
+                      value={formData.middle_name}
                       onChange={handleFormChange}
                     />
-                    ¿Ha sido anestesiado anteriormente?
-                  </label>
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Primer Apellido *</label>
+                    <input
+                      type="text"
+                      name="first_last_name"
+                      value={formData.first_last_name}
+                      onChange={handleFormChange}
+                      required
+                    />
+                  </div>
+                  
+                  <div className="form-group">
+                    <label>Segundo Apellido</label>
+                    <input
+                      type="text"
+                      name="second_last_name"
+                      value={formData.second_last_name}
+                      onChange={handleFormChange}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Cédula o Identificación</label>
+                    <input
+                      type="text"
+                      name="identification"
+                      value={formData.identification}
+                      onChange={handleFormChange}
+                    />
+                  </div>
+                  
+                  <div className="form-group">
+                    <label>Fecha de Nacimiento</label>
+                    <input
+                      type="date"
+                      name="birthdate"
+                      value={formData.birthdate}
+                      onChange={handleFormChange}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Teléfono</label>
+                  <input
+                    type="tel"
+                    name="number_phone"
+                    value={formData.number_phone}
+                    onChange={handleFormChange}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Correo Electrónico</label>
+                  <input
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleFormChange}
+                  />
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Profesión</label>
+                    <input
+                      type="text"
+                      name="profession"
+                      value={formData.profession}
+                      onChange={handleFormChange}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group address-field">
+                  <label>Dirección</label>
+                  <textarea
+                    name="address"
+                    value={formData.address}
+                    onChange={handleFormChange}
+                    rows="3"
+                    className="address-textarea"
+                  />
                 </div>
               </div>
-              
-              {formData.previous_anesthesia && (
+
+              {/* Sección de información médica */}
+              <div className="medical-info-section">
+                <h4>Información Médica y de Emergencia</h4>
+                
+                {/* Contacto de Emergencia */}
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Contacto de Emergencia (Nombre)</label>
+                    <input
+                      type="text"
+                      name="emergency_contact_name"
+                      value={formData.emergency_contact_name}
+                      onChange={handleFormChange}
+                      placeholder="Nombre del contacto"
+                    />
+                  </div>
+                  
+                  <div className="form-group">
+                    <label>Parentesco</label>
+                    <input
+                      type="text"
+                      name="emergency_contact_relationship"
+                      value={formData.emergency_contact_relationship}
+                      onChange={handleFormChange}
+                      placeholder="Ej: Padre, Madre, Cónyuge"
+                    />
+                  </div>
+                </div>
+
                 <div className="form-group">
-                  <label>Notas sobre Anestesia</label>
+                  <label>Teléfono de Emergencia</label>
+                  <input
+                    type="tel"
+                    name="emergency_contact_phone"
+                    value={formData.emergency_contact_phone}
+                    onChange={handleFormChange}
+                    placeholder="Número de teléfono"
+                  />
+                </div>
+                
+                {/* Salud Bucal */}
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Salud Bucal</label>
+                    <select
+                      name="oral_health_status"
+                      value={formData.oral_health_status}
+                      onChange={handleFormChange}
+                    >
+                      <option value="">Seleccionar...</option>
+                      <option value="buena">Buena</option>
+                      <option value="regular">Regular</option>
+                      <option value="mala">Mala</option>
+                    </select>
+                  </div>
+                  
+                  <div className="form-group">
+                    <label>Última Visita al Odontólogo</label>
+                    <input
+                      type="date"
+                      name="last_dental_visit"
+                      value={formData.last_dental_visit}
+                      onChange={handleFormChange}
+                    />
+                  </div>
+                </div>
+                
+                {/* Historial Médico */}
+                <div className="form-group">
+                  <label>Enfermedades Importantes</label>
                   <textarea
-                    name="anesthesia_notes"
-                    value={formData.anesthesia_notes}
+                    name="medical_conditions"
+                    value={formData.medical_conditions}
                     onChange={handleFormChange}
                     rows="2"
-                    placeholder="Detalles sobre experiencias previas con anestesia..."
-                  />
-                </div>
-              )}
-              
-              {/* Hábitos */}
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      name="smokes"
-                      checked={formData.smokes}
-                      onChange={handleFormChange}
-                    />
-                    ¿Fuma?
-                  </label>
-                </div>
-                
-                <div className="form-group">
-                  <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      name="drinks_alcohol"
-                      checked={formData.drinks_alcohol}
-                      onChange={handleFormChange}
-                    />
-                    ¿Ingiere bebidas alcohólicas?
-                  </label>
-                </div>
-              </div>
-              
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Otras Sustancias</label>
-                  <input
-                    type="text"
-                    name="other_substances"
-                    value={formData.other_substances}
-                    onChange={handleFormChange}
-                    placeholder="¿Otro tipo de sustancia?"
+                    placeholder="¿Padece o ha padecido alguna enfermedad que considere importante dar a conocer?"
                   />
                 </div>
                 
-                <div className="form-group">
-                  <label>Frecuencia de Consumo</label>
-                  <input
-                    type="text"
-                    name="substance_frequency"
-                    value={formData.substance_frequency}
-                    onChange={handleFormChange}
-                    placeholder="¿Cada cuánto consume?"
-                  />
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Alergias a Medicamentos</label>
+                    <textarea
+                      name="allergies"
+                      value={formData.allergies}
+                      onChange={handleFormChange}
+                      rows="2"
+                      placeholder="¿Es alérgico a algún medicamento?"
+                    />
+                  </div>
+                  
+                  <div className="form-group">
+                    <label>Medicamentos Actuales</label>
+                    <textarea
+                      name="current_medications"
+                      value={formData.current_medications}
+                      onChange={handleFormChange}
+                      rows="2"
+                      placeholder="¿Está tomando algún medicamento?"
+                    />
+                  </div>
+                </div>
+                
+                {/* Anestesia */}
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        name="previous_anesthesia"
+                        checked={formData.previous_anesthesia}
+                        onChange={handleFormChange}
+                      />
+                      ¿Ha sido anestesiado anteriormente?
+                    </label>
+                  </div>
+                </div>
+                
+                {formData.previous_anesthesia && (
+                  <div className="form-group">
+                    <label>Notas sobre Anestesia</label>
+                    <textarea
+                      name="anesthesia_notes"
+                      value={formData.anesthesia_notes}
+                      onChange={handleFormChange}
+                      rows="2"
+                      placeholder="Detalles sobre experiencias previas con anestesia..."
+                    />
+                  </div>
+                )}
+                
+                {/* Hábitos */}
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        name="smokes"
+                        checked={formData.smokes}
+                        onChange={handleFormChange}
+                      />
+                      ¿Fuma?
+                    </label>
+                  </div>
+                  
+                  <div className="form-group">
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        name="drinks_alcohol"
+                        checked={formData.drinks_alcohol}
+                        onChange={handleFormChange}
+                      />
+                      ¿Ingiere bebidas alcohólicas?
+                    </label>
+                  </div>
+                </div>
+                
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Otras Sustancias</label>
+                    <input
+                      type="text"
+                      name="other_substances"
+                      value={formData.other_substances}
+                      onChange={handleFormChange}
+                      placeholder="¿Otro tipo de sustancia?"
+                    />
+                  </div>
+                  
+                  <div className="form-group">
+                    <label>Frecuencia de Consumo</label>
+                    <input
+                      type="text"
+                      name="substance_frequency"
+                      value={formData.substance_frequency}
+                      onChange={handleFormChange}
+                      placeholder="¿Cada cuánto consume?"
+                    />
+                  </div>
+                </div>
+                
+                
+              </div>
+
+              {/* SECCIÓN DE ODONTOGRAMA - VERSIÓN VERTICAL */}
+              <div className="odontogram-form-section">
+                <h4 className="odontogram-section-title">Odontograma</h4>
+                <p className="odontogram-instructions">Ingresa la información de cada cuadrante dental según el formato establecido.</p>
+                
+                <div className="odontogram-vertical-grid">
+                  <div className="odontogram-input-group-full">
+                    <label>
+                      1. Superior Derecho 
+                      <span className="odontogram-hint">(Dientes: 18 al 11)</span>
+                    </label>
+                    <textarea
+                      name="odontogram_1"
+                      value={formData.odontogram_1}
+                      onChange={handleFormChange}
+                      rows="3"
+                      placeholder="Ej: 1.1(01), 1.2(02), 1.3(05+01)..."
+                      className="odontogram-textarea-horizontal"
+                    />
+                  </div>
+                  
+                  <div className="odontogram-input-group-full">
+                    <label>
+                      2. Superior Izquierdo 
+                      <span className="odontogram-hint">(Dientes: 21 al 28)</span>
+                    </label>
+                    <textarea
+                      name="odontogram_2"
+                      value={formData.odontogram_2}
+                      onChange={handleFormChange}
+                      rows="3"
+                      placeholder="Ej: 2.1(01), 2.2(02), 2.3(05+01)..."
+                      className="odontogram-textarea-horizontal"
+                    />
+                  </div>
+                  
+                  <div className="odontogram-input-group-full">
+                    <label>
+                      3. Inferior Izquierdo 
+                      <span className="odontogram-hint">(Dientes: 31 al 38)</span>
+                    </label>
+                    <textarea
+                      name="odontogram_3"
+                      value={formData.odontogram_3}
+                      onChange={handleFormChange}
+                      rows="3"
+                      placeholder="Ej: 3.1(01), 3.2(02), 3.3(05+01)..."
+                      className="odontogram-textarea-horizontal"
+                    />
+                  </div>
+                  
+                  <div className="odontogram-input-group-full">
+                    <label>
+                      4. Inferior Derecho 
+                      <span className="odontogram-hint">(Dientes: 41 al 48)</span>
+                    </label>
+                    <textarea
+                      name="odontogram_4"
+                      value={formData.odontogram_4}
+                      onChange={handleFormChange}
+                      rows="3"
+                      placeholder="Ej: 4.1(01), 4.2(02), 4.3(05+01)..."
+                      className="odontogram-textarea-horizontal"
+                    />
+                  </div>
                 </div>
               </div>
-              
-              {/* Notas Generales */}
-              <div className="form-group">
-                <label>Notas Adicionales</label>
-                <textarea
-                  name="general_notes"
-                  value={formData.general_notes}
-                  onChange={handleFormChange}
-                  rows="3"
-                  placeholder="Notas adicionales sobre el paciente..."
-                />
-              </div>
+
+                {/* Notas Generales */}
+                <div className="form-group">
+                  <label>Notas Adicionales</label>
+                  <textarea
+                    name="general_notes"
+                    value={formData.general_notes}
+                    onChange={handleFormChange}
+                    rows="3"
+                    placeholder="Notas adicionales sobre el paciente..."
+                  />
+                </div>
+
             </div>
 
             <div className="modal-actions">
@@ -1122,12 +1317,38 @@ export default function PatientsPage() {
         </div>
       </div>
 
-      {/* Botón de acción principal */}
+      {/* Botones de acción principales */}
       <div className="action-buttons">
         <button className="btn-action-primary" onClick={openAddModal}>
           <span>👤</span>
           Agregar Nuevo Paciente
         </button>
+        
+        {/* BOTÓN PARA GOOGLE DRIVE - SIEMPRE VISIBLE */}
+        {GOOGLE_DRIVE_CLINICAL_FILES_URL ? (
+          <a 
+            href={GOOGLE_DRIVE_CLINICAL_FILES_URL} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="btn-action-drive"
+          >
+            <span>📁</span>
+            Archivos Clínicos
+          </a>
+        ) : (
+          <button 
+            className="btn-action-drive placeholder"
+            onClick={() => {
+              showNotification("Configura el link de Google Drive en la constante GOOGLE_DRIVE_CLINICAL_FILES_URL", "info");
+              console.log('⚠️ GOOGLE_DRIVE_CLINICAL_FILES_URL está vacío - Configurar en PatientPage.jsx');
+            }}
+            title="Click para ver instrucciones"
+          >
+            <span>📁</span>
+            Archivos Clínicos
+            <span style={{ fontSize: '12px', marginLeft: '8px', opacity: 0.9 }}>⚙️</span>
+          </button>
+        )}
       </div>
 
       {/* Sección de tabla */}

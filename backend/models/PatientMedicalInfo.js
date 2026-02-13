@@ -53,6 +53,11 @@ const PatientMedicalInfo = {
           other_substances: medicalData.other_substances || null,
           substance_frequency: medicalData.substance_frequency || null,
           general_notes: medicalData.general_notes || null,
+          // Nuevos campos de odontograma
+          odontogram_1: medicalData.odontogram_1 || null,
+          odontogram_2: medicalData.odontogram_2 || null,
+          odontogram_3: medicalData.odontogram_3 || null,
+          odontogram_4: medicalData.odontogram_4 || null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         }])

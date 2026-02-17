@@ -58,14 +58,13 @@ const dailyClosingController = {
     }
   },
 
-  // Crear cierre diario (VERSIÓN MODIFICADA CON GASTOS VARIABLES)
+  // Crear cierre diario (AHORA USA LA FUNCIÓN PARA CIERRES)
   create: async (req, res) => {
     try {
       const { date, closing_date, closing_type = 'general', comentary = '' } = req.body;
       
-      console.log('🔍 DEBUG Controller - Datos recibidos:', req.body);
+      console.log('🔍 create - Datos recibidos:', req.body);
       
-      // Determinar qué fecha usar
       const effectiveDate = date || closing_date;
       
       if (!effectiveDate) {
@@ -75,7 +74,6 @@ const dailyClosingController = {
         });
       }
       
-      // Validar tipo de cierre
       const validTypes = ['general', 'orthodontics'];
       if (!validTypes.includes(closing_type)) {
         return res.status(400).json({ 
@@ -84,7 +82,6 @@ const dailyClosingController = {
         });
       }
       
-      // Verificar si ya existe cierre
       const exists = await DailyClosing.exists(effectiveDate, closing_type);
       if (exists) {
         return res.status(400).json({ 
@@ -92,16 +89,22 @@ const dailyClosingController = {
           error: `Ya existe un cierre ${closing_type === 'orthodontics' ? 'de ortodoncia' : 'general'} para esta fecha` 
         });
       }
+
+      // 🔴 USAR LA NUEVA FUNCIÓN PARA CIERRES
+      const financialSummary = await DailyClosing.getDailyClosingSummary(effectiveDate, closing_type);
       
-      // Obtener resumen financiero (INCLUYE GASTOS VARIABLES)
-      const financialSummary = await DailyClosing.getDailyFinancialSummary(effectiveDate, closing_type);
-      
-      // Mostrar advertencia si no hay procedimientos pero SÍ hay gastos
-      if (financialSummary.cantidad_procedimientos === 0 && financialSummary.cantidad_gastos_variables > 0) {
-        console.log('⚠️ No hay procedimientos pero hay gastos variables, continuando...');
+      if (financialSummary.cantidad_procedimientos === 0 && financialSummary.cantidad_gastos_variables === 0) {
+        const confirmCreate = req.body.force !== true;
+        if (confirmCreate) {
+          return res.status(200).json({ 
+            success: true, 
+            warning: true,
+            message: 'No hay procedimientos ni gastos para esta fecha',
+            data: financialSummary
+          });
+        }
       }
       
-      // Crear cierre diario con gastos variables incluidos
       const closingData = {
         closing_date: effectiveDate,
         closing_type,
@@ -109,11 +112,11 @@ const dailyClosingController = {
         total_clinic_income: financialSummary.total_clinic_income,
         total_doctor_income: financialSummary.total_doctor_income,
         total_external_doctor_payments: financialSummary.total_external_doctor_payments,
-        total_variable_expenses: financialSummary.total_variable_expenses, // NUEVO
+        total_variable_expenses: financialSummary.total_variable_expenses,
         net_profit: financialSummary.net_profit,
         comentary,
         is_processed: false,
-        expense_ids: financialSummary.expense_ids // IDs de gastos a marcar como procesados
+        expense_ids: financialSummary.expense_ids
       };
       
       console.log('📤 Creando cierre con datos:', {
@@ -125,7 +128,6 @@ const dailyClosingController = {
       
       console.log('✅ Cierre creado, ID:', newClosing.daily_closing_id);
       
-      // Crear relaciones con procedimientos (si existen)
       if (financialSummary.procedureClosings && financialSummary.procedureClosings.length > 0) {
         try {
           const procedureClosings = financialSummary.procedureClosings.map(pc => ({
@@ -144,9 +146,8 @@ const dailyClosingController = {
       
       const typeLabel = closing_type === 'orthodontics' ? 'de Ortodoncia' : 'General';
       
-      // Mensaje de éxito personalizado
       let message = `✅ Cierre Diario ${typeLabel} creado exitosamente\n\n`;
-      message += `📅 Fecha: ${newClosing.closing_date_display}\n`;
+      message += `📅 Fecha: ${effectiveDate}\n`;
       message += `📋 Procedimientos: ${financialSummary.cantidad_procedimientos}\n`;
       message += `💰 Gastos variables: ${financialSummary.cantidad_gastos_variables} (C$${financialSummary.total_variable_expenses?.toFixed(2) || '0.00'})\n\n`;
       
@@ -168,19 +169,11 @@ const dailyClosingController = {
           ...newClosing,
           procedure_count: financialSummary.cantidad_procedimientos,
           variable_expenses_count: financialSummary.cantidad_gastos_variables,
-          variable_expenses_total: financialSummary.total_variable_expenses,
-          clinic_percentage: financialSummary.clinic_percentage,
-          doctor_percentage: financialSummary.doctor_percentage,
-          exchange_rate: financialSummary.exchange_rate,
-          total_income_usd: financialSummary.total_income_usd,
-          total_clinic_income_usd: financialSummary.total_clinic_income_usd,
-          total_doctor_income_usd: financialSummary.total_doctor_income_usd,
-          variable_expenses_usd: financialSummary.total_variable_expenses_usd,
-          net_profit_usd: financialSummary.net_profit_usd
+          variable_expenses_total: financialSummary.total_variable_expenses
         }
       });
     } catch (error) {
-      console.error('❌ Error completo al crear cierre diario:', error);
+      console.error('❌ Error al crear cierre diario:', error);
       res.status(500).json({ 
         success: false, 
         error: 'Error al crear cierre diario: ' + error.message 
@@ -241,12 +234,12 @@ const dailyClosingController = {
       console.error('Error al eliminar cierre diario:', error);
       res.status(500).json({ 
         success: false, 
-        error: 'Error al eliminar cierre diario' 
+        error: error.message || 'Error al eliminar cierre diario' 
       });
     }
   },
 
-  // Obtener resumen financiero del día (INCLUYE GASTOS VARIABLES)
+  // Obtener resumen financiero del día (VERSIÓN ORIGINAL para resultados en vivo)
   getDailySummary: async (req, res) => {
     try {
       const { date, closing_type = 'general' } = req.query;
@@ -258,7 +251,6 @@ const dailyClosingController = {
         });
       }
       
-      // Validar tipo
       const validTypes = ['general', 'orthodontics'];
       if (!validTypes.includes(closing_type)) {
         return res.status(400).json({ 
@@ -267,9 +259,9 @@ const dailyClosingController = {
         });
       }
       
+      // 🔴 USAR LA FUNCIÓN ORIGINAL para resultados en vivo
       const summary = await DailyClosing.getDailyFinancialSummary(date, closing_type);
       
-      // Verificar si ya existe cierre
       const exists = await DailyClosing.exists(date, closing_type);
       
       res.json({ 
@@ -300,7 +292,6 @@ const dailyClosingController = {
         });
       }
       
-      // Validar tipo
       const validTypes = ['general', 'orthodontics'];
       if (closing_type && !validTypes.includes(closing_type)) {
         return res.status(400).json({ 
@@ -336,7 +327,6 @@ const dailyClosingController = {
         });
       }
       
-      // Validar tipo
       const validTypes = ['general', 'orthodontics'];
       if (!validTypes.includes(closing_type)) {
         return res.status(400).json({ 
@@ -372,7 +362,7 @@ const dailyClosingController = {
         });
       }
       
-      const expenses = await DailyClosing.getDailyVariableExpenses(date);
+      const expenses = await DailyClosing.getDailyVariableExpensesAll(date);
       
       res.json({ 
         success: true, 

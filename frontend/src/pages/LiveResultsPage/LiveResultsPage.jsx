@@ -121,38 +121,15 @@ const LiveResultsPage = () => {
     variable_expenses: 0,
     total_expenses: 0,
     net_profit: 0,
-    expenses: [],
     hasData: false
   });
 
-  // 🔴 Estados para controlar qué secciones están expandidas
+  // Estados para controlar qué secciones están expandidas
   const [expandedSections, setExpandedSections] = useState({
-    daily: false,    // Detalles del día (ingresos y gastos)
-    monthly: false,  // Detalles del mes (ingresos y gastos)
-    expenses: false  // Lista de gastos
+    daily: false,
+    monthly: false,
+    expenses: false
   });
-
-  // Obtener fechas CORRECTAS del mes actual
-  const getCurrentMonthDates = useCallback(() => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    
-    const firstDayStr = firstDay.toISOString().split('T')[0];
-    const lastDayStr = lastDay.toISOString().split('T')[0];
-    
-    console.log('📅 Fechas del mes calculadas:', { 
-      mes: month + 1,
-      año: year,
-      inicio: firstDayStr, 
-      fin: lastDayStr 
-    });
-    
-    return { start: firstDayStr, end: lastDayStr };
-  }, []);
 
   // Función para calcular total de gastos en córdobas
   const calculateTotalExpenses = (expenses, exchangeRate) => {
@@ -169,6 +146,30 @@ const LiveResultsPage = () => {
     }, 0);
   };
 
+  // Obtener fechas CORRECTAS del mes actual (primer y último día)
+  const getCurrentMonthDates = useCallback(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    
+    // Primer día del mes actual
+    const firstDay = new Date(year, month, 1);
+    // Último día del mes actual
+    const lastDay = new Date(year, month + 1, 0);
+    
+    const firstDayStr = firstDay.toISOString().split('T')[0];
+    const lastDayStr = lastDay.toISOString().split('T')[0];
+    
+    console.log('📅 Fechas del mes calculadas:', { 
+      mes: month + 1,
+      año: year,
+      inicio: firstDayStr, 
+      fin: lastDayStr 
+    });
+    
+    return { start: firstDayStr, end: lastDayStr };
+  }, []);
+
   // Función para cargar datos (solo manualmente o al entrar)
   const fetchLiveData = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
@@ -182,13 +183,13 @@ const LiveResultsPage = () => {
       console.log('🔍 Cargando datos en vivo...', { hoy: todayStr, mes: monthDates });
 
       // ============================================
-      // 1. CARGAR GASTOS VARIABLES DEL DÍA
+      // 1. CARGAR GASTOS VARIABLES DEL DÍA (para detalles)
       // ============================================
       let dailyExpenses = [];
       let dailyExpensesTotal = 0;
       
       try {
-        console.log('📥 Cargando gastos variables del día...');
+        console.log('📥 Cargando gastos variables del día para detalles...');
         const dailyExpensesRes = await apiFetch(`/bills?startDate=${todayStr}&endDate=${todayStr}&type=VARIABLE&limit=100`);
         if (dailyExpensesRes.success) {
           dailyExpenses = dailyExpensesRes.data || [];
@@ -210,7 +211,7 @@ const LiveResultsPage = () => {
       const dailyOrthoRes = await getDailySummary(todayStr, 'orthodontics');
       const dailyOrtho = dailyOrthoRes.success ? dailyOrthoRes.data : null;
 
-      // Ingresos de procedimientos
+      // Ingresos de procedimientos (solo ganancia de la clínica)
       const dailyIncomeFromProcedures = (dailyGeneral?.total_clinic_income || 0) + (dailyOrtho?.total_clinic_income || 0);
       
       // Gastos de procedimientos (si los reporta getDailySummary)
@@ -242,9 +243,19 @@ const LiveResultsPage = () => {
       const monthly = monthlyRes.success ? monthlyRes.data : null;
 
       if (monthly) {
+        // Ingresos totales = general + ortodoncia (solo ganancia clínica)
         const monthlyTotalIncome = (monthly.total_general_income || 0) + (monthly.total_clinical_orthodontic_income || 0);
         const monthlyFixedExpenses = monthly.total_fixed_expenses || 0;
         const monthlyVariableExpenses = monthly.total_variable_expenses || 0;
+        const monthlyTotalExpenses = monthlyFixedExpenses + monthlyVariableExpenses;
+        
+        console.log('💰 Datos mensuales recibidos:', {
+          ingresos: monthlyTotalIncome,
+          fijos: monthlyFixedExpenses,
+          variables: monthlyVariableExpenses,
+          total_gastos: monthlyTotalExpenses,
+          utilidad: monthlyTotalIncome - monthlyTotalExpenses
+        });
         
         setMonthlyData({
           startDate: monthDates.start,
@@ -252,22 +263,35 @@ const LiveResultsPage = () => {
           total_income: monthlyTotalIncome,
           fixed_expenses: monthlyFixedExpenses,
           variable_expenses: monthlyVariableExpenses,
-          total_expenses: monthlyFixedExpenses + monthlyVariableExpenses,
-          net_profit: monthlyTotalIncome - (monthlyFixedExpenses + monthlyVariableExpenses),
-          expenses: [],
+          total_expenses: monthlyTotalExpenses,
+          net_profit: monthlyTotalIncome - monthlyTotalExpenses,
           hasData: true
         });
       } else {
         // Si no hay datos combinados, intentar por separado
+        console.log('📊 Cargando datos mensuales por separado...');
+        
         const monthlyGeneralRes = await getFinancialSummary(monthDates.start, monthDates.end, 'general');
         const monthlyGeneral = monthlyGeneralRes.success ? monthlyGeneralRes.data : null;
         
         const monthlyOrthoRes = await getFinancialSummary(monthDates.start, monthDates.end, 'orthodontics');
         const monthlyOrtho = monthlyOrthoRes.success ? monthlyOrthoRes.data : null;
         
-        const monthlyTotalIncome = (monthlyGeneral?.clinic_income || 0) + (monthlyOrtho?.clinic_income || 0);
+        const monthlyGeneralIncome = monthlyGeneral?.clinic_income || 0;
+        const monthlyOrthoIncome = monthlyOrtho?.clinic_income || 0;
+        const monthlyTotalIncome = monthlyGeneralIncome + monthlyOrthoIncome;
+        
         const monthlyFixedExpenses = monthlyGeneral?.total_fixed_expenses || monthlyOrtho?.total_fixed_expenses || 0;
         const monthlyVariableExpenses = monthlyGeneral?.total_variable_expenses || monthlyOrtho?.total_variable_expenses || 0;
+        const monthlyTotalExpenses = monthlyFixedExpenses + monthlyVariableExpenses;
+        
+        console.log('💰 Datos mensuales por separado:', {
+          ingresos: monthlyTotalIncome,
+          fijos: monthlyFixedExpenses,
+          variables: monthlyVariableExpenses,
+          total_gastos: monthlyTotalExpenses,
+          utilidad: monthlyTotalIncome - monthlyTotalExpenses
+        });
         
         setMonthlyData({
           startDate: monthDates.start,
@@ -275,9 +299,8 @@ const LiveResultsPage = () => {
           total_income: monthlyTotalIncome,
           fixed_expenses: monthlyFixedExpenses,
           variable_expenses: monthlyVariableExpenses,
-          total_expenses: monthlyFixedExpenses + monthlyVariableExpenses,
-          net_profit: monthlyTotalIncome - (monthlyFixedExpenses + monthlyVariableExpenses),
-          expenses: [],
+          total_expenses: monthlyTotalExpenses,
+          net_profit: monthlyTotalIncome - monthlyTotalExpenses,
           hasData: monthlyTotalIncome > 0
         });
       }
@@ -292,19 +315,19 @@ const LiveResultsPage = () => {
     }
   }, [getDailySummary, getFinancialSummary, apiFetch, getCurrentMonthDates, systemSettings]);
 
-  // Solo se ejecuta al montar el componente
+  // Solo se ejecuta al montar el componente (cuando el usuario entra a la página)
   useEffect(() => {
     if (user) {
       fetchLiveData(true);
     }
-  }, [user]);
+  }, [user]); // Solo depende de user
 
   // Función para manejar actualización manual
   const handleManualRefresh = () => {
     fetchLiveData(true);
   };
 
-  // 🔴 Funciones para toggle de secciones
+  // Funciones para toggle de secciones
   const toggleDailyDetails = () => {
     setExpandedSections(prev => ({
       ...prev,
@@ -351,7 +374,7 @@ const LiveResultsPage = () => {
         <div className="header-left">
           <h2>
             <FontAwesomeIcon icon={faChartLine} className="header-icon" />
-            Resultados Financieros
+            Resultados Financieros en Vivo
           </h2>
           {lastUpdated && (
             <div className="live-indicator">
@@ -385,11 +408,20 @@ const LiveResultsPage = () => {
         <div className="section-header">
           <h3>
             <FontAwesomeIcon icon={faCalendarDay} />
-            Resultados del Día ({new Date(dailyData.date).toLocaleDateString('es-NI')})
+            Resultados del Día ({new Date(dailyData.date).toLocaleDateString('es-NI', { 
+              day: 'numeric', 
+              month: 'long', 
+              year: 'numeric' 
+            })})
           </h3>
+          {dailyData.expenses.length > 0 && (
+            <div className="section-badge">
+              {dailyData.expenses.length} gastos registrados
+            </div>
+          )}
         </div>
 
-        {/* 🔴 TARJETA PRINCIPAL: UTILIDAD NETA DEL DÍA */}
+        {/* TARJETA PRINCIPAL: UTILIDAD NETA DEL DÍA */}
         <div 
           className={`main-profit-card ${dailyData.net_profit >= 0 ? 'profit' : 'loss'}`}
           onClick={toggleDailyDetails}
@@ -410,9 +442,14 @@ const LiveResultsPage = () => {
               Margen: {((dailyData.net_profit / dailyData.total_income) * 100).toFixed(2)}%
             </div>
           )}
+          {dailyData.total_income === 0 && dailyData.total_expenses > 0 && (
+            <div className="profit-margin warning">
+              Solo hay gastos registrados (sin ingresos)
+            </div>
+          )}
         </div>
 
-        {/* 🔴 DETALLES DEL DÍA (expandibles) */}
+        {/* DETALLES DEL DÍA (expandibles) */}
         {expandedSections.daily && (
           <div className="expanded-details">
             <div className="details-grid">
@@ -425,6 +462,9 @@ const LiveResultsPage = () => {
                 <div className="detail-value">
                   <DualCurrency amountNIO={dailyData.total_income} />
                 </div>
+                <div className="detail-description">
+                  Ganancia clínica (General + Ortodoncia)
+                </div>
               </div>
 
               {/* Gastos Variables */}
@@ -435,6 +475,9 @@ const LiveResultsPage = () => {
                 </div>
                 <div className="detail-value">
                   <DualCurrency amountNIO={dailyData.total_expenses} />
+                </div>
+                <div className="detail-description">
+                  Gastos del día (procedimientos + facturas)
                 </div>
               </div>
             </div>
@@ -482,7 +525,7 @@ const LiveResultsPage = () => {
           </h3>
         </div>
 
-        {/* 🔴 TARJETA PRINCIPAL: UTILIDAD NETA DEL MES */}
+        {/* TARJETA PRINCIPAL: UTILIDAD NETA DEL MES */}
         <div 
           className={`main-profit-card ${monthlyData.net_profit >= 0 ? 'profit' : 'loss'}`}
           onClick={toggleMonthlyDetails}
@@ -505,7 +548,7 @@ const LiveResultsPage = () => {
           )}
         </div>
 
-        {/* 🔴 DETALLES DEL MES (expandibles) */}
+        {/* DETALLES DEL MES (expandibles) */}
         {expandedSections.monthly && (
           <div className="expanded-details">
             <div className="details-grid">
@@ -518,6 +561,9 @@ const LiveResultsPage = () => {
                 <div className="detail-value">
                   <DualCurrency amountNIO={monthlyData.total_income} />
                 </div>
+                <div className="detail-description">
+                  Ganancia clínica del mes
+                </div>
               </div>
 
               {/* Gastos Fijos */}
@@ -528,6 +574,9 @@ const LiveResultsPage = () => {
                 </div>
                 <div className="detail-value">
                   <DualCurrency amountNIO={monthlyData.fixed_expenses} />
+                </div>
+                <div className="detail-description">
+                  Gastos recurrentes mensuales
                 </div>
               </div>
 
@@ -540,6 +589,9 @@ const LiveResultsPage = () => {
                 <div className="detail-value">
                   <DualCurrency amountNIO={monthlyData.variable_expenses} />
                 </div>
+                <div className="detail-description">
+                  Gastos ocasionales del mes
+                </div>
               </div>
 
               {/* Total Gastos */}
@@ -551,6 +603,9 @@ const LiveResultsPage = () => {
                 <div className="detail-value">
                   <DualCurrency amountNIO={monthlyData.total_expenses} />
                 </div>
+                <div className="detail-description">
+                  Fijos + Variables
+                </div>
               </div>
             </div>
           </div>
@@ -560,13 +615,23 @@ const LiveResultsPage = () => {
       {/* Nota informativa */}
       <div className="info-note">
         <FontAwesomeIcon icon={faInfoCircle} />
-        <p>
-          <strong>Utilidad Neta:</strong> Es lo principal que se muestra. Haz clic en cada tarjeta para ver el detalle de ingresos y gastos.<br />
-          <strong>Actualización:</strong> Los datos se cargan al entrar a esta página y al presionar "Actualizar ahora".
-          {systemSettings && (
-            <> • Tipo de cambio: <strong>C${systemSettings.exchange_rate?.toFixed(2) || '36.50'} = $1 USD</strong></>
-          )}
-        </p>
+        <div className="info-content">
+          <p>
+            <strong>📊 ¿Qué significan estos números?</strong>
+          </p>
+          <ul>
+            <li><strong>Ingresos Totales:</strong> Solo la ganancia de la clínica (NO incluye pago a doctora de ortodoncia ni a doctores externos)</li>
+            <li><strong>Gastos Variables:</strong> Gastos ocasionales registrados en el sistema</li>
+            <li><strong>Gastos Fijos:</strong> Solo aplican en resultados mensuales</li>
+            <li><strong>Utilidad Neta:</strong> Ingresos - Gastos (lo que realmente gana la clínica)</li>
+          </ul>
+          <p className="info-note-small">
+            <FontAwesomeIcon icon={faClock} /> Los datos se actualizan al entrar a esta página y al presionar "Actualizar ahora".
+            {systemSettings && (
+              <> • Tipo de cambio: <strong>C${systemSettings.exchange_rate?.toFixed(2) || '36.50'} = $1 USD</strong></>
+            )}
+          </p>
+        </div>
       </div>
     </div>
   );

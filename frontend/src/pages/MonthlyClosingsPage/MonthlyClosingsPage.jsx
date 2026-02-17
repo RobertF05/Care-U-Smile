@@ -643,6 +643,12 @@ const handleDeleteClosing = async () => {
       }
       
       const summary = summaryResponse.data;
+
+      console.log('📊 Resumen para cierre:', {
+  procedimientos: summary.cantidad_procedimientos,
+  gastos_variables: summary.cantidad_gastos_variables,
+  total_gastos: summary.total_variable_expenses
+});
       
       // Advertencia mejorada considerando gastos variables
       if (summary.cantidad_procedimientos === 0 && summary.cantidad_gastos_variables === 0) {

@@ -114,6 +114,26 @@ const MonthlyClosing = {
     };
   },
 
+  // En monthlyClosingModel.js
+async delete(id) {
+  console.log('🗑️ Eliminando cierre mensual ID:', id);
+  
+  const { data, error } = await supabaseAdmin
+    .from('monthly_closings')
+    .delete()
+    .eq('closing_ID', id)
+    .select()
+    .single();
+  
+  if (error) {
+    console.error('❌ Error eliminando cierre mensual:', error);
+    throw error;
+  }
+  
+  console.log('✅ Cierre mensual eliminado:', data);
+  return data;
+},
+
   // Verificar si existe cierre para mes/año/tipo
   async exists(month, year, closingType = 'all') {
     try {

@@ -298,57 +298,62 @@ const MonthlyClosingsPage = () => {
     }
   };
 
-  // NUEVO: Función para eliminar cierre
-  const handleDeleteClosing = async () => {
-    if (!closingToDelete) return;
+  // 🔴 CORREGIDO: handleDeleteClosing en MonthlyClosingsPage.jsx
+const handleDeleteClosing = async () => {
+  if (!closingToDelete) return;
+  
+  setDeleting(true);
+  
+  try {
+    const confirmMessage = closingToDelete.type === 'monthly' 
+      ? `¿Está seguro de eliminar el cierre mensual de ${closingToDelete.month} ${closingToDelete.year}?\n\nEsta acción no se puede deshacer.`
+      : `¿Está seguro de eliminar el cierre diario del ${closingToDelete.date_exact}?\n\nEsta acción no se puede deshacer.`;
     
-    setDeleting(true);
-    
-    try {
-      const confirmMessage = closingToDelete.type === 'monthly' 
-        ? `¿Está seguro de eliminar el cierre mensual de ${closingToDelete.month} ${closingToDelete.year}?\n\nEsta acción no se puede deshacer.`
-        : `¿Está seguro de eliminar el cierre diario del ${closingToDelete.date_exact}?\n\nEsta acción no se puede deshacer.`;
-      
-      if (!window.confirm(confirmMessage)) {
-        setDeleting(false);
-        setShowDeleteModal(false);
-        setClosingToDelete(null);
-        return;
-      }
-      
-      let endpoint;
-      if (closingToDelete.type === 'monthly') {
-        endpoint = `/monthly-closings/${closingToDelete.closing_id}`;
-      } else {
-        endpoint = `/daily-closings/${closingToDelete.closing_id}`;
-      }
-      
-      const response = await apiFetch(endpoint, {
-        method: 'DELETE'
-      });
-      
-      if (response.success) {
-        alert('✅ Cierre eliminado exitosamente');
-        
-        // Recargar cierres según el tipo
-        if (closingToDelete.type === 'monthly') {
-          fetchMonthlyClosings();
-        } else {
-          fetchDailyClosings();
-        }
-      } else {
-        throw new Error(response.error || 'Error al eliminar cierre');
-      }
-      
-    } catch (error) {
-      console.error('Error eliminando cierre:', error);
-      alert(`❌ Error al eliminar cierre: ${error.message}`);
-    } finally {
+    if (!window.confirm(confirmMessage)) {
       setDeleting(false);
       setShowDeleteModal(false);
       setClosingToDelete(null);
+      return;
     }
-  };
+    
+    let endpoint;
+    if (closingToDelete.type === 'monthly') {
+      // 🔴 CORREGIDO: Asegurar el ID correcto
+      const closingId = closingToDelete.closing_id || closingToDelete.closing_ID || closingToDelete.id;
+      endpoint = `/monthly-closings/${closingId}`;
+      console.log('🗑️ Eliminando cierre mensual:', { id: closingId, endpoint });
+    } else {
+      const closingId = closingToDelete.daily_closing_id || closingToDelete.id;
+      endpoint = `/daily-closings/${closingId}`;
+      console.log('🗑️ Eliminando cierre diario:', { id: closingId, endpoint });
+    }
+    
+    const response = await apiFetch(endpoint, {
+      method: 'DELETE'
+    });
+    
+    if (response.success) {
+      alert('✅ Cierre eliminado exitosamente');
+      
+      // Recargar cierres según el tipo
+      if (closingToDelete.type === 'monthly') {
+        fetchMonthlyClosings();
+      } else {
+        fetchDailyClosings();
+      }
+    } else {
+      throw new Error(response.error || 'Error al eliminar cierre');
+    }
+    
+  } catch (error) {
+    console.error('Error eliminando cierre:', error);
+    alert(`❌ Error al eliminar cierre: ${error.message}`);
+  } finally {
+    setDeleting(false);
+    setShowDeleteModal(false);
+    setClosingToDelete(null);
+  }
+};
 
   // Combinar y filtrar todos los cierres (MODIFICADO para incluir gastos variables)
   const allClosings = useMemo(() => {

@@ -54,6 +54,11 @@ const Sidebar = ({ setPage, active, setActive, currentPage }) => {
       label: 'Informes', 
       icon: faChartBar
     },
+    {
+      id: 'resultados',
+      label: 'Resultados en Vivo',
+      icon: faChartBar
+    },
     { 
       id: 'configuracion', 
       label: 'Configuración', 

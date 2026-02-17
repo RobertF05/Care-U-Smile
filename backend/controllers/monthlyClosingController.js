@@ -236,6 +236,34 @@ const monthlyClosingController = {
   }
 },
 
+// En monthlyClosingController.js
+delete: async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const closing = await MonthlyClosing.getById(id);
+    if (!closing) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Cierre no encontrado' 
+      });
+    }
+    
+    await MonthlyClosing.delete(id);
+    
+    res.json({ 
+      success: true, 
+      message: 'Cierre eliminado exitosamente'
+    });
+  } catch (error) {
+    console.error('Error al eliminar cierre mensual:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Error al eliminar cierre' 
+    });
+  }
+},
+
 // AÑADIR función para obtener detalles de doctores externos
 getExternalDoctorDetails: async (req, res) => {
   try {

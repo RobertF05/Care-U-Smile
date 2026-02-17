@@ -8,6 +8,7 @@ import OrthodonticsPage from './pages/OrthodonticsPage/OrthodonticsPage.jsx';
 import AppointmentPage from './pages/AppointmentPage/AppointmentPage.jsx';
 import MonthlyClosingsPage from './pages/MonthlyClosingsPage/MonthlyClosingsPage.jsx';
 import BillsPage from './pages/BillsPage/BillsPage.jsx';
+import LiveResultsPage from './pages/LiveResultsPage/LiveResultsPage.jsx';
 import SettingsPage from './pages/SettingsPage/SettingsPage.jsx';
 import Login from './pages/LoginPage/LoginPage.jsx';
 import { AuthContext } from './context/AuthContext.jsx'
@@ -57,6 +58,8 @@ function App() {
         return <BillsPage />
       case 'informes':
         return <MonthlyClosingsPage />
+        case 'resultados':
+        return <LiveResultsPage />
       case 'configuracion':
         return <SettingsPage />
       default:

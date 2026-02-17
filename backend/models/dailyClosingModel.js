@@ -242,8 +242,7 @@ async markVariableExpensesAsProcessed(expenseIds, dailyClosingId) {
     return formattedData;
   },
 
-  // models/dailyClosingModel.js
-// CORREGIR la función getDailyFinancialSummary
+  // models/dailyClosingModel.js - CORREGIR getDailyFinancialSummary
 
 async getDailyFinancialSummary(date, closingType = 'general') {
   console.log('🔍 Obteniendo resumen diario para:', { date, closingType });
@@ -251,8 +250,9 @@ async getDailyFinancialSummary(date, closingType = 'general') {
   // Obtener procedimientos del día
   const procedures = await this.getDailyProcedures(date, closingType);
   
-  // Obtener gastos variables del día (NO procesados aún)
-  const variableExpenses = await this.getDailyVariableExpenses(date);
+  // 🔴 CORREGIDO: Obtener TODOS los gastos variables del día (no solo no procesados)
+  // Porque al recrear un cierre, necesitamos todos los gastos del día
+  const variableExpenses = await this.getDailyVariableExpensesAll(date);
   
   console.log('📊 Procedimientos encontrados:', procedures.length);
   console.log('💰 Gastos variables encontrados:', variableExpenses.length);
@@ -296,37 +296,39 @@ async getDailyFinancialSummary(date, closingType = 'general') {
       totalExternalDoctorPaymentsDollars += externalPaymentDollars;
     }
     
-    // Para la relación con el cierre diario - USAR procedure_ID (mayúscula)
     procedureClosings.push({
-      procedure_id: procedure.procedure_ID,  // ← Esto se convertirá a procedure_ID en createProcedureRelations
+      procedure_id: procedure.procedure_ID,
       clinic_income_portion: clinicCordobas,
       doctor_income_portion: doctorCordobas,
       external_doctor_payment: parseFloat(procedure.external_doctor_payment) || 0
     });
   });
   
-  // Calcular total de gastos variables
+  // 🔴 CORREGIDO: Calcular total de gastos variables de la tabla bills
   let totalVariableExpensesCordobas = 0;
   let totalVariableExpensesDollars = 0;
   const expenseDetails = [];
+  const expenseIds = [];
   
   variableExpenses.forEach(expense => {
     // Calcular monto en córdobas
-    let amountCordobas = parseFloat(expense.amount) || 0;
+    let amountCordobas = 0;
+    let amountDollars = 0;
     
-    // Si está en USD y no tiene amount, convertir
-    if (expense.currency_used === 'USD' && !amountCordobas) {
-      const amountUSD = parseFloat(expense.amount_usd) || 0;
+    if (expense.currency_used === 'USD') {
+      const usdAmount = parseFloat(expense.amount_usd) || 0;
       const expenseExchangeRate = parseFloat(expense.exchange_rate_bill) || exchangeRate;
-      amountCordobas = amountUSD * expenseExchangeRate;
+      amountCordobas = usdAmount * expenseExchangeRate;
+      amountDollars = usdAmount;
+    } else {
+      amountCordobas = parseFloat(expense.amount) || 0;
+      amountDollars = amountCordobas / exchangeRate;
     }
     
     totalVariableExpensesCordobas += amountCordobas;
-    
-    // Calcular en dólares
-    const expenseExchangeRate = parseFloat(expense.exchange_rate_bill) || exchangeRate;
-    const amountDollars = amountCordobas / expenseExchangeRate;
     totalVariableExpensesDollars += amountDollars;
+    
+    expenseIds.push(expense.bill_ID);
     
     expenseDetails.push({
       bill_id: expense.bill_ID,
@@ -334,7 +336,7 @@ async getDailyFinancialSummary(date, closingType = 'general') {
       amount: amountCordobas,
       amount_usd: amountDollars,
       category: expense.category,
-      exchange_rate: expenseExchangeRate
+      exchange_rate: expense.exchange_rate_bill || exchangeRate
     });
   });
   
@@ -363,7 +365,7 @@ async getDailyFinancialSummary(date, closingType = 'general') {
     total_doctor_income_usd: totalDoctorIncomeDollars,
     total_external_doctor_payments: totalExternalDoctorPaymentsCordobas,
     total_external_doctor_payments_usd: totalExternalDoctorPaymentsDollars,
-    total_variable_expenses: totalVariableExpensesCordobas,  // ← ASEGURAR que esto se envía
+    total_variable_expenses: totalVariableExpensesCordobas,  // ← AHORA INCLUYE GASTOS DE BILLS
     total_variable_expenses_usd: totalVariableExpensesDollars,
     net_profit: netProfit,
     net_profit_usd: netProfit / exchangeRate,
@@ -371,10 +373,10 @@ async getDailyFinancialSummary(date, closingType = 'general') {
     fecha_nicaragua: date,
     cantidad_procedimientos: procedures.length,
     cantidad_gastos_variables: variableExpenses.length,
-    expense_ids: variableExpenses.map(e => e.bill_ID) // IDs para marcar como procesados
+    expense_ids: expenseIds // IDs para marcar como procesados
   };
   
-  console.log('📋 Resultado final del resumen diario CON GASTOS VARIABLES:', {
+  console.log('📋 Resumen diario CON GASTOS VARIABLES:', {
     total_clinic_income: result.total_clinic_income,
     total_variable_expenses: result.total_variable_expenses,
     net_profit: result.net_profit,
@@ -383,6 +385,48 @@ async getDailyFinancialSummary(date, closingType = 'general') {
   });
   
   return result;
+},
+
+// 🔴 NUEVA FUNCIÓN: Obtener TODOS los gastos variables del día (procesados o no)
+async getDailyVariableExpensesAll(date) {
+  console.log('🔍 Obteniendo TODOS los gastos variables para el día:', date);
+  
+  // La fecha ya viene en formato YYYY-MM-DD
+  const queryDate = date;
+  
+  console.log('🔍 Buscando TODOS los gastos con fecha:', queryDate);
+  
+  // Obtener gastos variables (no recurrentes) de la fecha específica
+  // SIN filtrar por is_processed_in_daily_closing
+  const { data, error } = await supabaseAdmin
+    .from('bills')
+    .select(`
+      bill_ID,
+      description,
+      amount,
+      amount_usd,
+      bill_date,
+      category,
+      currency_used,
+      exchange_rate_bill,
+      is_processed_in_daily_closing,
+      processed_in_daily_closing_ID
+    `)
+    .eq('is_recurrent', false)  // Solo gastos variables
+    .eq('bill_date', queryDate);  // Comparar directamente con la fecha
+  
+  if (error) {
+    console.error('❌ Error obteniendo gastos variables:', error);
+    throw error;
+  }
+  
+  console.log(`✅ Encontrados ${data?.length || 0} gastos variables para el día ${date}`);
+  console.log('📊 Estado de procesamiento:', {
+    procesados: data?.filter(b => b.is_processed_in_daily_closing).length || 0,
+    no_procesados: data?.filter(b => !b.is_processed_in_daily_closing).length || 0
+  });
+  
+  return data || [];
 },
 
   // models/dailyClosingModel.js

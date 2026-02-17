@@ -320,9 +320,9 @@ async getOrthodonticsProceduresStats(startDate, endDate, clinicPercentage, docto
     };
   },
 
-  // models/monthlyClosingModel.js - getExpenseStats CORREGIDO
+// MODIFICAR getExpenseStats para usar las nuevas funciones
 async getExpenseStats(startDate, endDate) {
-  console.log('📊 Obteniendo estadísticas de gastos:', { startDate, endDate });
+  console.log('📊 Obteniendo estadísticas de gastos para cierre mensual:', { startDate, endDate });
   
   try {
     // Obtener configuración para conversiones
@@ -330,150 +330,75 @@ async getExpenseStats(startDate, endDate) {
     const defaultExchangeRate = settings?.exchange_rate || 36.5;
     
     // ============================================
-    // 1. GASTOS FIJOS: TODOS los que existen en la BD
+    // 1. GASTOS FIJOS: Todos los del período
     // ============================================
-    console.log('💰 BUSCANDO GASTOS FIJOS (todos los existentes)...');
-    
-    const { data: allFixedBills, error: fixedError } = await supabaseAdmin
-      .from('bills')
-      .select('bill_ID, description, amount, amount_usd, currency_used, exchange_rate_bill, is_recurrent, bill_date')
-      .eq('is_recurrent', true); // Solo gastos fijos
-    
-    if (fixedError) {
-      console.error('❌ Error obteniendo gastos fijos:', fixedError);
-      throw fixedError;
-    }
-    
-    console.log(`📋 Total gastos fijos en BD: ${allFixedBills?.length || 0}`);
-    
-    // Filtrar solo los activos (sin fecha de fin o con fecha futura)
-    const activeFixedBills = allFixedBills?.filter(bill => {
-      // Si el gasto tiene fecha de creación (bill_date), verificar si está activo
-      if (bill.bill_date) {
-        const billDate = new Date(bill.bill_date);
-        const periodEnd = new Date(endDate);
-        // Considerar gasto activo si su fecha es anterior o igual al fin del período
-        return billDate <= periodEnd;
-      }
-      // Si no tiene fecha, siempre está activo
-      return true;
-    }) || [];
-    
-    console.log(`📋 Gastos fijos activos: ${activeFixedBills.length}`);
+    const fixedBills = await this.getFixedExpensesInRange(startDate, endDate);
     
     // ============================================
-    // 2. GASTOS VARIABLES: Solo del período específico
+    // 2. GASTOS VARIABLES: Todos los del período (incluyendo ya procesados)
     // ============================================
-    console.log('💰 BUSCANDO GASTOS VARIABLES (del período específico)...');
-    
-    const { data: variableBills, error: variableError } = await supabaseAdmin
-      .from('bills')
-      .select('bill_ID, description, amount, amount_usd, currency_used, exchange_rate_bill, is_recurrent, bill_date')
-      .eq('is_recurrent', false) // Solo gastos variables
-      .gte('bill_date', startDate)
-      .lte('bill_date', endDate);
-    
-    if (variableError) {
-      console.error('❌ Error obteniendo gastos variables:', variableError);
-      throw variableError;
-    }
-    
-    console.log(`📋 Gastos variables del período: ${variableBills?.length || 0}`);
+    const variableBillsData = await this.getVariableExpensesForMonthly(startDate, endDate);
     
     // Función para calcular monto en córdobas
     const calculateAmountInCordobas = (bill) => {
       if (!bill) return 0;
       
-      // DEBUG: Ver estructura del bill
-      console.log('💰 Calculando monto para bill:', {
-        id: bill.bill_ID,
-        desc: bill.description,
-        amount: bill.amount,
-        amount_usd: bill.amount_usd,
-        currency: bill.currency_used,
-        exchange: bill.exchange_rate_bill
-      });
-      
-      // Si hay amount directo en córdobas, usarlo
+      // Si hay amount directo en córdobas
       if (bill.amount && parseFloat(bill.amount) > 0) {
-        return parseFloat(bill.amount) || 0;
+        return parseFloat(bill.amount);
       }
       
       // Si es USD, convertir
       if (bill.currency_used === 'USD') {
         const amountUSD = parseFloat(bill.amount_usd) || 0;
         const exchangeRate = parseFloat(bill.exchange_rate_bill) || defaultExchangeRate;
-        const amountCordobas = amountUSD * exchangeRate;
-        console.log(`   USD → C$: ${amountUSD} * ${exchangeRate} = ${amountCordobas}`);
-        return amountCordobas;
+        return amountUSD * exchangeRate;
       }
       
-      // Si no tiene amount ni es USD, es 0
-      console.log('   ⚠️ Bill sin monto válido, usando 0');
       return 0;
     };
     
     // Calcular total de gastos fijos
-    const fixedExpenses = activeFixedBills.reduce((sum, bill) => {
-      const amount = calculateAmountInCordobas(bill);
-      console.log(`💰 Gasto fijo "${bill.description?.substring(0, 30)}...": ${amount} C$`);
-      return sum + amount;
+    const fixedExpenses = fixedBills.reduce((sum, bill) => {
+      return sum + calculateAmountInCordobas(bill);
     }, 0);
     
-    // Calcular total de gastos variables
-    const variableExpenses = variableBills?.reduce((sum, bill) => {
-      const amount = calculateAmountInCordobas(bill);
-      console.log(`💰 Gasto variable "${bill.description?.substring(0, 30)}...": ${amount} C$`);
-      return sum + amount;
-    }, 0) || 0;
+    // Calcular total de gastos variables (TODOS, independientemente de si ya están en cierres diarios)
+    const variableExpenses = variableBillsData.all.reduce((sum, bill) => {
+      return sum + calculateAmountInCordobas(bill);
+    }, 0);
     
     const totalExpenses = fixedExpenses + variableExpenses;
     
-    console.log('📊 RESUMEN COMPLETO DE GASTOS:', {
+    console.log('📊 RESUMEN COMPLETO DE GASTOS PARA CIERRE MENSUAL:', {
       gastosFijos: {
-        totalEnBD: allFixedBills?.length || 0,
-        activos: activeFixedBills.length,
+        cantidad: fixedBills.length,
         totalCordobas: fixedExpenses
       },
       gastosVariables: {
-        delPeriodo: variableBills?.length || 0,
+        total: variableBillsData.all.length,
+        procesadosEnDiarios: variableBillsData.processedInDaily.length,
+        noProcesados: variableBillsData.notProcessed.length,
         totalCordobas: variableExpenses
       },
-      totalGastos: totalExpenses,
-      formula: `Total = Fijos(${fixedExpenses}) + Variables(${variableExpenses}) = ${totalExpenses}`
+      totalGastos: totalExpenses
     });
-    
-    // Mostrar detalle de gastos fijos
-    console.log('📋 DETALLE GASTOS FIJOS:');
-    activeFixedBills.forEach((bill, index) => {
-      const amount = calculateAmountInCordobas(bill);
-      console.log(`  ${index + 1}. ${bill.description} - ${amount} C$ (${bill.bill_date || 'sin fecha'})`);
-    });
-    
-    // Mostrar detalle de gastos variables
-    if (variableBills?.length > 0) {
-      console.log('📋 DETALLE GASTOS VARIABLES:');
-      variableBills.forEach((bill, index) => {
-        const amount = calculateAmountInCordobas(bill);
-        console.log(`  ${index + 1}. ${bill.description} - ${amount} C$ (${bill.bill_date})`);
-      });
-    }
     
     return {
       fixed_expenses: fixedExpenses,
       variable_expenses: variableExpenses,
       total_expenses: totalExpenses,
-      fixed_bills: activeFixedBills,
-      variable_bills: variableBills || [],
+      fixed_bills: fixedBills,
+      variable_bills: variableBillsData.all,
       metadata: {
-        total_fixed_bills_in_db: allFixedBills?.length || 0,
-        active_fixed_bills: activeFixedBills.length,
-        variable_bills_in_period: variableBills?.length || 0,
-        calculation_date: new Date().toISOString()
+        total_fixed_bills: fixedBills.length,
+        total_variable_bills: variableBillsData.all.length,
+        variable_processed_in_daily: variableBillsData.processedInDaily.length,
+        variable_not_processed: variableBillsData.notProcessed.length
       }
     };
   } catch (error) {
-    console.error('❌ Error completo en getExpenseStats:', error);
+    console.error('❌ Error en getExpenseStats:', error);
     return { 
       fixed_expenses: 0, 
       variable_expenses: 0, 
@@ -485,22 +410,23 @@ async getExpenseStats(startDate, endDate) {
   }
 },
 
-// En monthlyClosingModel.js, agrega esta función ANTES de getFinancialSummary
+// AÑADIR función para obtener procedimientos con doctores externos (si no existe)
 async getExternalDoctorPayments(startDate, endDate, closingType = 'all') {
   try {
     console.log('💰 Obteniendo pagos a doctores externos:', { startDate, endDate, closingType });
     
-    const { data, error } = await supabaseAdmin
+    let query = supabaseAdmin
       .from('procedures')
       .select(`
         procedure_ID,
         procedure_description,
+        procedure_date,
+        patients (first_name, first_last_name),
         total_procedure,
         theres_external_doctor,
         external_doctor_name,
         external_doctor_payment,
-        external_doctor_payment_value,
-        external_doctor_payment_currency,
+        external_doctor_payment_usd,
         external_doctor_payment_type,
         exchange_rate_used,
         is_orthodontics
@@ -508,6 +434,8 @@ async getExternalDoctorPayments(startDate, endDate, closingType = 'all') {
       .eq('theres_external_doctor', true)
       .gte('procedure_date', startDate + 'T00:00:00')
       .lte('procedure_date', endDate + 'T23:59:59');
+    
+    const { data, error } = await query;
     
     if (error) throw error;
     
@@ -518,54 +446,25 @@ async getExternalDoctorPayments(startDate, endDate, closingType = 'all') {
       filteredData = filteredData.filter(proc => proc.is_orthodontics === isOrtho);
     }
     
-    // Obtener configuración para conversiones
-    const settings = await this.getSystemSettings();
-    const defaultExchangeRate = settings?.exchange_rate || 36.5;
-    
     // Calcular totales
     const totalCordobas = filteredData.reduce((sum, proc) => {
-      let payment = 0;
-      
-      // Verificar si hay pago directo en córdobas
-      if (proc.external_doctor_payment && parseFloat(proc.external_doctor_payment) > 0) {
-        payment = parseFloat(proc.external_doctor_payment);
-      } 
-      // Si es porcentaje, calcular del total_procedure
-      else if (proc.external_doctor_payment_type === 'percentage' && 
-               proc.external_doctor_payment_value && 
-               proc.total_procedure) {
-        const percentage = parseFloat(proc.external_doctor_payment_value) || 0;
-        const total = parseFloat(proc.total_procedure) || 0;
-        payment = total * (percentage / 100);
-      }
-      // Si tiene valor fijo en otra moneda, convertir
-      else if (proc.external_doctor_payment_value) {
-        payment = parseFloat(proc.external_doctor_payment_value) || 0;
-        
-        // Si es USD, convertir a córdobas
-        if (proc.external_doctor_payment_currency === 'USD') {
-          const exchangeRate = parseFloat(proc.exchange_rate_used) || defaultExchangeRate;
-          payment = payment * exchangeRate;
-        }
-      }
-      
-      return sum + payment;
+      return sum + (parseFloat(proc.external_doctor_payment) || 0);
     }, 0);
     
-    // Calcular total en dólares
-    const totalDollars = totalCordobas / defaultExchangeRate;
+    const totalUsd = filteredData.reduce((sum, proc) => {
+      return sum + (parseFloat(proc.external_doctor_payment_usd) || 0);
+    }, 0);
     
-    console.log('💰 Total pagos a doctores externos:', {
-      totalCordobas,
-      totalDollars,
+    console.log('💰 Pagos a doctores externos:', {
       count: filteredData.length,
-      procedimientosConDoctorExterno: filteredData.filter(p => p.theres_external_doctor).length
+      totalCordobas,
+      totalUsd
     });
     
     return {
       payments: filteredData,
       total_payments_cordobas: totalCordobas,
-      total_payments_usd: totalDollars,
+      total_payments_usd: totalUsd,
       count: filteredData.length
     };
   } catch (error) {
@@ -603,8 +502,9 @@ async verifyDateRange(startDate, endDate) {
   };
 },
 
-  async getFinancialSummary(startDate, endDate, closingType = 'all') {
-  console.log('Obteniendo resumen financiero:', {
+  // MODIFICAR getFinancialSummary para asegurar que los gastos variables se incluyan correctamente
+async getFinancialSummary(startDate, endDate, closingType = 'all') {
+  console.log('📊 Obteniendo resumen financiero mensual:', {
     inicio: startDate,
     fin: endDate,
     tipo: closingType
@@ -622,7 +522,8 @@ async verifyDateRange(startDate, endDate) {
     variable_expenses: 0, 
     total_expenses: 0,
     fixed_bills: [],
-    variable_bills: [] 
+    variable_bills: [],
+    metadata: {}
   };
   
   // Obtener pagos a doctores externos
@@ -636,10 +537,15 @@ async verifyDateRange(startDate, endDate) {
     // 'all' - ambos tipos
     incomeStats = await this.getAllProceduresStats(startDate, endDate, clinicPercentage, doctorPercentage);
     
-    // Obtener gastos
+    // Obtener gastos (incluye TODOS los variables del período)
     try {
       expenseStats = await this.getExpenseStats(startDate, endDate);
-      console.log('💰 Gastos obtenidos para el cierre:', expenseStats);
+      console.log('💰 Gastos obtenidos para cierre mensual:', {
+        fijos: expenseStats.fixed_expenses,
+        variables: expenseStats.variable_expenses,
+        total: expenseStats.total_expenses,
+        metadata: expenseStats.metadata
+      });
     } catch (expenseError) {
       console.error('❌ Error obteniendo gastos, usando valores por defecto:', expenseError);
     }
@@ -665,7 +571,7 @@ async verifyDateRange(startDate, endDate) {
   
   const netProfit = clinicIncome - totalExpenses;
   
-  console.log('🧮 Cálculos finales:', {
+  console.log('🧮 Cálculos finales cierre mensual:', {
     generalIncome,
     clinicOrthodonticIncome,
     doctorOrthodonticIncome,
@@ -674,6 +580,8 @@ async verifyDateRange(startDate, endDate) {
     netProfit,
     closingType,
     externalDoctors: externalDoctorStats.total_payments_cordobas,
+    gastosVariablesIncluidos: expenseStats.metadata?.total_variable_bills || 0,
+    gastosVariablesProcesadosEnDiarios: expenseStats.metadata?.variable_processed_in_daily || 0,
     formula: `Utilidad = ${clinicIncome} - ${totalExpenses} = ${netProfit}`
   });
   
@@ -685,13 +593,20 @@ async verifyDateRange(startDate, endDate) {
     total_variable_expenses: expenseStats.variable_expenses || 0,
     net_profit: netProfit,
     closing_type: closingType,
-    // Campos adicionales para pagos a doctores externos
-    total_external_doctor_payments: externalDoctorStats.total_payments_cordobas || 0,
-    total_external_doctor_payments_usd: externalDoctorStats.total_payments_usd || 0,
+    // Campos adicionales
+    total_external_doctor_payments: externalDoctorStats.total_payments_cordobas,
+    total_external_doctor_payments_usd: externalDoctorStats.total_payments_usd,
     external_doctor_count: externalDoctorStats.count || 0,
     clinic_percentage: clinicPercentage,
     doctor_percentage: doctorPercentage,
-    exchange_rate: settings.exchange_rate || 36.5
+    exchange_rate: settings.exchange_rate || 36.5,
+    // Metadatos de gastos
+    expense_metadata: {
+      variable_expenses_total: expenseStats.variable_expenses || 0,
+      variable_expenses_count: expenseStats.metadata?.total_variable_bills || 0,
+      variable_expenses_in_daily: expenseStats.metadata?.variable_processed_in_daily || 0,
+      fixed_expenses_count: expenseStats.metadata?.total_fixed_bills || 0
+    }
   };
 },
 
@@ -805,7 +720,149 @@ async getFinancialSummary(startDate, endDate, closingType = 'all') {
       new Date(end).toISOString().split('T')[0],
       closingType
     );
+  },
+
+  // Obtener gastos variables del período, considerando si ya están en cierres diarios
+async getVariableExpensesForMonthly(startDate, endDate) {
+  console.log('💰 Obteniendo gastos variables para cierre mensual:', { startDate, endDate });
+  
+  const { data, error } = await supabaseAdmin
+    .from('bills')
+    .select(`
+      bill_ID,
+      description,
+      amount,
+      amount_usd,
+      bill_date,
+      category,
+      currency_used,
+      exchange_rate_bill,
+      is_processed_in_daily_closing,
+      processed_in_daily_closing_ID
+    `)
+    .eq('is_recurrent', false) // Solo gastos variables
+    .gte('bill_date', startDate)
+    .lte('bill_date', endDate);
+  
+  if (error) {
+    console.error('❌ Error obteniendo gastos variables:', error);
+    throw error;
   }
+  
+  console.log(`📊 Encontrados ${data?.length || 0} gastos variables en el período`);
+  
+  // Separar gastos ya procesados en cierres diarios
+  const processedInDaily = (data || []).filter(b => b.is_processed_in_daily_closing === true);
+  const notProcessed = (data || []).filter(b => b.is_processed_in_daily_closing !== true);
+  
+  console.log('📋 Estado de gastos variables:', {
+    total: data?.length || 0,
+    procesadosEnCierresDiarios: processedInDaily.length,
+    noProcesados: notProcessed.length
+  });
+  
+  return {
+    all: data || [],
+    processedInDaily,
+    notProcessed
+  };
+},
+
+// Obtener gastos fijos del período
+async getFixedExpensesInRange(startDate, endDate) {
+  console.log('💰 Obteniendo gastos fijos:', { startDate, endDate });
+  
+  const { data, error } = await supabaseAdmin
+    .from('bills')
+    .select('*')
+    .eq('is_recurrent', true) // Solo gastos fijos
+    .gte('bill_date', startDate)
+    .lte('bill_date', endDate);
+  
+  if (error) {
+    console.error('❌ Error obteniendo gastos fijos:', error);
+    throw error;
+  }
+  
+  console.log(`📊 Encontrados ${data?.length || 0} gastos fijos en el período`);
+  return data || [];
+},
+
+// AÑADIR función para obtener detalles de doctores externos por período
+async getExternalDoctorDetails(startDate, endDate, closingType = 'all') {
+  try {
+    let query = supabaseAdmin
+      .from('procedures')
+      .select(`
+        procedure_ID,
+        procedure_date,
+        procedure_description,
+        patients (first_name, first_last_name),
+        theres_external_doctor,
+        external_doctor_name,
+        external_doctor_specialty,
+        external_doctor_payment,
+        external_doctor_payment_usd,
+        external_doctor_payment_type,
+        external_doctor_payment_value,
+        external_doctor_payment_currency,
+        exchange_rate_used,
+        is_orthodontics
+      `)
+      .eq('theres_external_doctor', true)
+      .gte('procedure_date', startDate + 'T00:00:00')
+      .lte('procedure_date', endDate + 'T23:59:59')
+      .order('procedure_date', { ascending: false });
+    
+    const { data, error } = await query;
+    
+    if (error) throw error;
+    
+    // Filtrar por tipo de cierre
+    let filteredData = data || [];
+    if (closingType !== 'all') {
+      const isOrtho = closingType === 'orthodontics';
+      filteredData = filteredData.filter(proc => proc.is_orthodontics === isOrtho);
+    }
+    
+    // Formatear datos
+    const details = filteredData.map(proc => ({
+      procedure_id: proc.procedure_ID,
+      procedure_date: proc.procedure_date,
+      procedure_description: proc.procedure_description,
+      patient_name: proc.patients ? 
+        `${proc.patients.first_name || ''} ${proc.patients.first_last_name || ''}`.trim() : 
+        'N/A',
+      doctor_name: proc.external_doctor_name || 'No especificado',
+      doctor_specialty: proc.external_doctor_specialty || 'General',
+      payment_cordobas: parseFloat(proc.external_doctor_payment) || 0,
+      payment_usd: parseFloat(proc.external_doctor_payment_usd) || 0,
+      payment_type: proc.external_doctor_payment_type || 'fixed',
+      payment_value: proc.external_doctor_payment_value,
+      payment_currency: proc.external_doctor_payment_currency || 'C$',
+      is_orthodontics: proc.is_orthodontics,
+      exchange_rate_used: proc.exchange_rate_used
+    }));
+    
+    // Calcular totales
+    const totalCordobas = details.reduce((sum, d) => sum + d.payment_cordobas, 0);
+    const totalUsd = details.reduce((sum, d) => sum + d.payment_usd, 0);
+    
+    return {
+      payments: details,
+      summary: {
+        total_payments_cordobas: totalCordobas,
+        total_payments_usd: totalUsd,
+        count: details.length,
+        count_orthodontics: details.filter(d => d.is_orthodontics).length,
+        count_general: details.filter(d => !d.is_orthodontics).length
+      }
+    };
+  } catch (error) {
+    console.error('❌ Error en getExternalDoctorDetails:', error);
+    throw error;
+  }
+}
 };
 
 export default MonthlyClosing;

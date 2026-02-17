@@ -58,7 +58,7 @@ const dailyClosingController = {
     }
   },
 
-  // Crear cierre diario
+  // Crear cierre diario (VERSIÓN MODIFICADA CON GASTOS VARIABLES)
   create: async (req, res) => {
     try {
       const { date, closing_date, closing_type = 'general', comentary = '' } = req.body;
@@ -93,10 +93,15 @@ const dailyClosingController = {
         });
       }
       
-      // Obtener resumen financiero
+      // Obtener resumen financiero (INCLUYE GASTOS VARIABLES)
       const financialSummary = await DailyClosing.getDailyFinancialSummary(effectiveDate, closing_type);
       
-      // Crear cierre diario
+      // Mostrar advertencia si no hay procedimientos pero SÍ hay gastos
+      if (financialSummary.cantidad_procedimientos === 0 && financialSummary.cantidad_gastos_variables > 0) {
+        console.log('⚠️ No hay procedimientos pero hay gastos variables, continuando...');
+      }
+      
+      // Crear cierre diario con gastos variables incluidos
       const closingData = {
         closing_date: effectiveDate,
         closing_type,
@@ -104,35 +109,24 @@ const dailyClosingController = {
         total_clinic_income: financialSummary.total_clinic_income,
         total_doctor_income: financialSummary.total_doctor_income,
         total_external_doctor_payments: financialSummary.total_external_doctor_payments,
+        total_variable_expenses: financialSummary.total_variable_expenses, // NUEVO
         net_profit: financialSummary.net_profit,
         comentary,
-        is_processed: false
+        is_processed: false,
+        expense_ids: financialSummary.expense_ids // IDs de gastos a marcar como procesados
       };
       
-      console.log('📤 Creando cierre con datos:', closingData);
+      console.log('📤 Creando cierre con datos:', {
+        ...closingData,
+        expense_ids: `${closingData.expense_ids?.length || 0} gastos variables`
+      });
       
       const newClosing = await DailyClosing.create(closingData);
       
       console.log('✅ Cierre creado, ID:', newClosing.daily_closing_id);
       
-      // Verificar que tenemos el ID
-      if (!newClosing.daily_closing_id) {
-        console.error('❌ No se recibió daily_closing_id del cierre creado');
-        
-        // Intentar obtener el ID de diferentes formas
-        const closingId = newClosing.daily_closing_id || newClosing.id || newClosing.daily_closing_ID;
-        
-        if (!closingId) {
-          throw new Error('No se pudo obtener el ID del cierre creado');
-        }
-        
-        newClosing.daily_closing_id = closingId;
-      }
-      
-      // Crear relaciones con procedimientos
+      // Crear relaciones con procedimientos (si existen)
       if (financialSummary.procedureClosings && financialSummary.procedureClosings.length > 0) {
-        console.log(`📝 Creando ${financialSummary.procedureClosings.length} relaciones de procedimientos`);
-        
         try {
           const procedureClosings = financialSummary.procedureClosings.map(pc => ({
             procedure_id: pc.procedure_id,
@@ -142,30 +136,47 @@ const dailyClosingController = {
             external_doctor_payment: pc.external_doctor_payment || 0
           }));
           
-          console.log('📤 Insertando relaciones:', procedureClosings);
           await DailyClosing.createProcedureRelations(procedureClosings);
         } catch (relationError) {
-          console.warn('⚠️ No se pudieron crear relaciones, pero el cierre se guardó:', relationError.message);
-          // Continuar sin relaciones
+          console.warn('⚠️ No se pudieron crear relaciones:', relationError.message);
         }
-      } else {
-        console.log('ℹ️ No hay procedimientos para crear relaciones');
       }
       
       const typeLabel = closing_type === 'orthodontics' ? 'de Ortodoncia' : 'General';
       
+      // Mensaje de éxito personalizado
+      let message = `✅ Cierre Diario ${typeLabel} creado exitosamente\n\n`;
+      message += `📅 Fecha: ${newClosing.closing_date_display}\n`;
+      message += `📋 Procedimientos: ${financialSummary.cantidad_procedimientos}\n`;
+      message += `💰 Gastos variables: ${financialSummary.cantidad_gastos_variables} (C$${financialSummary.total_variable_expenses?.toFixed(2) || '0.00'})\n\n`;
+      
+      if (closing_type === 'orthodontics') {
+        message += `🦷 ORTODONCIA:\n`;
+        message += `   Clínica: C$${financialSummary.total_clinic_income?.toFixed(2)}\n`;
+        message += `   Doctora: C$${financialSummary.total_doctor_income?.toFixed(2)}\n`;
+      } else {
+        message += `📊 PROCEDIMIENTOS GENERALES:\n`;
+        message += `   Ganancia clínica: C$${financialSummary.total_clinic_income?.toFixed(2)}\n`;
+      }
+      
+      message += `\n💰 UTILIDAD NETA (después de gastos): C$${financialSummary.net_profit?.toFixed(2)}`;
+      
       res.status(201).json({ 
         success: true, 
-        message: `Cierre Diario ${typeLabel} creado exitosamente`,
+        message,
         data: {
           ...newClosing,
-          procedure_count: financialSummary.procedures ? financialSummary.procedures.length : 0,
+          procedure_count: financialSummary.cantidad_procedimientos,
+          variable_expenses_count: financialSummary.cantidad_gastos_variables,
+          variable_expenses_total: financialSummary.total_variable_expenses,
           clinic_percentage: financialSummary.clinic_percentage,
           doctor_percentage: financialSummary.doctor_percentage,
           exchange_rate: financialSummary.exchange_rate,
           total_income_usd: financialSummary.total_income_usd,
           total_clinic_income_usd: financialSummary.total_clinic_income_usd,
-          total_doctor_income_usd: financialSummary.total_doctor_income_usd
+          total_doctor_income_usd: financialSummary.total_doctor_income_usd,
+          variable_expenses_usd: financialSummary.total_variable_expenses_usd,
+          net_profit_usd: financialSummary.net_profit_usd
         }
       });
     } catch (error) {
@@ -235,7 +246,7 @@ const dailyClosingController = {
     }
   },
 
-  // Obtener resumen financiero del día
+  // Obtener resumen financiero del día (INCLUYE GASTOS VARIABLES)
   getDailySummary: async (req, res) => {
     try {
       const { date, closing_type = 'general' } = req.query;
@@ -345,6 +356,37 @@ const dailyClosingController = {
       res.status(500).json({ 
         success: false, 
         error: 'Error al verificar cierre' 
+      });
+    }
+  },
+
+  // Obtener gastos variables del día (para depuración)
+  getDailyVariableExpenses: async (req, res) => {
+    try {
+      const { date } = req.query;
+      
+      if (!date) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'La fecha es requerida' 
+        });
+      }
+      
+      const expenses = await DailyClosing.getDailyVariableExpenses(date);
+      
+      res.json({ 
+        success: true, 
+        data: {
+          expenses,
+          count: expenses.length,
+          total: expenses.reduce((sum, e) => sum + (e.amount || 0), 0)
+        }
+      });
+    } catch (error) {
+      console.error('Error al obtener gastos variables:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: 'Error al obtener gastos variables' 
       });
     }
   }

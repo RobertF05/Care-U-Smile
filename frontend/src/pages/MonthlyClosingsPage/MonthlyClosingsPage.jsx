@@ -38,7 +38,9 @@ import {
   faExchangeAlt,
   faReceipt,
   faUsers,
-  faStethoscope
+  faStethoscope,
+  faTrashAlt, // NUEVO: Icono para eliminar
+  faExclamationCircle // NUEVO: Icono para advertencias
 } from '@fortawesome/free-solid-svg-icons';
 import { AppContext } from '../../context/AppContext';
 import { AuthContext } from '../../context/AuthContext';
@@ -85,6 +87,15 @@ const MonthlyClosingsPage = () => {
   const [doctorPercentage, setDoctorPercentage] = useState(60);
   const [externalDoctorDetails, setExternalDoctorDetails] = useState(null);
   const [showExternalDoctorsModal, setShowExternalDoctorsModal] = useState(false);
+  
+  // NUEVO: Estados para eliminar cierre
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [closingToDelete, setClosingToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  
+  // NUEVO: Estado para gastos variables en cierres diarios
+  const [showVariableExpensesModal, setShowVariableExpensesModal] = useState(false);
+  const [variableExpensesDetails, setVariableExpensesDetails] = useState(null);
   
   // Formulario para crear cierre mensual
   const [newClosing, setNewClosing] = useState({
@@ -220,6 +231,36 @@ const MonthlyClosingsPage = () => {
     }));
   };
 
+  // NUEVO: Función para obtener detalles de gastos variables de un cierre diario
+  const fetchVariableExpensesDetails = async (closing) => {
+    try {
+      if (closing.type !== 'daily') {
+        alert('Esta opción solo está disponible para cierres diarios');
+        return;
+      }
+      
+      const queryParams = new URLSearchParams({
+        startDate: closing.closing_date,
+        endDate: closing.closing_date
+      }).toString();
+      
+      const response = await apiFetch(`/monthly-closings/variable-expenses?${queryParams}`);
+      
+      if (response.success) {
+        setVariableExpensesDetails({
+          ...response.data,
+          closingInfo: closing
+        });
+        setShowVariableExpensesModal(true);
+      } else {
+        throw new Error(response.error || 'Error al obtener detalles de gastos');
+      }
+    } catch (error) {
+      console.error('Error obteniendo detalles de gastos variables:', error);
+      alert(`❌ Error: ${error.message}`);
+    }
+  };
+
   // Función para obtener detalles de doctores externos
   const fetchExternalDoctorDetails = async (closing) => {
     try {
@@ -257,15 +298,64 @@ const MonthlyClosingsPage = () => {
     }
   };
 
-  // Combinar y filtrar todos los cierres
+  // NUEVO: Función para eliminar cierre
+  const handleDeleteClosing = async () => {
+    if (!closingToDelete) return;
+    
+    setDeleting(true);
+    
+    try {
+      const confirmMessage = closingToDelete.type === 'monthly' 
+        ? `¿Está seguro de eliminar el cierre mensual de ${closingToDelete.month} ${closingToDelete.year}?\n\nEsta acción no se puede deshacer.`
+        : `¿Está seguro de eliminar el cierre diario del ${closingToDelete.date_exact}?\n\nEsta acción no se puede deshacer.`;
+      
+      if (!window.confirm(confirmMessage)) {
+        setDeleting(false);
+        setShowDeleteModal(false);
+        setClosingToDelete(null);
+        return;
+      }
+      
+      let endpoint;
+      if (closingToDelete.type === 'monthly') {
+        endpoint = `/monthly-closings/${closingToDelete.closing_id}`;
+      } else {
+        endpoint = `/daily-closings/${closingToDelete.closing_id}`;
+      }
+      
+      const response = await apiFetch(endpoint, {
+        method: 'DELETE'
+      });
+      
+      if (response.success) {
+        alert('✅ Cierre eliminado exitosamente');
+        
+        // Recargar cierres según el tipo
+        if (closingToDelete.type === 'monthly') {
+          fetchMonthlyClosings();
+        } else {
+          fetchDailyClosings();
+        }
+      } else {
+        throw new Error(response.error || 'Error al eliminar cierre');
+      }
+      
+    } catch (error) {
+      console.error('Error eliminando cierre:', error);
+      alert(`❌ Error al eliminar cierre: ${error.message}`);
+    } finally {
+      setDeleting(false);
+      setShowDeleteModal(false);
+      setClosingToDelete(null);
+    }
+  };
+
+  // Combinar y filtrar todos los cierres (MODIFICADO para incluir gastos variables)
   const allClosings = useMemo(() => {
     const monthly = monthlyClosings.map(closing => {
-      // Calcular utilidad neta CORRECTA incluyendo gastos
       const clinicIncome = (closing.total_general_income || 0) + (closing.total_clinical_orthodontic_income || 0);
       const totalExpenses = (closing.total_fixed_expenses || 0) + (closing.total_variable_expenses || 0);
       const netProfit = clinicIncome - totalExpenses;
-      
-      // Agregar pagos a doctores externos si existen
       const externalDoctorPayments = closing.total_external_doctor_payments || 0;
       
       return {
@@ -285,12 +375,12 @@ const MonthlyClosingsPage = () => {
         net_profit_usd: netProfit / exchangeRate,
         total_external_doctor_payments: externalDoctorPayments,
         total_external_doctor_payments_usd: externalDoctorPayments / exchangeRate,
-        // Mantener los campos individuales para el desglose
         total_general_income: closing.total_general_income || 0,
         total_clinical_orthodontic_income: closing.total_clinical_orthodontic_income || 0,
         total_orthodontic_doctor_income: closing.total_orthodontic_doctor_income || 0,
         total_fixed_expenses: closing.total_fixed_expenses || 0,
-        total_variable_expenses: closing.total_variable_expenses || 0
+        total_variable_expenses: closing.total_variable_expenses || 0,
+        has_expenses: (closing.total_variable_expenses || 0) > 0
       };
     });
 
@@ -305,8 +395,11 @@ const MonthlyClosingsPage = () => {
       date_sort: closing.closing_date,
       total_clinic_income: closing.total_clinic_income || 0,
       total_clinic_income_usd: (closing.total_clinic_income || 0) / exchangeRate,
-      total_expenses: 0,
-      total_expenses_usd: 0,
+      // IMPORTANTE: Ahora los gastos variables se guardan en total_variable_expenses
+      total_variable_expenses: closing.total_variable_expenses || 0,
+      total_variable_expenses_usd: (closing.total_variable_expenses || 0) / exchangeRate,
+      total_expenses: closing.total_variable_expenses || 0,
+      total_expenses_usd: (closing.total_variable_expenses || 0) / exchangeRate,
       net_profit: closing.net_profit || closing.total_clinic_income || 0,
       net_profit_usd: (closing.net_profit || closing.total_clinic_income || 0) / exchangeRate,
       total_income: closing.total_income || 0,
@@ -314,7 +407,8 @@ const MonthlyClosingsPage = () => {
       total_doctor_income: closing.total_doctor_income || 0,
       total_doctor_income_usd: (closing.total_doctor_income || 0) / exchangeRate,
       total_external_doctor_payments: closing.total_external_doctor_payments || 0,
-      total_external_doctor_payments_usd: (closing.total_external_doctor_payments || 0) / exchangeRate
+      total_external_doctor_payments_usd: (closing.total_external_doctor_payments || 0) / exchangeRate,
+      has_expenses: (closing.total_variable_expenses || 0) > 0 // Indicador de gastos
     }));
 
     return [...monthly, ...daily];
@@ -386,13 +480,12 @@ const MonthlyClosingsPage = () => {
     }
   };
 
-  // Crear cierre mensual
+  // Crear cierre mensual (MODIFICADO para mejor manejo de gastos)
   const handleCreateClosing = async (e) => {
     e.preventDefault();
     setCreating(true);
     
     try {
-      // Verificar si ya existe cierre
       const exists = await checkMonthlyClosingExists(newClosing.month, newClosing.year, newClosing.closing_type);
       
       if (exists) {
@@ -401,13 +494,11 @@ const MonthlyClosingsPage = () => {
         return;
       }
 
-      // Calcular fechas del período
       const startDate = newClosing.startDate || `${newClosing.year}-${getMonthNumber(newClosing.month)}-01`;
       const endDate = newClosing.endDate || getLastDayOfMonth(newClosing.year, newClosing.month);
       
       console.log('📅 Período a calcular:', { startDate, endDate, type: newClosing.closing_type });
       
-      // Crear cierre
       const closingData = {
         month: newClosing.month,
         year: parseInt(newClosing.year),
@@ -418,15 +509,12 @@ const MonthlyClosingsPage = () => {
         deleteVariableExpenses: false
       };
       
-      console.log('📤 Datos para crear cierre mensual:', closingData);
-
       const response = await createMonthlyClosing(closingData);
       
       if (response.success) {
         let message = `✅ Cierre ${getClosingTypeLabel(newClosing.closing_type)} de ${newClosing.month} ${newClosing.year} creado exitosamente\n\n`;
         
         if (newClosing.closing_type === 'all') {
-          // Calcular utilidad neta correctamente
           const clinicIncome = (response.data.total_general_income || 0) + (response.data.total_clinical_orthodontic_income || 0);
           const totalExpenses = (response.data.total_fixed_expenses || 0) + (response.data.total_variable_expenses || 0);
           const netProfit = clinicIncome - totalExpenses;
@@ -459,11 +547,21 @@ const MonthlyClosingsPage = () => {
           message += `   Doctora (${doctorPercentage}%): ${formatCurrencySimple(response.data.total_orthodontic_doctor_income || 0)}\n`;
         }
         
-        // Agregar información de doctores externos si existe
         if (response.data.total_external_doctor_payments) {
           message += `\n👨‍⚕️ PAGOS DOCTORES EXTERNOS:\n`;
           message += `   Total pagado: ${formatCurrencySimple(response.data.total_external_doctor_payments)}\n`;
           message += `   (Ya deducido de las ganancias mostradas arriba)`;
+        }
+        
+        // NUEVO: Información sobre gastos variables que ya estaban en cierres diarios
+        if (response.data.expense_info) {
+          message += `\n\n📋 INFORMACIÓN DE GASTOS:\n`;
+          message += `   • Gastos variables totales: ${response.data.expense_info.variable_expenses_count}\n`;
+          message += `   • Ya incluidos en cierres diarios: ${response.data.expense_info.variable_expenses_in_daily}\n`;
+          if (response.data.expense_info.variable_expenses_count > response.data.expense_info.variable_expenses_in_daily) {
+            const nuevos = response.data.expense_info.variable_expenses_count - response.data.expense_info.variable_expenses_in_daily;
+            message += `   • Nuevos gastos (solo en mensual): ${nuevos}\n`;
+          }
         }
         
         alert(message);
@@ -478,7 +576,6 @@ const MonthlyClosingsPage = () => {
           comentary: ''
         });
         
-        // Recargar cierres
         fetchMonthlyClosings();
       } else {
         throw new Error(response.error || 'Error al crear cierre');
@@ -492,7 +589,7 @@ const MonthlyClosingsPage = () => {
     }
   };
 
-  // Obtener resumen diario previo
+  // Obtener resumen diario previo (MODIFICADO para incluir gastos variables)
   const handleGetDailySummary = async () => {
     try {
       setCreatingDaily(true);
@@ -500,6 +597,11 @@ const MonthlyClosingsPage = () => {
       
       if (summaryResponse.success) {
         setDailySummary(summaryResponse.data);
+        
+        // Mostrar advertencia si hay gastos variables pero no procedimientos
+        if (summaryResponse.data.cantidad_gastos_variables > 0 && summaryResponse.data.cantidad_procedimientos === 0) {
+          alert(`⚠️ Se encontraron ${summaryResponse.data.cantidad_gastos_variables} gastos variables por ${formatCurrencySimple(summaryResponse.data.total_variable_expenses)} pero no hay procedimientos. El cierre registrará solo los gastos.`);
+        }
         
         if (summaryResponse.data.closing_exists) {
           alert(`⚠️ Ya existe un cierre ${newDailyClosing.closing_type === 'orthodontics' ? 'de ortodoncia' : 'general'} para esta fecha`);
@@ -515,13 +617,12 @@ const MonthlyClosingsPage = () => {
     }
   };
 
-  // Crear cierre diario
+  // Crear cierre diario (MODIFICADO para incluir gastos variables)
   const handleCreateDailyClosing = async (e) => {
     e.preventDefault();
     setCreatingDaily(true);
     
     try {
-      // Verificar si ya existe cierre para esta fecha y tipo
       const existsResponse = await checkDailyClosingExists(newDailyClosing.date, newDailyClosing.closing_type);
       
       if (existsResponse.data.exists) {
@@ -530,7 +631,6 @@ const MonthlyClosingsPage = () => {
         return;
       }
 
-      // Obtener resumen primero para verificar si hay procedimientos
       const summaryResponse = await getDailySummary(newDailyClosing.date, newDailyClosing.closing_type);
       
       if (!summaryResponse.success) {
@@ -539,11 +639,21 @@ const MonthlyClosingsPage = () => {
       
       const summary = summaryResponse.data;
       
-      // VERIFICAR: Si no hay procedimientos, mostrar advertencia
-      if (!summary.procedures || summary.procedures.length === 0) {
+      // Advertencia mejorada considerando gastos variables
+      if (summary.cantidad_procedimientos === 0 && summary.cantidad_gastos_variables === 0) {
         const confirmCreate = window.confirm(
-          `⚠️ No se encontraron procedimientos de tipo "${newDailyClosing.closing_type}" para la fecha ${formatDate(newDailyClosing.date)}.\n\n` +
-          `¿Desea crear el cierre igualmente?`
+          `⚠️ No se encontraron procedimientos ni gastos variables para la fecha ${formatDate(newDailyClosing.date)}.\n\n` +
+          `¿Desea crear un cierre en cero igualmente?`
+        );
+        
+        if (!confirmCreate) {
+          setCreatingDaily(false);
+          return;
+        }
+      } else if (summary.cantidad_procedimientos === 0 && summary.cantidad_gastos_variables > 0) {
+        const confirmCreate = window.confirm(
+          `⚠️ No hay procedimientos, pero hay ${summary.cantidad_gastos_variables} gastos variables por ${formatCurrencySimple(summary.total_variable_expenses)}.\n\n` +
+          `Se creará un cierre con SOLO gastos variables. ¿Continuar?`
         );
         
         if (!confirmCreate) {
@@ -552,7 +662,6 @@ const MonthlyClosingsPage = () => {
         }
       }
       
-      // Crear cierre diario
       const closingData = {
         date: newDailyClosing.date,
         closing_type: newDailyClosing.closing_type,
@@ -562,20 +671,14 @@ const MonthlyClosingsPage = () => {
       const response = await createDailyClosing(closingData);
       
       if (response.success) {
-        // Mensaje personalizado basado en si hay procedimientos o no
         const typeLabel = newDailyClosing.closing_type === 'orthodontics' ? 'de Ortodoncia' : 'General';
         let message = `✅ Cierre Diario ${typeLabel} creado exitosamente\n\n`;
         message += `📅 Fecha: ${formatDate(newDailyClosing.date)}\n`;
-        message += `📋 Procedimientos incluidos: ${response.data.procedure_count || 0}\n`;
-        
-        if (response.data.procedure_count === 0) {
-          message += `⚠️ Nota: No se encontraron procedimientos de este tipo para esta fecha\n`;
-        }
-        
+        message += `📋 Procedimientos: ${response.data.procedure_count || 0}\n`;
+        message += `💰 Gastos variables: ${response.data.variable_expenses_count || 0} (${formatCurrencySimple(response.data.variable_expenses_total || 0)})\n`;
         message += `💱 Tipo de cambio: C$${exchangeRate.toFixed(2)} = $1\n\n`;
         
-        // Solo mostrar ganancias si hay procedimientos
-        if (response.data.procedure_count > 0) {
+        if (response.data.procedure_count > 0 || response.data.variable_expenses_count > 0) {
           if (newDailyClosing.closing_type === 'orthodontics') {
             message += `🦷 ORTODONCIA:\n`;
             message += `   Total ganancias: ${formatCurrency(response.data.total_income, 'NIO', true)}\n`;
@@ -586,11 +689,16 @@ const MonthlyClosingsPage = () => {
             message += `   Ganancia neta clínica: ${formatCurrency(response.data.total_clinic_income, 'NIO', true)}\n`;
           }
           
-          // Agregar información de doctores externos si existe
+          if (response.data.variable_expenses_total > 0) {
+            message += `\n💰 GASTOS VARIABLES DEL DÍA:\n`;
+            message += `   Total: ${formatCurrency(response.data.variable_expenses_total, 'NIO', true)}\n`;
+          }
+          
+          message += `\n🧮 UTILIDAD NETA CLÍNICA: ${formatCurrency(response.data.net_profit, 'NIO', true)}`;
+          
           if (response.data.total_external_doctor_payments > 0) {
-            message += `\n👨‍⚕️ PAGOS DOCTORES EXTERNOS:\n`;
-            message += `   Total pagado: ${formatCurrency(response.data.total_external_doctor_payments, 'NIO', true)}\n`;
-            message += `   (Ya deducido de las ganancias mostradas arriba)`;
+            message += `\n\n👨‍⚕️ PAGOS DOCTORES EXTERNOS:\n`;
+            message += `   Total pagado: ${formatCurrency(response.data.total_external_doctor_payments, 'NIO', true)} (ya deducido)`;
           }
         }
         
@@ -604,7 +712,6 @@ const MonthlyClosingsPage = () => {
         });
         setDailySummary(null);
         
-        // Recargar cierres diarios
         fetchDailyClosings();
       } else {
         throw new Error(response.error || 'Error al crear cierre diario');
@@ -622,6 +729,13 @@ const MonthlyClosingsPage = () => {
   const handleViewDetails = (closing) => {
     setSelectedClosing(closing);
     setShowDetailModal(true);
+  };
+
+  // NUEVO: Función para preparar eliminación
+  const handleDeleteClick = (closing, e) => {
+    e.stopPropagation();
+    setClosingToDelete(closing);
+    setShowDeleteModal(true);
   };
 
   // Obtener color según utilidad
@@ -952,7 +1066,14 @@ const MonthlyClosingsPage = () => {
                       </div>
                     )}
                     
-                    {/* Mostrar desglose básico */}
+                    {/* NUEVO: Mostrar indicador de gastos variables para cierres diarios */}
+                    {closing.type === 'daily' && closing.has_expenses && (
+                      <div className="expense-indicator" title="Este cierre incluye gastos variables">
+                        <FontAwesomeIcon icon={faReceipt} />
+                        <span>Gastos: {formatCurrency(closing.total_variable_expenses, 'NIO', false)}</span>
+                      </div>
+                    )}
+                    
                     <div className="closing-quick-stats">
                       {closing.type === 'monthly' && closing.sub_type === 'all' && (
                         <>
@@ -971,12 +1092,19 @@ const MonthlyClosingsPage = () => {
                         </>
                       )}
                       {closing.type === 'daily' && (
-                        <span className="quick-stat">
-                          <FontAwesomeIcon icon={faHospital} />
-                          <span>Clínica: {formatCurrency(closing.total_clinic_income, 'NIO', false)}</span>
-                        </span>
+                        <>
+                          <span className="quick-stat">
+                            <FontAwesomeIcon icon={faHospital} />
+                            <span>Clínica: {formatCurrency(closing.total_clinic_income, 'NIO', false)}</span>
+                          </span>
+                          {closing.has_expenses && (
+                            <span className="quick-stat expense">
+                              <FontAwesomeIcon icon={faReceipt} />
+                              <span>Gastos: {formatCurrency(closing.total_variable_expenses, 'NIO', false)}</span>
+                            </span>
+                          )}
+                        </>
                       )}
-                      {/* Mostrar doctores externos si existen */}
                       {closing.total_external_doctor_payments > 0 && (
                         <span className="quick-stat external" title="Ver detalles de doctores externos">
                           <FontAwesomeIcon icon={faUserDoctor} />
@@ -1027,6 +1155,18 @@ const MonthlyClosingsPage = () => {
                       <FontAwesomeIcon icon={faListAlt} />
                       <span className="btn-tooltip">Excel Detallado</span>
                     </button>
+                    
+                    {/* NUEVO: Botón para ver gastos variables en cierres diarios */}
+                    {closing.type === 'daily' && closing.has_expenses && (
+                      <button 
+                        className="action-btn expenses"
+                        onClick={() => fetchVariableExpensesDetails(closing)}
+                        title="Ver detalles de gastos variables"
+                      >
+                        <FontAwesomeIcon icon={faReceipt} />
+                      </button>
+                    )}
+                    
                     {/* Botón para ver detalles de doctores externos */}
                     {closing.total_external_doctor_payments > 0 && (
                       <button 
@@ -1037,6 +1177,16 @@ const MonthlyClosingsPage = () => {
                         <FontAwesomeIcon icon={faStethoscope} />
                       </button>
                     )}
+                    
+                    {/* NUEVO: Botón para eliminar cierre */}
+                    <button 
+                      className="action-btn delete"
+                      onClick={(e) => handleDeleteClick(closing, e)}
+                      title="Eliminar cierre (solo si hubo error)"
+                    >
+                      <FontAwesomeIcon icon={faTrashAlt} />
+                    </button>
+                    
                     <FontAwesomeIcon 
                       icon={expandedClosings[closing.id] ? faChevronUp : faChevronDown} 
                       className="expand-icon"
@@ -1046,7 +1196,7 @@ const MonthlyClosingsPage = () => {
                 </div>
               </div>
 
-              {/* Detalles expandidos */}
+              {/* Detalles expandidos (MODIFICADO para mostrar gastos variables en diarios) */}
               {expandedClosings[closing.id] && (
                 <div className="closing-details">
                   <div className="financial-summary">
@@ -1176,7 +1326,6 @@ const MonthlyClosingsPage = () => {
                               </div>
                             </div>
                             
-                            {/* Doctores externos para general */}
                             {closing.total_external_doctor_payments > 0 && (
                               <div className="summary-section external-section">
                                 <div className="section-title">
@@ -1239,7 +1388,6 @@ const MonthlyClosingsPage = () => {
                               </div>
                             </div>
                             
-                            {/* Doctores externos para ortodoncia */}
                             {closing.total_external_doctor_payments > 0 && (
                               <div className="summary-section external-section">
                                 <div className="section-title">
@@ -1306,6 +1454,27 @@ const MonthlyClosingsPage = () => {
                               <span className="summary-value">{formatCurrency(closing.total_doctor_income, 'NIO', true)}</span>
                             </div>
                           )}
+                          
+                          {/* NUEVO: Sección de gastos variables para cierres diarios */}
+                          {closing.has_expenses && (
+                            <div className="summary-item expenses-daily">
+                              <div className="summary-header">
+                                <FontAwesomeIcon icon={faReceipt} />
+                                <span className="summary-label">Gastos Variables del Día:</span>
+                              </div>
+                              <span className="summary-value expense">{formatCurrency(closing.total_variable_expenses, 'NIO', true)}</span>
+                              <div className="summary-description">
+                                <small>Gastos ocasionales registrados en esta fecha</small>
+                                <button 
+                                  className="details-btn small"
+                                  onClick={() => fetchVariableExpensesDetails(closing)}
+                                >
+                                  <FontAwesomeIcon icon={faEye} />
+                                  Ver detalles
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                         
                         {/* Doctores externos para cierres diarios */}
@@ -1350,6 +1519,18 @@ const MonthlyClosingsPage = () => {
                             {formatCurrency(closing.total_clinic_income, 'NIO', true)}
                           </span>
                         </div>
+                        
+                        {/* Mostrar gastos si existen */}
+                        {closing.has_expenses && (
+                          <div className="net-profit-item expense-note">
+                            <span className="net-profit-label">
+                              <FontAwesomeIcon icon={faReceipt} /> Gastos:
+                            </span>
+                            <span className="net-profit-value expense">
+                              -{formatCurrency(closing.total_variable_expenses, 'NIO', true)}
+                            </span>
+                          </div>
+                        )}
                         
                         {/* Mostrar doctores externos en resumen final */}
                         {closing.total_external_doctor_payments > 0 && (
@@ -1421,7 +1602,15 @@ const MonthlyClosingsPage = () => {
                         <FontAwesomeIcon icon={faFileExcel} />
                         Excel General
                       </button>
-                      {/* Botón para ver detalles de doctores externos */}
+                      {closing.type === 'daily' && closing.has_expenses && (
+                        <button 
+                          className="secondary-btn small expense"
+                          onClick={() => fetchVariableExpensesDetails(closing)}
+                        >
+                          <FontAwesomeIcon icon={faReceipt} />
+                          Ver Gastos
+                        </button>
+                      )}
                       {closing.total_external_doctor_payments > 0 && (
                         <button 
                           className="secondary-btn small external"
@@ -1440,7 +1629,7 @@ const MonthlyClosingsPage = () => {
         </div>
       )}
 
-      {/* Modal para crear cierre mensual */}
+      {/* Modal para crear cierre mensual (sin cambios) */}
       {showCreateModal && (
         <div className="modal-overlay">
           <div className="modal-content">
@@ -1578,7 +1767,7 @@ const MonthlyClosingsPage = () => {
         </div>
       )}
 
-      {/* Modal para crear cierre diario */}
+      {/* Modal para crear cierre diario (MODIFICADO con información de gastos) */}
       {showCreateDailyModal && (
         <div className="modal-overlay">
           <div className="modal-content">
@@ -1657,8 +1846,22 @@ const MonthlyClosingsPage = () => {
                   <div className="summary-preview-content">
                     <div className="preview-item">
                       <span>Procedimientos encontrados:</span>
-                      <span className="preview-value">{dailySummary.procedures?.length || 0}</span>
+                      <span className="preview-value">{dailySummary.cantidad_procedimientos || 0}</span>
                     </div>
+                    
+                    {/* NUEVO: Mostrar gastos variables en el resumen */}
+                    {dailySummary.cantidad_gastos_variables > 0 && (
+                      <div className="preview-item expense">
+                        <span>
+                          <FontAwesomeIcon icon={faReceipt} /> Gastos variables:
+                        </span>
+                        <span className="preview-value">{dailySummary.cantidad_gastos_variables}</span>
+                        <div className="preview-note">
+                          <small>Total: {formatCurrency(dailySummary.total_variable_expenses, 'NIO', true)}</small>
+                        </div>
+                      </div>
+                    )}
+                    
                     <div className="preview-item">
                       <span>Total ganancias:</span>
                       <span className="preview-value">{formatCurrency(dailySummary.total_income, 'NIO', true)}</span>
@@ -1666,6 +1869,7 @@ const MonthlyClosingsPage = () => {
                         <small>Suma de ganancias netas</small>
                       </div>
                     </div>
+                    
                     {newDailyClosing.closing_type === 'orthodontics' ? (
                       <>
                         <div className="preview-item">
@@ -1683,6 +1887,18 @@ const MonthlyClosingsPage = () => {
                         <span className="preview-value">{formatCurrency(dailySummary.total_clinic_income, 'NIO', true)}</span>
                       </div>
                     )}
+                    
+                    {/* Mostrar utilidad después de gastos */}
+                    <div className="preview-item total">
+                      <span>Utilidad neta clínica (después de gastos):</span>
+                      <span 
+                        className="preview-value"
+                        style={{ color: getProfitColor(dailySummary.net_profit || 0) }}
+                      >
+                        {formatCurrency(dailySummary.net_profit, 'NIO', true)}
+                      </span>
+                    </div>
+                    
                     {dailySummary.total_external_doctor_payments > 0 && (
                       <div className="preview-item external">
                         <span>
@@ -1696,25 +1912,25 @@ const MonthlyClosingsPage = () => {
                         </div>
                       </div>
                     )}
-                    <div className="preview-item total">
-                      <span>Utilidad neta clínica:</span>
-                      <span 
-                        className="preview-value"
-                        style={{ color: getProfitColor(dailySummary.net_profit || 0) }}
-                      >
-                        {formatCurrency(dailySummary.net_profit, 'NIO', true)}
-                      </span>
-                    </div>
+                    
                     {dailySummary.closing_exists && (
                       <div className="preview-warning">
                         <FontAwesomeIcon icon={faExclamationTriangle} />
                         <span>Ya existe un cierre para esta fecha y tipo</span>
                       </div>
                     )}
-                    {dailySummary.procedures?.length === 0 && (
+                    
+                    {dailySummary.cantidad_procedimientos === 0 && dailySummary.cantidad_gastos_variables === 0 && (
                       <div className="preview-warning">
                         <FontAwesomeIcon icon={faExclamationTriangle} />
-                        <span>No se encontraron procedimientos para esta fecha y tipo</span>
+                        <span>No se encontraron procedimientos ni gastos variables para esta fecha</span>
+                      </div>
+                    )}
+                    
+                    {dailySummary.cantidad_procedimientos === 0 && dailySummary.cantidad_gastos_variables > 0 && (
+                      <div className="preview-warning info">
+                        <FontAwesomeIcon icon={faInfoCircle} />
+                        <span>Solo se registrarán {dailySummary.cantidad_gastos_variables} gastos variables</span>
                       </div>
                     )}
                   </div>
@@ -1762,7 +1978,113 @@ const MonthlyClosingsPage = () => {
         </div>
       )}
 
-      {/* Modal de detalles de doctores externos */}
+      {/* NUEVO: Modal de detalles de gastos variables */}
+      {showVariableExpensesModal && variableExpensesDetails && (
+        <div className="modal-overlay">
+          <div className="modal-content wide">
+            <div className="modal-header">
+              <h3>
+                <FontAwesomeIcon icon={faReceipt} />
+                Detalles de Gastos Variables - {variableExpensesDetails.closingInfo.date_exact}
+              </h3>
+              <button 
+                className="close-modal-btn"
+                onClick={() => setShowVariableExpensesModal(false)}
+              >
+                <FontAwesomeIcon icon={faTimes} />
+              </button>
+            </div>
+            
+            <div className="detail-content">
+              <div className="detail-section">
+                <h4>Información del Cierre</h4>
+                <div className="detail-grid">
+                  <div className="detail-item">
+                    <span className="detail-label">Cierre:</span>
+                    <span className="detail-value">{variableExpensesDetails.closingInfo.display_date}</span>
+                  </div>
+                  <div className="detail-item">
+                    <span className="detail-label">Tipo:</span>
+                    <span className="detail-value">{getClosingTypeText(variableExpensesDetails.closingInfo.type, variableExpensesDetails.closingInfo.sub_type)}</span>
+                  </div>
+                  <div className="detail-item">
+                    <span className="detail-label">Total gastos:</span>
+                    <span className="detail-value expense">
+                      {formatCurrency(variableExpensesDetails.summary?.total_expenses || 0, 'NIO', true)}
+                    </span>
+                  </div>
+                  <div className="detail-item">
+                    <span className="detail-label">Cantidad de gastos:</span>
+                    <span className="detail-value">{variableExpensesDetails.summary?.total_count || 0}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="detail-section">
+                <h4>Detalle de Gastos</h4>
+                {variableExpensesDetails.expenses && variableExpensesDetails.expenses.length > 0 ? (
+                  <div className="expenses-table">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>ID</th>
+                          <th>Descripción</th>
+                          <th>Categoría</th>
+                          <th>Monto (C$)</th>
+                          <th>Monto ($)</th>
+                          <th>Moneda</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {variableExpensesDetails.expenses.map((expense, index) => (
+                          <tr key={index}>
+                            <td>#{expense.bill_ID}</td>
+                            <td>{expense.description}</td>
+                            <td>
+                              <span className="category-badge">{expense.category || 'General'}</span>
+                            </td>
+                            <td>{formatCurrencySimple(expense.amount_cordobas, 'NIO')}</td>
+                            <td>{formatCurrencySimple(expense.amount_cordobas / exchangeRate, 'USD')}</td>
+                            <td>{expense.currency_used || 'NIO'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr>
+                          <td colSpan="3" className="total-label"><strong>Total:</strong></td>
+                          <td className="total-amount">
+                            <strong>{formatCurrencySimple(variableExpensesDetails.summary?.total_expenses || 0, 'NIO')}</strong>
+                          </td>
+                          <td className="total-amount">
+                            <strong>{formatCurrencySimple((variableExpensesDetails.summary?.total_expenses || 0) / exchangeRate, 'USD')}</strong>
+                          </td>
+                          <td></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="no-data">
+                    <FontAwesomeIcon icon={faInfoCircle} />
+                    <p>No hay gastos variables registrados para este día.</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="modal-actions">
+                <button 
+                  className="secondary-btn"
+                  onClick={() => setShowVariableExpensesModal(false)}
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de detalles de doctores externos (sin cambios) */}
       {showExternalDoctorsModal && externalDoctorDetails && (
         <div className="modal-overlay">
           <div className="modal-content wide">
@@ -1881,7 +2203,7 @@ const MonthlyClosingsPage = () => {
         </div>
       )}
 
-      {/* Modal de detalles general del cierre */}
+      {/* Modal de detalles general del cierre (sin cambios) */}
       {showDetailModal && selectedClosing && (
         <div className="modal-overlay">
           <div className="modal-content wide">
@@ -1962,7 +2284,7 @@ const MonthlyClosingsPage = () => {
                 <div className="financial-breakdown">
                   
                   {selectedClosing.type === 'monthly' ? (
-                    // Resumen mensual
+                    // Resumen mensual (sin cambios)
                     <>
                       {selectedClosing.sub_type === 'all' && (
                         <>
@@ -2076,7 +2398,6 @@ const MonthlyClosingsPage = () => {
                             </div>
                           </div>
                           
-                          {/* Doctores externos para general */}
                           {selectedClosing.total_external_doctor_payments > 0 && (
                             <div className="breakdown-section external">
                               <h5>
@@ -2129,7 +2450,6 @@ const MonthlyClosingsPage = () => {
                             </div>
                           </div>
                           
-                          {/* Doctores externos para ortodoncia */}
                           {selectedClosing.total_external_doctor_payments > 0 && (
                             <div className="breakdown-section external">
                               <h5>
@@ -2158,7 +2478,7 @@ const MonthlyClosingsPage = () => {
                       )}
                     </>
                   ) : (
-                    // Resumen diario
+                    // Resumen diario (MODIFICADO para incluir gastos)
                     <>
                       <div className="breakdown-section income">
                         <h5>
@@ -2188,6 +2508,16 @@ const MonthlyClosingsPage = () => {
                               <FontAwesomeIcon icon={faUserMd} /> Doctora ({doctorPercentage}%):
                             </span>
                             <span className="amount">{formatCurrency(selectedClosing.total_doctor_income, 'NIO', true)}</span>
+                          </div>
+                        )}
+                        
+                        {/* NUEVO: Mostrar gastos variables si existen */}
+                        {selectedClosing.has_expenses && (
+                          <div className="breakdown-item expense">
+                            <span>
+                              <FontAwesomeIcon icon={faReceipt} /> Gastos Variables:
+                            </span>
+                            <span className="amount expense">{formatCurrency(selectedClosing.total_variable_expenses, 'NIO', true)}</span>
                           </div>
                         )}
                       </div>
@@ -2225,6 +2555,18 @@ const MonthlyClosingsPage = () => {
                         {formatCurrency(selectedClosing.total_clinic_income, 'NIO', true)}
                       </span>
                     </div>
+                    
+                    {/* Mostrar gastos si existen */}
+                    {selectedClosing.has_expenses && (
+                      <div className="breakdown-item">
+                        <span>
+                          <FontAwesomeIcon icon={faReceipt} /> Gastos variables:
+                        </span>
+                        <span className="amount expense">
+                          -{formatCurrency(selectedClosing.total_variable_expenses, 'NIO', true)}
+                        </span>
+                      </div>
+                    )}
                     
                     {/* Mostrar deducción de doctores externos */}
                     {selectedClosing.total_external_doctor_payments > 0 && (
@@ -2306,6 +2648,80 @@ const MonthlyClosingsPage = () => {
                     </button>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NUEVO: Modal de confirmación para eliminar */}
+      {showDeleteModal && closingToDelete && (
+        <div className="modal-overlay">
+          <div className="modal-content small">
+            <div className="modal-header warning">
+              <h3>
+                <FontAwesomeIcon icon={faExclamationCircle} />
+                Confirmar Eliminación
+              </h3>
+              <button 
+                className="close-modal-btn"
+                onClick={() => !deleting && setShowDeleteModal(false)}
+                disabled={deleting}
+              >
+                <FontAwesomeIcon icon={faTimes} />
+              </button>
+            </div>
+            
+            <div className="delete-confirmation">
+              <div className="warning-icon">
+                <FontAwesomeIcon icon={faExclamationTriangle} size="3x" />
+              </div>
+              
+              <p className="warning-message">
+                ¿Está seguro de eliminar este cierre?
+              </p>
+              
+              <div className="closing-info">
+                <p><strong>Tipo:</strong> {getClosingTypeText(closingToDelete.type, closingToDelete.sub_type)}</p>
+                <p><strong>Fecha:</strong> {closingToDelete.display_date}</p>
+                {closingToDelete.type === 'monthly' ? (
+                  <p><strong>Período:</strong> {closingToDelete.month} {closingToDelete.year}</p>
+                ) : (
+                  <p><strong>Fecha exacta:</strong> {closingToDelete.date_exact}</p>
+                )}
+                <p><strong>Utilidad neta:</strong> {formatCurrency(closingToDelete.net_profit, 'NIO', true)}</p>
+              </div>
+              
+              <p className="warning-note">
+                <FontAwesomeIcon icon={faInfoCircle} />
+                Esta acción no se puede deshacer. Los procedimientos y gastos asociados volverán a estar disponibles para nuevos cierres.
+              </p>
+              
+              <div className="modal-actions">
+                <button 
+                  className="secondary-btn"
+                  onClick={() => setShowDeleteModal(false)}
+                  disabled={deleting}
+                >
+                  Cancelar
+                </button>
+                <button 
+                  className="danger-btn"
+                  onClick={handleDeleteClosing}
+                  disabled={deleting}
+                >
+                  {deleting ? (
+                    <>
+                      <div className="spinner-small"></div>
+                      Eliminando...
+                    </>
+                  ) : (
+                    <>
+                      <FontAwesomeIcon icon={faTrashAlt} />
+                      Eliminar Cierre
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           </div>

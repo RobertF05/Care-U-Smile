@@ -836,6 +836,37 @@ const createPatient = async (patientData) => {
     }
   };
 
+  const deleteMonthlyClosing = async (id) => {
+  try {
+    console.log('🗑️ Eliminando cierre mensual ID:', id);
+    
+    const data = await apiFetch(`/monthly-closings/${id}`, {
+      method: 'DELETE',
+    });
+    
+    if (data.success) {
+      // Actualizar el estado local
+      setMonthlyClosings(prev => 
+        prev.filter(closing => closing.closing_ID !== id && closing.id !== id)
+      );
+      
+      // Actualizar estadísticas si es necesario
+      if (monthlyClosings.length > 0) {
+        const lastClosing = monthlyClosings[0];
+        setStats(prev => ({ 
+          ...prev, 
+          monthlyIncome: lastClosing.total_general_income || 0 
+        }));
+      }
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('Error eliminando cierre mensual:', error);
+    return { success: false, error: error.message };
+  }
+};
+
   // ========== CIERRES DIARIOS ==========
   const fetchDailyClosings = async (filters = {}) => {
     try {
@@ -975,6 +1006,28 @@ const createPatient = async (patientData) => {
     }
   };
 
+  const deleteDailyClosing = async (id) => {
+  try {
+    console.log('🗑️ Eliminando cierre diario ID:', id);
+    
+    const data = await apiFetch(`/daily-closings/${id}`, {
+      method: 'DELETE',
+    });
+    
+    if (data.success) {
+      // Actualizar el estado local
+      setDailyClosings(prev => 
+        prev.filter(closing => closing.daily_closing_id !== id && closing.id !== id)
+      );
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('Error eliminando cierre diario:', error);
+    return { success: false, error: error.message };
+  }
+};
+
   // ========== FUNCIONES DE UTILIDAD PARA FECHAS ==========
   
   const prepareDateForForm = (dateString, includeTime = true) => {
@@ -1091,6 +1144,7 @@ const createPatient = async (patientData) => {
     getMonthlyClosingById,
     createMonthlyClosing,
     getFinancialSummary,
+    deleteMonthlyClosing,
     
     // Cierres Diarios
     fetchDailyClosings,
@@ -1099,6 +1153,7 @@ const createPatient = async (patientData) => {
     getDailySummary,
     checkDailyClosingExists,
     getDailyStatsByRange,
+    deleteDailyClosing,
     
     // Funciones de utilidad para fechas
     prepareDateForForm,

@@ -3,18 +3,14 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
   faUsers, 
   faCalendarCheck, 
-  faMoneyBillWave, 
-  faChartLine,
   faTooth,
   faUserMd,
   faClock,
   faSmile,
-  faReceipt,
   faChevronDown,
   faChevronUp,
   faChartBar,
-  faSpinner,
-  faExclamationTriangle
+  faSpinner
 } from '@fortawesome/free-solid-svg-icons';
 import { AuthContext } from '../../context/AuthContext.jsx';
 import { AppContext } from '../../context/AppContext.jsx';
@@ -24,13 +20,11 @@ import './DashboardPage.css';
 const DashboardPage = () => {
   const { user } = useContext(AuthContext);
   const { 
-    stats, 
-    loading, 
     fetchPatients,
-    getPendingAppointmentsCount,
     getUpcomingAppointments,
     fetchProceduresNormal,
-    fetchOrthodontics
+    fetchOrthodontics,
+    apiFetch
   } = useContext(AppContext);
 
   // Estados
@@ -45,6 +39,7 @@ const DashboardPage = () => {
   const [loadingPending, setLoadingPending] = useState(false);
   const [loadingAppointments, setLoadingAppointments] = useState(false);
   const [loadingProcedures, setLoadingProcedures] = useState(false);
+  const [loadingPatients, setLoadingPatients] = useState(false);
   
   const [totalPatients, setTotalPatients] = useState(0);
 
@@ -58,17 +53,12 @@ const DashboardPage = () => {
   // Función principal para cargar todos los datos del dashboard
   const loadDashboardData = async () => {
     try {
-      // Cargar pacientes
-      await loadPatientsCount();
-      
-      // Cargar citas pendientes
-      await loadPendingAppointmentsCount();
-      
-      // Cargar próximas citas (7 días)
-      await loadUpcomingAppointments();
-      
-      // Cargar últimos procedimientos completados
-      await loadRecentCompletedProcedures();
+      await Promise.all([
+        loadPatientsCount(),
+        loadPendingAppointmentsCount(),
+        loadUpcomingAppointments(),
+        loadRecentCompletedProcedures()
+      ]);
     } catch (error) {
       console.error('Error cargando datos del dashboard:', error);
     }
@@ -76,6 +66,7 @@ const DashboardPage = () => {
 
   // Cargar conteo de pacientes
   const loadPatientsCount = async () => {
+    setLoadingPatients(true);
     try {
       const result = await fetchPatients(1, '');
       if (result && result.total) {
@@ -83,42 +74,88 @@ const DashboardPage = () => {
       }
     } catch (error) {
       console.error('Error cargando pacientes:', error);
+    } finally {
+      setLoadingPatients(false);
     }
   };
 
-  // Cargar citas pendientes
+  // Cargar citas pendientes - VERSIÓN CORREGIDA
   const loadPendingAppointmentsCount = async () => {
     setLoadingPending(true);
     try {
-      const count = await getPendingAppointmentsCount();
-      setPendingCount(count);
+      // Usar el mismo fetchAppointments pero con filtro de estado
+      const today = new Date();
+      const startDate = today.toISOString().split('T')[0];
+      
+      // Obtener todas las citas programadas (sin límite de fecha)
+      const response = await apiFetch('/appointments?state=scheduled&limit=1000');
+      
+      if (response && response.data) {
+        // Contar todas las citas con estado 'scheduled'
+        const pending = response.data.filter(apt => apt.state === 'scheduled');
+        setPendingCount(pending.length);
+      } else {
+        setPendingCount(0);
+      }
     } catch (error) {
       console.error('Error cargando citas pendientes:', error);
+      setPendingCount(0);
     } finally {
       setLoadingPending(false);
     }
   };
 
-  // Cargar próximas citas (7 días)
+  // Cargar próximas citas (7 días) - VERSIÓN CORREGIDA (fechas)
   const loadUpcomingAppointments = async () => {
     setLoadingAppointments(true);
     try {
       const appointments = await getUpcomingAppointments();
       
-      // Procesar y ordenar citas
+      // Procesar y ordenar citas - con validación mejorada de fechas
       const processedAppointments = appointments
         .filter(apt => apt && apt.appointment_date)
-        .map(apt => ({
-          id: apt.appointment_ID || apt.id || Math.random(),
-          patient: apt.patient_name || apt.patients?.first_name || 'Paciente',
-          dateTime: new Date(apt.appointment_date),
-          time: formatNicaraguaTime(apt.appointment_date),
-          date: formatNicaraguaDate(apt.appointment_date),
-          procedure: apt.query_type || 'Consulta',
-          status: apt.state || 'scheduled',
-          notes: apt.observations || '',
-          isToday: isToday(apt.appointment_date)
-        }))
+        .map(apt => {
+          // Crear fecha de manera segura
+          let dateTime = null;
+          let timeStr = '--:--';
+          let dateStr = 'Fecha inválida';
+          let isTodayFlag = false;
+          
+          try {
+            // Intentar parsear la fecha
+            const rawDate = apt.appointment_date;
+            // Si viene en formato "DD/MM/YYYY HH:MM:SS AM/PM" del backend
+            if (typeof rawDate === 'string' && rawDate.includes('/')) {
+              const [datePart, timePart] = rawDate.split(' ');
+              const [day, month, year] = datePart.split('/');
+              dateTime = new Date(`${year}-${month}-${day}T${convertTimeToISO(timePart)}`);
+            } else {
+              dateTime = new Date(rawDate);
+            }
+            
+            if (!isNaN(dateTime.getTime())) {
+              timeStr = formatNicaraguaTime(dateTime);
+              dateStr = formatNicaraguaDate(dateTime);
+              isTodayFlag = isToday(dateTime);
+            }
+          } catch (e) {
+            console.warn('Error parseando fecha:', apt.appointment_date, e);
+          }
+          
+          return {
+            id: apt.appointment_ID || apt.id || Math.random(),
+            patient: apt.patient_name || apt.patients?.first_name || 'Paciente',
+            dateTime: dateTime,
+            time: timeStr,
+            date: dateStr,
+            procedure: apt.query_type || 'Consulta',
+            status: apt.state || 'scheduled',
+            notes: apt.observations || '',
+            isToday: isTodayFlag,
+            rawDate: apt.appointment_date // Para debugging
+          };
+        })
+        .filter(apt => apt.dateTime !== null) // Solo mantener fechas válidas
         .sort((a, b) => a.dateTime - b.dateTime); // Ordenar por fecha más cercana
       
       setUpcomingAppointments(processedAppointments);
@@ -129,14 +166,30 @@ const DashboardPage = () => {
     }
   };
 
-  // Cargar últimos 10 procedimientos completados
+  // Función auxiliar para convertir tiempo AM/PM a formato ISO
+  const convertTimeToISO = (timeStr) => {
+    if (!timeStr) return '00:00:00';
+    
+    const match = timeStr.match(/(\d+):(\d+):(\d+)\s*(AM|PM)/i);
+    if (!match) return timeStr;
+    
+    let [_, hours, minutes, seconds, meridian] = match;
+    hours = parseInt(hours);
+    
+    if (meridian.toUpperCase() === 'PM' && hours < 12) hours += 12;
+    if (meridian.toUpperCase() === 'AM' && hours === 12) hours = 0;
+    
+    return `${hours.toString().padStart(2, '0')}:${minutes}:${seconds}`;
+  };
+
+  // Cargar últimos 10 procedimientos completados - VERSIÓN CORREGIDA (fechas)
   const loadRecentCompletedProcedures = async () => {
     setLoadingProcedures(true);
     try {
       // Obtener procedimientos normales completados
       const normalResult = await fetchProceduresNormal({ 
         state: 'completed', 
-        limit: 15  // Pedir más para asegurar tener suficientes después del filtrado
+        limit: 15
       });
       
       // Obtener ortodoncias completadas
@@ -179,9 +232,33 @@ const DashboardPage = () => {
         });
       }
       
-      // Filtrar solo los que tienen fecha válida, ordenar y limitar a 10
+      // Filtrar solo los que tienen fecha válida y formatear
       const validProcedures = allProcedures
-        .filter(proc => isValidDate(proc.procedure_date))
+        .filter(proc => {
+          if (!proc.procedure_date) return false;
+          try {
+            const date = new Date(proc.procedure_date);
+            return !isNaN(date.getTime());
+          } catch {
+            return false;
+          }
+        })
+        .map(proc => {
+          let formattedDate = 'Fecha inválida';
+          try {
+            const date = new Date(proc.procedure_date);
+            if (!isNaN(date.getTime())) {
+              formattedDate = formatFullDateTime(date);
+            }
+          } catch (e) {
+            console.warn('Error formateando fecha de procedimiento:', proc.procedure_date);
+          }
+          
+          return {
+            ...proc,
+            formattedDate
+          };
+        })
         .sort((a, b) => new Date(b.procedure_date) - new Date(a.procedure_date))
         .slice(0, 10);
       
@@ -193,17 +270,10 @@ const DashboardPage = () => {
     }
   };
 
-  // Funciones auxiliares para fechas
-  const isValidDate = (dateString) => {
-    if (!dateString) return false;
-    const date = new Date(dateString);
-    return date instanceof Date && !isNaN(date.getTime());
-  };
-
-  const formatNicaraguaTime = (dateString) => {
-    if (!isValidDate(dateString)) return '--:--';
+  // Funciones auxiliares para fechas (versiones que aceptan Date object)
+  const formatNicaraguaTime = (date) => {
+    if (!date || !(date instanceof Date) || isNaN(date.getTime())) return '--:--';
     
-    const date = new Date(dateString);
     return date.toLocaleTimeString('es-NI', {
       hour: '2-digit',
       minute: '2-digit',
@@ -211,10 +281,9 @@ const DashboardPage = () => {
     }).toLowerCase().replace('a. m.', 'AM').replace('p. m.', 'PM');
   };
 
-  const formatNicaraguaDate = (dateString) => {
-    if (!isValidDate(dateString)) return 'Fecha inválida';
+  const formatNicaraguaDate = (date) => {
+    if (!date || !(date instanceof Date) || isNaN(date.getTime())) return 'Fecha inválida';
     
-    const date = new Date(dateString);
     return date.toLocaleDateString('es-NI', {
       day: '2-digit',
       month: '2-digit',
@@ -222,33 +291,29 @@ const DashboardPage = () => {
     });
   };
 
-  const formatFullDateTime = (dateString) => {
-    if (!isValidDate(dateString)) return 'Fecha inválida';
+  const formatFullDateTime = (date) => {
+    if (!date || !(date instanceof Date) || isNaN(date.getTime())) return 'Fecha inválida';
     
-    const date = new Date(dateString);
-    return `${formatNicaraguaDate(dateString)} ${formatNicaraguaTime(dateString)}`;
+    return `${formatNicaraguaDate(date)} ${formatNicaraguaTime(date)}`;
   };
 
-  const isToday = (dateString) => {
-    if (!isValidDate(dateString)) return false;
+  const isToday = (date) => {
+    if (!date || !(date instanceof Date) || isNaN(date.getTime())) return false;
     
     const today = new Date();
-    const date = new Date(dateString);
-    
     return date.getDate() === today.getDate() &&
            date.getMonth() === today.getMonth() &&
            date.getFullYear() === today.getFullYear();
   };
 
-  const getDayName = (dateString) => {
-    if (!isValidDate(dateString)) return '';
+  const getDayName = (date) => {
+    if (!date || !(date instanceof Date) || isNaN(date.getTime())) return '';
     
-    const date = new Date(dateString);
     const today = new Date();
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
     
-    if (isToday(dateString)) return 'Hoy';
+    if (isToday(date)) return 'Hoy';
     if (date.getDate() === tomorrow.getDate() && 
         date.getMonth() === tomorrow.getMonth() && 
         date.getFullYear() === tomorrow.getFullYear()) {
@@ -288,7 +353,7 @@ const DashboardPage = () => {
       value: totalPatients, 
       icon: faUsers, 
       color: '#2196F3',
-      loading: loading
+      loading: loadingPatients
     },
     { 
       id: 2, 
@@ -299,17 +364,6 @@ const DashboardPage = () => {
       loading: loadingPending
     }
   ];
-
-  if (loading && !totalPatients && pendingCount === 0) {
-    return (
-      <div className="page-content">
-        <div className="loading-indicator">
-          <FontAwesomeIcon icon={faSpinner} spin size="3x" />
-          <p>Cargando datos del dashboard...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="page-content">
@@ -368,7 +422,7 @@ const DashboardPage = () => {
         </div>
       </div>
       
-      {/* SECCIÓN 2: DOS COLUMNAS - CITAS Y PROCEDIMIENTOS UNO AL LADO DEL OTRO */}
+      {/* SECCIÓN 2: DOS COLUMNAS */}
       <div className="dashboard-sections">
         {/* PRÓXIMAS CITAS (7 DÍAS) */}
         <div className="dashboard-section collapsible-section">
@@ -420,12 +474,6 @@ const DashboardPage = () => {
                           <FontAwesomeIcon icon={faTooth} />
                           {appointment.procedure}
                         </span>
-                        {appointment.notes && (
-                          <span className="appointment-notes" title={appointment.notes}>
-                            <FontAwesomeIcon icon={faChartLine} />
-                            Notas
-                          </span>
-                        )}
                       </div>
                     </div>
                     
@@ -524,7 +572,7 @@ const DashboardPage = () => {
                       <div className="procedure-footer">
                         <div className="procedure-date">
                           <FontAwesomeIcon icon={faClock} />
-                          {formatFullDateTime(procedure.procedure_date)}
+                          {procedure.formattedDate || 'Fecha inválida'}
                         </div>
                       </div>
                     </div>

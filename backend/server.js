@@ -13,7 +13,7 @@ import monthlyClosingRoutes from './routes/monthlyClosingRoutes.js';
 import systemSettingsRoutes from './routes/systemSettingsRoutes.js';
 import dailyClosingRoutes from './routes/dailyClosingRoutes.js';
 import exportRoutes from './routes/exportRoutes.js';
-import exportDailyRoutes from './exportDailyRoutes.js';
+import exportDailyRoutes from './routes/exportDailyRoutes.js';
 
 // Importar y probar conexión
 import { testConnection } from './config/supabase.js';

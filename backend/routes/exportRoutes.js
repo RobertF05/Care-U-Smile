@@ -1,18 +1,18 @@
-// routes/exportRoutes.js - Actualizado
 import express from 'express';
 import exportController from '../controllers/exportController.js';
+import exportDailyController from '../controllers/exportDailyController.js';
 
 const router = express.Router();
 
-// Exportar a PDF
+// VERIFICA QUE ESTAS FUNCIONES EXISTAN EN exportController.js
 router.get('/pdf/monthly/:closingId', exportController.exportMonthlyPDF);
-router.get('/pdf/daily/:closingId', exportController.exportDailyPDF);
-
-// Exportar a Excel (nuevas rutas detalladas)
 router.get('/excel/detailed/monthly/:closingId', exportController.exportMonthlyToExcelDetailed);
-router.get('/excel/detailed/daily/:closingId', exportController.exportDailyToExcelDetailed);
 
-// Exportar a Excel (general - mantener compatibilidad)
+// VERIFICA QUE ESTAS FUNCIONES EXISTAN EN exportDailyController.js
+router.get('/pdf/daily/:closingId', exportDailyController.exportDailyPDF);
+router.get('/excel/detailed/daily/:closingId', exportDailyController.exportDailyToExcelDetailed);
+router.get('/excel/daily/:closingId', exportDailyController.exportDailyToExcel);
+
 router.get('/excel', exportController.exportToExcel);
 
 export default router;

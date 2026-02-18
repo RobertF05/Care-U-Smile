@@ -179,7 +179,8 @@
 
 .appointment-card:hover,
 .procedure-card:hover {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  transform: translateX(5px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
   border-color: #B0BEC5;
 }
 
@@ -196,6 +197,7 @@
 .appointment-time {
   display: flex;
   align-items: center;
+  gap: 5px;
   color: #2196F3;
 }
 
@@ -258,7 +260,10 @@
 }
 
 .procedure-patient {
-  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .procedure-amount-section {
@@ -329,8 +334,12 @@
 .procedure-date {
   display: inline-flex;
   align-items: center;
+  gap: 0.5rem;
   color: #78909C;
-  font-size: 0.8rem;
+  font-size: 0.85rem;
+  background-color: #F5F5F5;
+  padding: 4px 10px;
+  border-radius: 16px;
 }
 
 /* Empty states */
@@ -374,11 +383,125 @@
   100% { transform: rotate(360deg); }
 }
 
-/* Dashboard layout */
+/* Dashboard layout - DOS COLUMNAS */
 .dashboard-sections {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1.5rem;
+}
+
+/* ===== NUEVOS ESTILOS PARA DASHBOARD MEJORADO ===== */
+
+/* Loading indicator */
+.loading-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  color: #666;
+}
+
+.loading-indicator p {
+  margin-top: 1rem;
+  font-size: 1.1rem;
+}
+
+/* Card loading */
+.card-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60px;
+  color: #2196F3;
+  font-size: 1.5rem;
+}
+
+/* Appointment day badge */
+.appointment-day-badge {
+  background-color: #E3F2FD;
+  color: #1976D2;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+
+.appointment-day-badge.today {
+  background-color: #4CAF50;
+  color: white;
+}
+
+.appointment-date {
+  font-size: 0.8rem;
+  color: #999;
+  margin-top: 3px;
+}
+
+/* Procedure type badge */
+.procedure-type-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.procedure-type-badge.general {
+  background-color: #E3F2FD;
+  color: #1976D2;
+}
+
+.procedure-type-badge.orthodontics {
+  background-color: #F3E5F5;
+  color: #7B1FA2;
+}
+
+/* Appointment details enhancement */
+.appointment-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+}
+
+.appointment-notes {
+  color: #FF9800;
+  font-size: 0.85rem;
+  cursor: help;
+}
+
+.appointment-notes svg {
+  margin-right: 4px;
+}
+
+/* Tooltip personalizado */
+[title] {
+  position: relative;
+  cursor: help;
+}
+
+[title]:hover::after {
+  content: attr(title);
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  background: #333;
+  color: white;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  z-index: 1000;
+  pointer-events: none;
+  margin-bottom: 5px;
+}
+
+/* Badge para citas de hoy */
+.appointment-card[data-today="true"] {
+  border-left: 4px solid #4CAF50;
 }
 
 /* Responsive */
@@ -401,18 +524,28 @@
   
   .appointment-card {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
     gap: 0.75rem;
   }
   
   .appointment-time-section {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
     border-right: none;
     border-bottom: 1px solid #eee;
     padding-right: 0;
     padding-bottom: 0.75rem;
     width: 100%;
-    flex-direction: row;
-    justify-content: space-between;
+  }
+  
+  .appointment-day-badge {
+    margin-bottom: 0;
+  }
+  
+  .appointment-time {
+    margin: 0 10px;
   }
   
   .appointment-info {
@@ -436,11 +569,25 @@
   .procedure-header {
     flex-direction: column;
     gap: 0.5rem;
+    width: 100%;
+  }
+  
+  .procedure-patient {
+    width: 100%;
   }
   
   .procedure-amount-section {
     text-align: left;
     width: 100%;
+  }
+  
+  .procedure-footer {
+    width: 100%;
+  }
+  
+  .procedure-date {
+    width: 100%;
+    justify-content: center;
   }
 }
 
@@ -457,5 +604,20 @@
   .procedure-meta {
     flex-direction: column;
     gap: 0.5rem;
+  }
+  
+  .appointment-time-section {
+    flex-wrap: wrap;
+  }
+  
+  .procedure-patient {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+  }
+  
+  .ortho-breakdown {
+    flex-direction: column;
+    gap: 3px;
   }
 }

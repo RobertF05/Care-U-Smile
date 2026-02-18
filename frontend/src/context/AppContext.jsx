@@ -318,6 +318,43 @@ const createPatient = async (patientData) => {
     }
   };
 
+  // ========== CITAS (agregar estas funciones después de fetchAppointments) ==========
+
+// Nueva función: Obtener citas pendientes
+const getPendingAppointmentsCount = async () => {
+  try {
+    const data = await apiFetch('/appointments/count/pending');
+    return data.count || 0;
+  } catch (error) {
+    console.error('Error obteniendo citas pendientes:', error);
+    return 0;
+  }
+};
+
+// Nueva función: Obtener citas de los próximos 7 días
+const getUpcomingAppointments = async () => {
+  try {
+    // Calcular fecha actual y fecha dentro de 7 días en Nicaragua
+    const today = new Date();
+    const sevenDaysLater = new Date(today);
+    sevenDaysLater.setDate(today.getDate() + 7);
+    
+    // Formatear fechas para la consulta
+    const startDate = today.toISOString().split('T')[0];
+    const endDate = sevenDaysLater.toISOString().split('T')[0];
+    
+    console.log(`🔍 Buscando citas desde ${startDate} hasta ${endDate}`);
+    
+    // Obtener citas programadas en el rango
+    const data = await apiFetch(`/appointments?startDate=${startDate}&endDate=${endDate}&state=scheduled&limit=50`);
+    
+    return data.data || [];
+  } catch (error) {
+    console.error('Error obteniendo próximas citas:', error);
+    return [];
+  }
+};
+
   const getAppointmentsByDate = async (date) => {
     try {
       // Convertir fecha a formato YYYY-MM-DD para el backend
@@ -405,103 +442,107 @@ const createPatient = async (patientData) => {
   };
 
   // ========== PROCEDIMIENTOS ==========
-  // Procedimientos normales con filtros unificados
-  const fetchProceduresNormal = async (filters = {}) => {
-    try {
-      console.log('🔍 Cargando procedimientos normales con filtros:', filters);
-      
-      // Construir parámetros de consulta
-      const queryParams = new URLSearchParams();
-      
-      // Agregar filtro de tiempo si existe
-      if (filters.timeFilter) {
-        queryParams.append('timeFilter', filters.timeFilter);
-      }
-      
-      // Agregar fechas específicas si existen
-      if (filters.startDate) {
-        queryParams.append('startDate', filters.startDate);
-      }
-      
-      if (filters.endDate) {
-        queryParams.append('endDate', filters.endDate);
-      }
-      
-      if (filters.patientId) {
-        queryParams.append('patientId', filters.patientId);
-      }
-      
-      // Agregar paginación por defecto
-      queryParams.append('page', '1');
-      queryParams.append('limit', '50');
-      
-      const endpoint = `/procedures/normal?${queryParams.toString()}`;
-      console.log('📤 Endpoint:', endpoint);
-      
-      const data = await apiFetch(endpoint);
-      
-      console.log(`✅ ${data.data?.length || 0} procedimientos cargados`);
-      
-      setProcedures(data.data || []); // ✅ Guarda en procedimientos normales
-      setStats(prev => ({ 
-        ...prev, 
-        totalProcedures: data.total || 0,
-        pendingProcedures: (data.data || []).filter(proc => !proc.state || proc.state !== 'COMPLETED').length
-      }));
-      
-      return data;
-    } catch (error) {
-      console.error('❌ Error cargando procedimientos normales:', error);
-      return { success: false, error: error.message };
+  // ========== PROCEDIMIENTOS (modificar fetchProceduresNormal) ==========
+const fetchProceduresNormal = async (filters = {}) => {
+  try {
+    console.log('🔍 Cargando procedimientos normales con filtros:', filters);
+    
+    // Construir parámetros de consulta
+    const queryParams = new URLSearchParams();
+    
+    // Agregar filtro de tiempo si existe
+    if (filters.timeFilter) {
+      queryParams.append('timeFilter', filters.timeFilter);
     }
-  };
+    
+    // NUEVO: Agregar filtro de estado
+    if (filters.state) {
+      queryParams.append('state', filters.state);
+    }
+    
+    // Agregar fechas específicas si existen
+    if (filters.startDate) {
+      queryParams.append('startDate', filters.startDate);
+    }
+    
+    if (filters.endDate) {
+      queryParams.append('endDate', filters.endDate);
+    }
+    
+    if (filters.patientId) {
+      queryParams.append('patientId', filters.patientId);
+    }
+    
+    // Agregar paginación
+    queryParams.append('page', filters.page || '1');
+    queryParams.append('limit', filters.limit || '50');
+    
+    const endpoint = `/procedures/normal?${queryParams.toString()}`;
+    console.log('📤 Endpoint:', endpoint);
+    
+    const data = await apiFetch(endpoint);
+    
+    console.log(`✅ ${data.data?.length || 0} procedimientos cargados`);
+    
+    setProcedures(data.data || []);
+    
+    return data;
+  } catch (error) {
+    console.error('❌ Error cargando procedimientos normales:', error);
+    return { success: false, error: error.message };
+  }
+};
 
-  // Ortodoncias con filtros unificados - MODIFICADO
-  const fetchOrthodontics = async (filters = {}) => {
-    try {
-      console.log('🔍 Cargando ortodoncias con filtros:', filters);
-      
-      // Construir parámetros de consulta
-      const queryParams = new URLSearchParams();
-      
-      // Agregar filtro de tiempo si existe
-      if (filters.timeFilter) {
-        queryParams.append('timeFilter', filters.timeFilter);
-      }
-      
-      // Agregar fechas específicas si existen
-      if (filters.startDate) {
-        queryParams.append('startDate', filters.startDate);
-      }
-      
-      if (filters.endDate) {
-        queryParams.append('endDate', filters.endDate);
-      }
-      
-      if (filters.patientId) {
-        queryParams.append('patientId', filters.patientId);
-      }
-      
-      // Agregar paginación por defecto
-      queryParams.append('page', '1');
-      queryParams.append('limit', '50');
-      
-      const endpoint = `/procedures/orthodontics?${queryParams.toString()}`;
-      console.log('📤 Endpoint (ortodoncia):', endpoint);
-      
-      const data = await apiFetch(endpoint);
-      
-      console.log(`✅ ${data.data?.length || 0} ortodoncias cargadas`);
-      
-      // ✅ MODIFICADO: Guardar en estado separado para ortodoncias
-      setOrthodonticProcedures(data.data || []);
-      
-      return data;
-    } catch (error) {
-      console.error('❌ Error cargando ortodoncias:', error);
-      return { success: false, error: error.message };
+  // ========== PROCEDIMIENTOS (modificar fetchOrthodontics) ==========
+const fetchOrthodontics = async (filters = {}) => {
+  try {
+    console.log('🔍 Cargando ortodoncias con filtros:', filters);
+    
+    // Construir parámetros de consulta
+    const queryParams = new URLSearchParams();
+    
+    // Agregar filtro de tiempo si existe
+    if (filters.timeFilter) {
+      queryParams.append('timeFilter', filters.timeFilter);
     }
-  };
+    
+    // NUEVO: Agregar filtro de estado
+    if (filters.state) {
+      queryParams.append('state', filters.state);
+    }
+    
+    // Agregar fechas específicas si existen
+    if (filters.startDate) {
+      queryParams.append('startDate', filters.startDate);
+    }
+    
+    if (filters.endDate) {
+      queryParams.append('endDate', filters.endDate);
+    }
+    
+    if (filters.patientId) {
+      queryParams.append('patientId', filters.patientId);
+    }
+    
+    // Agregar paginación
+    queryParams.append('page', filters.page || '1');
+    queryParams.append('limit', filters.limit || '50');
+    
+    const endpoint = `/procedures/orthodontics?${queryParams.toString()}`;
+    console.log('📤 Endpoint (ortodoncia):', endpoint);
+    
+    const data = await apiFetch(endpoint);
+    
+    console.log(`✅ ${data.data?.length || 0} ortodoncias cargadas`);
+    
+    setOrthodonticProcedures(data.data || []);
+    
+    return data;
+  } catch (error) {
+    console.error('❌ Error cargando ortodoncias:', error);
+    return { success: false, error: error.message };
+  }
+};
 
   // Función genérica (mantener para compatibilidad)
   const fetchProcedures = async (filters = {}) => {
@@ -1117,6 +1158,8 @@ const createPatient = async (patientData) => {
     
     // Citas
     fetchAppointments,
+    getPendingAppointmentsCount,
+    getUpcomingAppointments,
     getAppointmentsByDate,
     createAppointment,
     updateAppointment,

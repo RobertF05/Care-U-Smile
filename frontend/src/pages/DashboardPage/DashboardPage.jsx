@@ -12,87 +12,180 @@ import {
   faReceipt,
   faChevronDown,
   faChevronUp,
-  faChartBar
+  faChartBar,
+  faSpinner,
+  faExclamationTriangle
 } from '@fortawesome/free-solid-svg-icons';
 import { AuthContext } from '../../context/AuthContext.jsx';
 import { AppContext } from '../../context/AppContext.jsx';
-import { formatCurrency, formatDate } from '../../utils/formatters.js';
+import { formatCurrency } from '../../utils/formatters.js';
 import './DashboardPage.css';
 
 const DashboardPage = () => {
   const { user } = useContext(AuthContext);
   const { 
     stats, 
-    appointments, 
-    procedures, 
     loading, 
-    fetchAppointments,
-    fetchProcedures,
+    fetchPatients,
+    getPendingAppointmentsCount,
+    getUpcomingAppointments,
     fetchProceduresNormal,
     fetchOrthodontics
   } = useContext(AppContext);
 
-  const [expandedStats, setExpandedStats] = useState(false);
-  const [expandedAppointments, setExpandedAppointments] = useState(false); 
-  const [expandedProcedures, setExpandedProcedures] = useState(false);
+  // Estados
+  const [expandedStats, setExpandedStats] = useState(true);
+  const [expandedAppointments, setExpandedAppointments] = useState(true); 
+  const [expandedProcedures, setExpandedProcedures] = useState(true);
+  
+  const [pendingCount, setPendingCount] = useState(0);
+  const [upcomingAppointments, setUpcomingAppointments] = useState([]);
   const [recentCompletedProcedures, setRecentCompletedProcedures] = useState([]);
+  
+  const [loadingPending, setLoadingPending] = useState(false);
+  const [loadingAppointments, setLoadingAppointments] = useState(false);
   const [loadingProcedures, setLoadingProcedures] = useState(false);
+  
+  const [totalPatients, setTotalPatients] = useState(0);
 
+  // Cargar datos al montar el componente
   useEffect(() => {
     if (user) {
-      // Obtener citas de hoy
-      const today = new Date().toISOString().split('T')[0];
-      fetchAppointments({ startDate: today, endDate: today });
-      
-      // Obtener procedimientos completados recientemente
-      fetchRecentCompletedProcedures();
+      loadDashboardData();
     }
   }, [user]);
 
-  // Función para obtener procedimientos completados recientes
-  const fetchRecentCompletedProcedures = async () => {
+  // Función principal para cargar todos los datos del dashboard
+  const loadDashboardData = async () => {
+    try {
+      // Cargar pacientes
+      await loadPatientsCount();
+      
+      // Cargar citas pendientes
+      await loadPendingAppointmentsCount();
+      
+      // Cargar próximas citas (7 días)
+      await loadUpcomingAppointments();
+      
+      // Cargar últimos procedimientos completados
+      await loadRecentCompletedProcedures();
+    } catch (error) {
+      console.error('Error cargando datos del dashboard:', error);
+    }
+  };
+
+  // Cargar conteo de pacientes
+  const loadPatientsCount = async () => {
+    try {
+      const result = await fetchPatients(1, '');
+      if (result && result.total) {
+        setTotalPatients(result.total);
+      }
+    } catch (error) {
+      console.error('Error cargando pacientes:', error);
+    }
+  };
+
+  // Cargar citas pendientes
+  const loadPendingAppointmentsCount = async () => {
+    setLoadingPending(true);
+    try {
+      const count = await getPendingAppointmentsCount();
+      setPendingCount(count);
+    } catch (error) {
+      console.error('Error cargando citas pendientes:', error);
+    } finally {
+      setLoadingPending(false);
+    }
+  };
+
+  // Cargar próximas citas (7 días)
+  const loadUpcomingAppointments = async () => {
+    setLoadingAppointments(true);
+    try {
+      const appointments = await getUpcomingAppointments();
+      
+      // Procesar y ordenar citas
+      const processedAppointments = appointments
+        .filter(apt => apt && apt.appointment_date)
+        .map(apt => ({
+          id: apt.appointment_ID || apt.id || Math.random(),
+          patient: apt.patient_name || apt.patients?.first_name || 'Paciente',
+          dateTime: new Date(apt.appointment_date),
+          time: formatNicaraguaTime(apt.appointment_date),
+          date: formatNicaraguaDate(apt.appointment_date),
+          procedure: apt.query_type || 'Consulta',
+          status: apt.state || 'scheduled',
+          notes: apt.observations || '',
+          isToday: isToday(apt.appointment_date)
+        }))
+        .sort((a, b) => a.dateTime - b.dateTime); // Ordenar por fecha más cercana
+      
+      setUpcomingAppointments(processedAppointments);
+    } catch (error) {
+      console.error('Error cargando próximas citas:', error);
+    } finally {
+      setLoadingAppointments(false);
+    }
+  };
+
+  // Cargar últimos 10 procedimientos completados
+  const loadRecentCompletedProcedures = async () => {
     setLoadingProcedures(true);
     try {
-      // Obtener ambos tipos de procedimientos
-      const [normalProcedures, orthodonticProcedures] = await Promise.all([
-        fetchProceduresNormal({ state: 'COMPLETED', limit: 10 }),
-        fetchOrthodontics({ state: 'COMPLETED', limit: 10 })
-      ]);
+      // Obtener procedimientos normales completados
+      const normalResult = await fetchProceduresNormal({ 
+        state: 'completed', 
+        limit: 15  // Pedir más para asegurar tener suficientes después del filtrado
+      });
+      
+      // Obtener ortodoncias completadas
+      const orthoResult = await fetchOrthodontics({ 
+        state: 'completed', 
+        limit: 15 
+      });
 
-      // Combinar y procesar resultados
+      // Procesar y combinar procedimientos
       const allProcedures = [];
       
       // Agregar procedimientos normales
-      if (normalProcedures.success && normalProcedures.data) {
-        normalProcedures.data.forEach(proc => {
+      if (normalResult.success && normalResult.data) {
+        normalResult.data.forEach(proc => {
           allProcedures.push({
             ...proc,
             procedure_type: 'General',
-            total_amount: proc.total_procedure || proc.total_cost || 0
+            total_amount: proc.total_procedure || proc.total_cost || 0,
+            clinic_amount: proc.clinic_payment_cordobas || proc.total_procedure || 0,
+            isOrthodontics: false
           });
         });
       }
       
-      // Agregar procedimientos de ortodoncia
-      if (orthodonticProcedures.success && orthodonticProcedures.data) {
-        orthodonticProcedures.data.forEach(proc => {
+      // Agregar ortodoncias
+      if (orthoResult.success && orthoResult.data) {
+        orthoResult.data.forEach(proc => {
+          const totalAmount = proc.total_procedure || proc.total_cost || 0;
+          const clinicAmount = proc.clinic_payment_cordobas || (totalAmount * 0.4) || 0;
+          const doctorAmount = proc.doctor_payment_cordobas || (totalAmount * 0.6) || 0;
+          
           allProcedures.push({
             ...proc,
             procedure_type: 'Ortodoncia',
-            total_amount: proc.total_procedure || proc.total_cost || 0,
-            // Calcular porciones para ortodoncia
-            clinic_portion: proc.clinic_income || (proc.total_procedure * 0.4),
-            doctor_portion: proc.doctor_income || (proc.total_procedure * 0.6)
+            total_amount: totalAmount,
+            clinic_amount: clinicAmount,
+            doctor_amount: doctorAmount,
+            isOrthodontics: true
           });
         });
       }
       
-      // Ordenar por fecha más reciente y limitar a 10
-      const sortedProcedures = allProcedures
+      // Filtrar solo los que tienen fecha válida, ordenar y limitar a 10
+      const validProcedures = allProcedures
+        .filter(proc => isValidDate(proc.procedure_date))
         .sort((a, b) => new Date(b.procedure_date) - new Date(a.procedure_date))
         .slice(0, 10);
       
-      setRecentCompletedProcedures(sortedProcedures);
+      setRecentCompletedProcedures(validProcedures);
     } catch (error) {
       console.error('Error al obtener procedimientos completados:', error);
     } finally {
@@ -100,14 +193,13 @@ const DashboardPage = () => {
     }
   };
 
-  // Función para validar si una fecha es válida
+  // Funciones auxiliares para fechas
   const isValidDate = (dateString) => {
     if (!dateString) return false;
     const date = new Date(dateString);
     return date instanceof Date && !isNaN(date.getTime());
   };
 
-  // Función para formatear hora en formato Nicaragua (HH:MM AM/PM)
   const formatNicaraguaTime = (dateString) => {
     if (!isValidDate(dateString)) return '--:--';
     
@@ -116,109 +208,104 @@ const DashboardPage = () => {
       hour: '2-digit',
       minute: '2-digit',
       hour12: true
-    });
+    }).toLowerCase().replace('a. m.', 'AM').replace('p. m.', 'PM');
   };
 
-  // Función para formatear fecha completa con hora
-  const formatDateTime = (dateString) => {
+  const formatNicaraguaDate = (dateString) => {
     if (!isValidDate(dateString)) return 'Fecha inválida';
     
     const date = new Date(dateString);
-    const datePart = date.toLocaleDateString('es-NI', {
+    return date.toLocaleDateString('es-NI', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric'
     });
-    const timePart = formatNicaraguaTime(dateString);
-    
-    return `${datePart} ${timePart}`;
   };
 
-  // Función para obtener solo la fecha en formato YYYY-MM-DD
-  const getDatePart = (dateString) => {
-    if (!isValidDate(dateString)) return null;
+  const formatFullDateTime = (dateString) => {
+    if (!isValidDate(dateString)) return 'Fecha inválida';
     
     const date = new Date(dateString);
-    return date.toISOString().split('T')[0];
+    return `${formatNicaraguaDate(dateString)} ${formatNicaraguaTime(dateString)}`;
   };
 
+  const isToday = (dateString) => {
+    if (!isValidDate(dateString)) return false;
+    
+    const today = new Date();
+    const date = new Date(dateString);
+    
+    return date.getDate() === today.getDate() &&
+           date.getMonth() === today.getMonth() &&
+           date.getFullYear() === today.getFullYear();
+  };
+
+  const getDayName = (dateString) => {
+    if (!isValidDate(dateString)) return '';
+    
+    const date = new Date(dateString);
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    if (isToday(dateString)) return 'Hoy';
+    if (date.getDate() === tomorrow.getDate() && 
+        date.getMonth() === tomorrow.getMonth() && 
+        date.getFullYear() === tomorrow.getFullYear()) {
+      return 'Mañana';
+    }
+    
+    return date.toLocaleDateString('es-NI', { weekday: 'long' });
+  };
+
+  const getStatusColor = (status) => {
+    const colors = {
+      'scheduled': '#FFA726',
+      'confirmed': '#42A5F5',
+      'completed': '#66BB6A',
+      'cancelled': '#EF5350',
+      'no_show': '#78909C'
+    };
+    return colors[status] || '#78909C';
+  };
+
+  const getStatusLabel = (status) => {
+    const labels = {
+      'scheduled': 'Programada',
+      'confirmed': 'Confirmada',
+      'completed': 'Completada',
+      'cancelled': 'Cancelada',
+      'no_show': 'No asistió'
+    };
+    return labels[status] || status;
+  };
+
+  // Stats para mostrar
   const dashboardStats = [
     { 
       id: 1, 
-      title: 'Pacientes', 
-      value: stats.totalPatients || 0, 
+      title: 'Total Pacientes', 
+      value: totalPatients, 
       icon: faUsers, 
       color: '#2196F3',
-      change: ''
+      loading: loading
     },
     { 
-      id: 5, 
-      title: 'Pendientes', 
-      value: stats.pendingProcedures || 0, 
+      id: 2, 
+      title: 'Citas Pendientes', 
+      value: pendingCount, 
       icon: faClock, 
-      color: '#EF5350',
-      change: ''
+      color: '#FF9800',
+      loading: loadingPending
     }
   ];
 
-  // Procesar citas de hoy con hora - VERSIÓN SEGURA
-  const upcomingAppointments = appointments
-    .filter(apt => {
-      if (!apt || !apt.appointment_date) return false;
-      
-      // Validar que la fecha sea válida
-      if (!isValidDate(apt.appointment_date)) return false;
-      
-      const today = new Date().toISOString().split('T')[0];
-      const aptDate = getDatePart(apt.appointment_date);
-      
-      return aptDate === today;
-    })
-    .sort((a, b) => {
-      const dateA = new Date(a.appointment_date);
-      const dateB = new Date(b.appointment_date);
-      return dateA - dateB;
-    })
-    .slice(0, 10)
-    .map(apt => ({
-      id: apt.appointment_ID || apt.id || Math.random(),
-      patient: apt.patient_name || apt.patients?.first_name || 'Paciente',
-      time: formatNicaraguaTime(apt.appointment_date),
-      dateTime: isValidDate(apt.appointment_date) ? new Date(apt.appointment_date) : new Date(),
-      dateTimeDisplay: formatDateTime(apt.appointment_date),
-      procedure: apt.query_type || 'Consulta',
-      status: apt.state || 'scheduled',
-      notes: apt.observations || ''
-    }));
-
-  // Preparar datos de procedimientos completados para mostrar
-  const preparedProcedures = recentCompletedProcedures.map(proc => ({
-    id: proc.procedure_ID || proc.id || Math.random(),
-    patient: proc.patient_name || proc.patients?.first_name || 'Paciente',
-    description: proc.procedure_description || 'Procedimiento dental',
-    amount: proc.is_orthodontics 
-      ? (proc.clinic_portion || (proc.total_procedure * 0.4) || 0)
-      : (proc.total_procedure || proc.total_cost || 0),
-    formattedAmount: formatCurrency(
-      proc.is_orthodontics 
-        ? (proc.clinic_portion || (proc.total_procedure * 0.4) || 0)
-        : (proc.total_procedure || proc.total_cost || 0)
-    ),
-    date: formatDateTime(proc.procedure_date),
-    type: proc.procedure_type || (proc.is_orthodontics ? 'Ortodoncia' : 'General'),
-    isOrthodontics: proc.is_orthodontics || false,
-    clinicPortion: proc.clinic_portion || 0,
-    doctorPortion: proc.doctor_portion || 0,
-    clinicPortionFormatted: formatCurrency(proc.clinic_portion || 0),
-    doctorPortionFormatted: formatCurrency(proc.doctor_portion || 0),
-  }));
-
-  if (loading && !stats.totalPatients) {
+  if (loading && !totalPatients && pendingCount === 0) {
     return (
       <div className="page-content">
         <div className="loading-indicator">
-          <div className="spinner"></div>
-          <p>Cargando datos...</p>
+          <FontAwesomeIcon icon={faSpinner} spin size="3x" />
+          <p>Cargando datos del dashboard...</p>
         </div>
       </div>
     );
@@ -231,7 +318,7 @@ const DashboardPage = () => {
           <h1>Bienvenido, {user?.username || user?.name || user?.email || 'Doctor'}</h1>
           <p className="dashboard-subtitle">
             <FontAwesomeIcon icon={faSmile} style={{ marginRight: '8px' }} />
-            Hoy es {new Date().toLocaleDateString('es-NI', { 
+            {new Date().toLocaleDateString('es-NI', { 
               weekday: 'long', 
               year: 'numeric', 
               month: 'long', 
@@ -241,13 +328,13 @@ const DashboardPage = () => {
         </div>
       </div>
       
-      {/* Estadísticas desplegables - Siempre con header clickeable */}
+      {/* SECCIÓN 1: ESTADÍSTICAS */}
       <div className="dashboard-section collapsible-section">
         <div className="section-header clickable-header" onClick={() => setExpandedStats(!expandedStats)}>
           <div className="section-header-content">
             <h3 className="section-title">
               <FontAwesomeIcon icon={faChartBar} />
-              Estadísticas del Dashboard
+              Estadísticas Generales
             </h3>
           </div>
           <FontAwesomeIcon 
@@ -267,10 +354,13 @@ const DashboardPage = () => {
                   <h3 className="card-title">{stat.title}</h3>
                 </div>
                 <div className="card-body">
-                  <div className="card-value">{stat.value}</div>
-                  <div className="card-change" style={{ color: stat.change.startsWith('+') ? '#4CAF50' : '#F44336' }}>
-                    {stat.change}
-                  </div>
+                  {stat.loading ? (
+                    <div className="card-loading">
+                      <FontAwesomeIcon icon={faSpinner} spin />
+                    </div>
+                  ) : (
+                    <div className="card-value">{stat.value}</div>
+                  )}
                 </div>
               </div>
             ))}
@@ -278,25 +368,17 @@ const DashboardPage = () => {
         </div>
       </div>
       
-      {/* Secciones desplegables para Citas y Procedimientos */}
+      {/* SECCIÓN 2: DOS COLUMNAS - CITAS Y PROCEDIMIENTOS UNO AL LADO DEL OTRO */}
       <div className="dashboard-sections">
-        {/* Próximas Citas de Hoy - Desplegable */}
+        {/* PRÓXIMAS CITAS (7 DÍAS) */}
         <div className="dashboard-section collapsible-section">
           <div className="section-header clickable-header" onClick={() => setExpandedAppointments(!expandedAppointments)}>
             <div className="section-header-content">
               <h3 className="section-title">
                 <FontAwesomeIcon icon={faCalendarCheck} />
-                Próximas Citas de Hoy
+                Próximas Citas (7 días)
               </h3>
               <div className="section-summary">
-                <span className="summary-item">
-                  <FontAwesomeIcon icon={faClock} />
-                  {new Date().toLocaleTimeString('es-NI', { 
-                    hour: '2-digit', 
-                    minute: '2-digit',
-                    hour12: true 
-                  })}
-                </span>
                 <span className="summary-badge">{upcomingAppointments.length}</span>
               </div>
             </div>
@@ -307,42 +389,49 @@ const DashboardPage = () => {
           </div>
           
           <div className={`section-content ${expandedAppointments ? 'expanded' : 'collapsed'}`}>
-            {upcomingAppointments.length > 0 ? (
+            {loadingAppointments ? (
+              <div className="loading-procedures">
+                <FontAwesomeIcon icon={faSpinner} spin size="2x" />
+                <p>Cargando citas...</p>
+              </div>
+            ) : upcomingAppointments.length > 0 ? (
               <div className="appointments-list">
                 {upcomingAppointments.map((appointment) => (
                   <div key={appointment.id} className="appointment-card">
                     <div className="appointment-time-section">
-                      <div className="appointment-time">
-                        <FontAwesomeIcon icon={faClock} style={{ marginRight: '5px', fontSize: '0.9em' }} />
-                        <strong className="time-display">{appointment.time}</strong>
+                      <div className={`appointment-day-badge ${appointment.isToday ? 'today' : ''}`}>
+                        {getDayName(appointment.dateTime)}
                       </div>
-                      <div className="appointment-date-info">
-                        {appointment.dateTimeDisplay.split(' ')[0]}
+                      <div className="appointment-time">
+                        <FontAwesomeIcon icon={faClock} />
+                        <strong>{appointment.time}</strong>
+                      </div>
+                      <div className="appointment-date">
+                        {appointment.date}
                       </div>
                     </div>
+                    
                     <div className="appointment-info">
                       <div className="patient-name">
                         <strong>{appointment.patient}</strong>
                       </div>
                       <div className="appointment-details">
                         <span className="procedure">
-                          <FontAwesomeIcon icon={faTooth} style={{ marginRight: '5px', fontSize: '0.9em' }} />
+                          <FontAwesomeIcon icon={faTooth} />
                           {appointment.procedure}
                         </span>
                         {appointment.notes && (
                           <span className="appointment-notes" title={appointment.notes}>
-                            <FontAwesomeIcon icon={faChartLine} style={{ marginRight: '5px', fontSize: '0.9em' }} />
+                            <FontAwesomeIcon icon={faChartLine} />
                             Notas
                           </span>
                         )}
                       </div>
                     </div>
+                    
                     <div 
                       className="appointment-status" 
-                      style={{ 
-                        backgroundColor: getStatusColor(appointment.status),
-                        color: '#FFFFFF'
-                      }}
+                      style={{ backgroundColor: getStatusColor(appointment.status) }}
                     >
                       {getStatusLabel(appointment.status)}
                     </div>
@@ -352,24 +441,24 @@ const DashboardPage = () => {
             ) : (
               <div className="empty-state">
                 <div className="empty-state-icon">
-                  <FontAwesomeIcon icon={faCalendarCheck} size="2x" />
+                  <FontAwesomeIcon icon={faCalendarCheck} size="3x" />
                 </div>
-                <p>No hay citas programadas para hoy</p>
+                <p>No hay citas programadas para los próximos 7 días</p>
               </div>
             )}
           </div>
         </div>
         
-        {/* Últimos Procedimientos Completados - Desplegable */}
+        {/* ÚLTIMOS 10 PROCEDIMIENTOS COMPLETADOS */}
         <div className="dashboard-section collapsible-section">
           <div className="section-header clickable-header" onClick={() => setExpandedProcedures(!expandedProcedures)}>
             <div className="section-header-content">
               <h3 className="section-title">
                 <FontAwesomeIcon icon={faTooth} />
-                Últimos Procedimientos Completados
+                Últimos 10 Procedimientos Completados
               </h3>
               <div className="section-summary">
-                <span className="summary-badge">{preparedProcedures.length}</span>
+                <span className="summary-badge">{recentCompletedProcedures.length}</span>
               </div>
             </div>
             <FontAwesomeIcon 
@@ -381,55 +470,61 @@ const DashboardPage = () => {
           <div className={`section-content ${expandedProcedures ? 'expanded' : 'collapsed'}`}>
             {loadingProcedures ? (
               <div className="loading-procedures">
-                <div className="spinner-small"></div>
+                <FontAwesomeIcon icon={faSpinner} spin size="2x" />
                 <p>Cargando procedimientos...</p>
               </div>
-            ) : preparedProcedures.length > 0 ? (
+            ) : recentCompletedProcedures.length > 0 ? (
               <div className="procedures-list">
-                {preparedProcedures.map((procedure) => (
-                  <div key={procedure.id} className="procedure-card">
+                {recentCompletedProcedures.map((procedure) => (
+                  <div key={procedure.procedure_ID || procedure.id} className="procedure-card">
                     <div className="procedure-icon" style={{ 
                       backgroundColor: procedure.isOrthodontics ? '#9C27B020' : '#2196F320',
                       color: procedure.isOrthodontics ? '#9C27B0' : '#2196F3'
                     }}>
                       <FontAwesomeIcon icon={procedure.isOrthodontics ? faUserMd : faTooth} />
                     </div>
+                    
                     <div className="procedure-info">
                       <div className="procedure-header">
                         <div className="procedure-patient">
-                          <strong>{procedure.patient}</strong>
-                        </div>
-                        <div className="procedure-amount-section">
-                          <span className="procedure-amount" title={`Ganancia Clínica: ${procedure.formattedAmount}`}>
-                            {procedure.formattedAmount}
+                          <strong>
+                            {procedure.patient_name || 
+                             procedure.patients?.first_name || 
+                             'Paciente'}
+                          </strong>
+                          <span className={`procedure-type-badge ${procedure.isOrthodontics ? 'orthodontics' : 'general'}`}>
+                            {procedure.procedure_type}
                           </span>
+                        </div>
+                        
+                        <div className="procedure-amount-section">
+                          <span className="procedure-amount" title="Total del procedimiento">
+                            {formatCurrency(procedure.total_amount)}
+                          </span>
+                          
                           {procedure.isOrthodontics && (
                             <div className="ortho-breakdown">
-                              <small className="clinic-portion" title="Porción Clínica">
-                                C: {procedure.clinicPortionFormatted}
+                              <small className="clinic-portion" title="Porción Clínica (40%)">
+                                Clínica: {formatCurrency(procedure.clinic_amount || 0)}
                               </small>
-                              <small className="doctor-portion" title="Porción Doctora">
-                                D: {procedure.doctorPortionFormatted}
+                              <small className="doctor-portion" title="Porción Doctora (60%)">
+                                Doctora: {formatCurrency(procedure.doctor_amount || 0)}
                               </small>
                             </div>
                           )}
                         </div>
                       </div>
-                      <p className="procedure-description" title={procedure.description}>
-                        {procedure.description.length > 60 
-                          ? `${procedure.description.substring(0, 60)}...` 
-                          : procedure.description}
+                      
+                      <p className="procedure-description" title={procedure.procedure_description}>
+                        {procedure.procedure_description?.length > 60 
+                          ? `${procedure.procedure_description.substring(0, 60)}...` 
+                          : procedure.procedure_description || 'Procedimiento dental'}
                       </p>
+                      
                       <div className="procedure-footer">
-                        <div className="procedure-meta">
-                          <span className={`procedure-type ${procedure.isOrthodontics ? 'orthodontics' : 'general'}`}>
-                            <FontAwesomeIcon icon={procedure.isOrthodontics ? faUserMd : faTooth} style={{ marginRight: '3px' }} />
-                            {procedure.type}
-                          </span>
-                          <span className="procedure-date">
-                            <FontAwesomeIcon icon={faClock} style={{ marginRight: '3px' }} />
-                            {procedure.date}
-                          </span>
+                        <div className="procedure-date">
+                          <FontAwesomeIcon icon={faClock} />
+                          {formatFullDateTime(procedure.procedure_date)}
                         </div>
                       </div>
                     </div>
@@ -439,7 +534,7 @@ const DashboardPage = () => {
             ) : (
               <div className="empty-state">
                 <div className="empty-state-icon">
-                  <FontAwesomeIcon icon={faTooth} size="2x" />
+                  <FontAwesomeIcon icon={faTooth} size="3x" />
                 </div>
                 <p>No hay procedimientos completados recientemente</p>
               </div>
@@ -449,29 +544,6 @@ const DashboardPage = () => {
       </div>
     </div>
   );
-};
-
-// Funciones auxiliares
-const getStatusColor = (status) => {
-  const colors = {
-    'scheduled': '#FFA726',
-    'confirmed': '#42A5F5',
-    'completed': '#66BB6A',
-    'cancelled': '#EF5350',
-    'no_show': '#78909C'
-  };
-  return colors[status] || '#78909C';
-};
-
-const getStatusLabel = (status) => {
-  const labels = {
-    'scheduled': 'Programada',
-    'confirmed': 'Confirmada',
-    'completed': 'Completada',
-    'cancelled': 'Cancelada',
-    'no_show': 'No asistió'
-  };
-  return labels[status] || status;
 };
 
 export default DashboardPage;

@@ -11,5 +11,6 @@ router.delete('/:id', appointmentController.delete);
 router.get('/date/:date', appointmentController.getByDate);
 router.post('/:id/convert-to-procedure', appointmentController.convertToProcedure);
 router.put('/:id/unregister', appointmentController.unregisterAppointment);
+router.get('/count/pending', appointmentController.countPending);
 
 export default router;

@@ -880,6 +880,29 @@ unregisterAppointment: async (req, res) => {
         error: 'Error al contar citas no registradas' 
       });
     }
+  },
+
+  // Obtener conteo de citas pendientes
+  countPending: async (req, res) => {
+    try {
+      const { count, error } = await supabaseAdmin
+        .from('clinical_appointments')
+        .select('*', { count: 'exact', head: true })
+        .eq('state', 'scheduled');
+      
+      if (error) throw error;
+      
+      res.json({ 
+        success: true, 
+        count: count || 0 
+      });
+    } catch (error) {
+      console.error('Error al contar citas pendientes:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: 'Error al contar citas pendientes' 
+      });
+    }
   }
 };
 

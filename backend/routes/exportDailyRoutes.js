@@ -9,7 +9,7 @@ router.get('/pdf/daily/:closingId', exportDailyController.exportDailyPDF);
 // Exportar cierre diario a Excel detallado
 router.get('/excel/detailed/daily/:closingId', exportDailyController.exportDailyToExcelDetailed);
 
-// Exportar cierre diario a Excel general
+// Exportar cierre diario a Excel (versión simplificada)
 router.get('/excel/daily/:closingId', exportDailyController.exportDailyToExcel);
 
 export default router;

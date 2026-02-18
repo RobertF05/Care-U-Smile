@@ -28,9 +28,9 @@ const DashboardPage = () => {
   } = useContext(AppContext);
 
   // Estados
-  const [expandedStats, setExpandedStats] = useState(true);
-  const [expandedAppointments, setExpandedAppointments] = useState(true); 
-  const [expandedProcedures, setExpandedProcedures] = useState(true);
+  const [expandedStats, setExpandedStats] = useState(false);
+  const [expandedAppointments, setExpandedAppointments] = useState(false); 
+  const [expandedProcedures, setExpandedProcedures] = useState(false);
   
   const [pendingCount, setPendingCount] = useState(0);
   const [upcomingAppointments, setUpcomingAppointments] = useState([]);

@@ -331,22 +331,25 @@ const getPendingAppointmentsCount = async () => {
   }
 };
 
-// Nueva función: Obtener citas de los próximos 7 días
+// Obtener citas de los próximos 7 días (VERSIÓN MEJORADA)
 const getUpcomingAppointments = async () => {
   try {
-    // Calcular fecha actual y fecha dentro de 7 días en Nicaragua
     const today = new Date();
     const sevenDaysLater = new Date(today);
     sevenDaysLater.setDate(today.getDate() + 7);
     
-    // Formatear fechas para la consulta
     const startDate = today.toISOString().split('T')[0];
     const endDate = sevenDaysLater.toISOString().split('T')[0];
     
     console.log(`🔍 Buscando citas desde ${startDate} hasta ${endDate}`);
     
-    // Obtener citas programadas en el rango
+    // Asegurarnos de que el backend devuelva las fechas en un formato consistente
     const data = await apiFetch(`/appointments?startDate=${startDate}&endDate=${endDate}&state=scheduled&limit=50`);
+    
+    // Log para ver qué formato de fechas viene del backend
+    if (data.data && data.data.length > 0) {
+      console.log('📅 Formato de fecha del backend:', data.data[0].appointment_date);
+    }
     
     return data.data || [];
   } catch (error) {
@@ -371,11 +374,8 @@ const getUpcomingAppointments = async () => {
     try {
       console.log('📝 Datos de la cita original:', appointmentData);
       
-      // IMPORTANTE: NO convertir aquí, el backend maneja la conversión
-      // Solo enviar la fecha como está (en hora Nicaragua desde el input)
       const appointmentToSend = {
         ...appointmentData,
-        // appointment_date ya está en hora Nicaragua del input datetime-local
       };
       
       console.log('📤 Enviando al backend (hora Nicaragua):', appointmentToSend.appointment_date);
@@ -387,7 +387,6 @@ const getUpcomingAppointments = async () => {
       
       console.log('✅ Cita creada exitosamente:', data);
       
-      // El backend ya devuelve la fecha formateada en hora Nicaragua
       setAppointments(prev => [...prev, data.data]);
       
       return data;

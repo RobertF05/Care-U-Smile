@@ -79,19 +79,12 @@ const DashboardPage = () => {
     }
   };
 
-  // Cargar citas pendientes - VERSIÓN CORREGIDA
+  // Cargar citas pendientes
   const loadPendingAppointmentsCount = async () => {
     setLoadingPending(true);
     try {
-      // Usar el mismo fetchAppointments pero con filtro de estado
-      const today = new Date();
-      const startDate = today.toISOString().split('T')[0];
-      
-      // Obtener todas las citas programadas (sin límite de fecha)
       const response = await apiFetch('/appointments?state=scheduled&limit=1000');
-      
       if (response && response.data) {
-        // Contar todas las citas con estado 'scheduled'
         const pending = response.data.filter(apt => apt.state === 'scheduled');
         setPendingCount(pending.length);
       } else {
@@ -105,59 +98,142 @@ const DashboardPage = () => {
     }
   };
 
-  // Cargar próximas citas (7 días) - VERSIÓN CORREGIDA (fechas)
+  // FUNCIÓN CRÍTICA: Parsear fecha del formato Nicaragua
+  const parseNicaraguaDate = (dateString) => {
+    if (!dateString) return null;
+    
+    try {
+      // El formato viene como: "20/02/2026, 08:00:00 a. m."
+      console.log('Parseando fecha:', dateString);
+      
+      // Separar fecha y hora
+      const parts = dateString.split(', ');
+      if (parts.length !== 2) return null;
+      
+      const datePart = parts[0]; // "20/02/2026"
+      const timePart = parts[1]; // "08:00:00 a. m."
+      
+      // Parsear fecha (DD/MM/YYYY)
+      const dateParts = datePart.split('/');
+      if (dateParts.length !== 3) return null;
+      
+      const day = parseInt(dateParts[0], 10);
+      const month = parseInt(dateParts[1], 10) - 1; // Los meses en JS son 0-11
+      const year = parseInt(dateParts[2], 10);
+      
+      // Parsear hora
+      const timeMatch = timePart.match(/(\d+):(\d+):(\d+)\s*(a\.?\s*m\.?|p\.?\s*m\.?)/i);
+      if (!timeMatch) return null;
+      
+      let hours = parseInt(timeMatch[1], 10);
+      const minutes = parseInt(timeMatch[2], 10);
+      const seconds = parseInt(timeMatch[3], 10);
+      const meridian = timeMatch[4].toLowerCase();
+      
+      // Convertir a formato 24 horas
+      if (meridian.includes('p') && hours < 12) hours += 12;
+      if (meridian.includes('a') && hours === 12) hours = 0;
+      
+      // Crear objeto Date
+      const date = new Date(year, month, day, hours, minutes, seconds);
+      
+      // Verificar si es válida
+      if (isNaN(date.getTime())) return null;
+      
+      return date;
+    } catch (error) {
+      console.error('Error parseando fecha:', dateString, error);
+      return null;
+    }
+  };
+
+  // Formatear hora desde objeto Date
+  const formatTimeFromDate = (date) => {
+    if (!date || !(date instanceof Date) || isNaN(date.getTime())) return '--:--';
+    
+    return date.toLocaleTimeString('es-NI', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    }).toLowerCase().replace('a. m.', 'AM').replace('p. m.', 'PM');
+  };
+
+  // Formatear fecha desde objeto Date
+  const formatDateFromDate = (date) => {
+    if (!date || !(date instanceof Date) || isNaN(date.getTime())) return 'Fecha inválida';
+    
+    return date.toLocaleDateString('es-NI', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+  };
+
+  // Verificar si es hoy
+  const isDateToday = (date) => {
+    if (!date || !(date instanceof Date) || isNaN(date.getTime())) return false;
+    
+    const today = new Date();
+    return date.getDate() === today.getDate() &&
+           date.getMonth() === today.getMonth() &&
+           date.getFullYear() === today.getFullYear();
+  };
+
+  // Obtener nombre del día
+  const getDayNameFromDate = (date) => {
+    if (!date || !(date instanceof Date) || isNaN(date.getTime())) return '';
+    
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    if (isDateToday(date)) return 'Hoy';
+    
+    if (date.getDate() === tomorrow.getDate() && 
+        date.getMonth() === tomorrow.getMonth() && 
+        date.getFullYear() === tomorrow.getFullYear()) {
+      return 'Mañana';
+    }
+    
+    return date.toLocaleDateString('es-NI', { weekday: 'long' });
+  };
+
+  // Cargar próximas citas (7 días) - VERSIÓN CORREGIDA
   const loadUpcomingAppointments = async () => {
     setLoadingAppointments(true);
     try {
       const appointments = await getUpcomingAppointments();
+      console.log('Citas recibidas:', appointments);
       
-      // Procesar y ordenar citas - con validación mejorada de fechas
-      const processedAppointments = appointments
-        .filter(apt => apt && apt.appointment_date)
-        .map(apt => {
-          // Crear fecha de manera segura
-          let dateTime = null;
-          let timeStr = '--:--';
-          let dateStr = 'Fecha inválida';
-          let isTodayFlag = false;
-          
-          try {
-            // Intentar parsear la fecha
-            const rawDate = apt.appointment_date;
-            // Si viene en formato "DD/MM/YYYY HH:MM:SS AM/PM" del backend
-            if (typeof rawDate === 'string' && rawDate.includes('/')) {
-              const [datePart, timePart] = rawDate.split(' ');
-              const [day, month, year] = datePart.split('/');
-              dateTime = new Date(`${year}-${month}-${day}T${convertTimeToISO(timePart)}`);
-            } else {
-              dateTime = new Date(rawDate);
-            }
-            
-            if (!isNaN(dateTime.getTime())) {
-              timeStr = formatNicaraguaTime(dateTime);
-              dateStr = formatNicaraguaDate(dateTime);
-              isTodayFlag = isToday(dateTime);
-            }
-          } catch (e) {
-            console.warn('Error parseando fecha:', apt.appointment_date, e);
-          }
-          
-          return {
+      // Procesar cada cita
+      const processedAppointments = [];
+      
+      for (const apt of appointments) {
+        if (!apt || !apt.appointment_date) continue;
+        
+        const dateObj = parseNicaraguaDate(apt.appointment_date);
+        
+        if (dateObj) {
+          processedAppointments.push({
             id: apt.appointment_ID || apt.id || Math.random(),
             patient: apt.patient_name || apt.patients?.first_name || 'Paciente',
-            dateTime: dateTime,
-            time: timeStr,
-            date: dateStr,
+            dateTime: dateObj,
+            time: formatTimeFromDate(dateObj),
+            date: formatDateFromDate(dateObj),
             procedure: apt.query_type || 'Consulta',
             status: apt.state || 'scheduled',
             notes: apt.observations || '',
-            isToday: isTodayFlag,
-            rawDate: apt.appointment_date // Para debugging
-          };
-        })
-        .filter(apt => apt.dateTime !== null) // Solo mantener fechas válidas
-        .sort((a, b) => a.dateTime - b.dateTime); // Ordenar por fecha más cercana
+            isToday: isDateToday(dateObj)
+          });
+        } else {
+          console.warn('No se pudo parsear fecha:', apt.appointment_date);
+        }
+      }
       
+      // Ordenar por fecha
+      processedAppointments.sort((a, b) => a.dateTime - b.dateTime);
+      
+      console.log('Citas procesadas:', processedAppointments);
       setUpcomingAppointments(processedAppointments);
     } catch (error) {
       console.error('Error cargando próximas citas:', error);
@@ -166,57 +242,48 @@ const DashboardPage = () => {
     }
   };
 
-  // Función auxiliar para convertir tiempo AM/PM a formato ISO
-  const convertTimeToISO = (timeStr) => {
-    if (!timeStr) return '00:00:00';
-    
-    const match = timeStr.match(/(\d+):(\d+):(\d+)\s*(AM|PM)/i);
-    if (!match) return timeStr;
-    
-    let [_, hours, minutes, seconds, meridian] = match;
-    hours = parseInt(hours);
-    
-    if (meridian.toUpperCase() === 'PM' && hours < 12) hours += 12;
-    if (meridian.toUpperCase() === 'AM' && hours === 12) hours = 0;
-    
-    return `${hours.toString().padStart(2, '0')}:${minutes}:${seconds}`;
-  };
-
-  // Cargar últimos 10 procedimientos completados - VERSIÓN CORREGIDA (fechas)
+  // Cargar últimos 10 procedimientos completados - VERSIÓN CORREGIDA
   const loadRecentCompletedProcedures = async () => {
     setLoadingProcedures(true);
     try {
-      // Obtener procedimientos normales completados
+      // Obtener procedimientos normales
       const normalResult = await fetchProceduresNormal({ 
         state: 'completed', 
         limit: 15
       });
       
-      // Obtener ortodoncias completadas
+      // Obtener ortodoncias
       const orthoResult = await fetchOrthodontics({ 
         state: 'completed', 
         limit: 15 
       });
 
-      // Procesar y combinar procedimientos
+      console.log('Procedimientos normales:', normalResult);
+      console.log('Ortodoncias:', orthoResult);
+
       const allProcedures = [];
       
-      // Agregar procedimientos normales
+      // Procesar procedimientos normales
       if (normalResult.success && normalResult.data) {
         normalResult.data.forEach(proc => {
+          const dateObj = parseNicaraguaDate(proc.procedure_date);
+          
           allProcedures.push({
             ...proc,
             procedure_type: 'General',
             total_amount: proc.total_procedure || proc.total_cost || 0,
             clinic_amount: proc.clinic_payment_cordobas || proc.total_procedure || 0,
-            isOrthodontics: false
+            isOrthodontics: false,
+            dateObj: dateObj,
+            formattedDate: dateObj ? formatDateFromDate(dateObj) + ' ' + formatTimeFromDate(dateObj) : 'Fecha inválida'
           });
         });
       }
       
-      // Agregar ortodoncias
+      // Procesar ortodoncias
       if (orthoResult.success && orthoResult.data) {
         orthoResult.data.forEach(proc => {
+          const dateObj = parseNicaraguaDate(proc.procedure_date);
           const totalAmount = proc.total_procedure || proc.total_cost || 0;
           const clinicAmount = proc.clinic_payment_cordobas || (totalAmount * 0.4) || 0;
           const doctorAmount = proc.doctor_payment_cordobas || (totalAmount * 0.6) || 0;
@@ -227,100 +294,26 @@ const DashboardPage = () => {
             total_amount: totalAmount,
             clinic_amount: clinicAmount,
             doctor_amount: doctorAmount,
-            isOrthodontics: true
+            isOrthodontics: true,
+            dateObj: dateObj,
+            formattedDate: dateObj ? formatDateFromDate(dateObj) + ' ' + formatTimeFromDate(dateObj) : 'Fecha inválida'
           });
         });
       }
       
-      // Filtrar solo los que tienen fecha válida y formatear
+      // Filtrar los que tienen fecha válida, ordenar y limitar
       const validProcedures = allProcedures
-        .filter(proc => {
-          if (!proc.procedure_date) return false;
-          try {
-            const date = new Date(proc.procedure_date);
-            return !isNaN(date.getTime());
-          } catch {
-            return false;
-          }
-        })
-        .map(proc => {
-          let formattedDate = 'Fecha inválida';
-          try {
-            const date = new Date(proc.procedure_date);
-            if (!isNaN(date.getTime())) {
-              formattedDate = formatFullDateTime(date);
-            }
-          } catch (e) {
-            console.warn('Error formateando fecha de procedimiento:', proc.procedure_date);
-          }
-          
-          return {
-            ...proc,
-            formattedDate
-          };
-        })
-        .sort((a, b) => new Date(b.procedure_date) - new Date(a.procedure_date))
+        .filter(proc => proc.dateObj !== null)
+        .sort((a, b) => b.dateObj - a.dateObj)
         .slice(0, 10);
       
+      console.log('Procedimientos procesados:', validProcedures);
       setRecentCompletedProcedures(validProcedures);
     } catch (error) {
       console.error('Error al obtener procedimientos completados:', error);
     } finally {
       setLoadingProcedures(false);
     }
-  };
-
-  // Funciones auxiliares para fechas (versiones que aceptan Date object)
-  const formatNicaraguaTime = (date) => {
-    if (!date || !(date instanceof Date) || isNaN(date.getTime())) return '--:--';
-    
-    return date.toLocaleTimeString('es-NI', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true
-    }).toLowerCase().replace('a. m.', 'AM').replace('p. m.', 'PM');
-  };
-
-  const formatNicaraguaDate = (date) => {
-    if (!date || !(date instanceof Date) || isNaN(date.getTime())) return 'Fecha inválida';
-    
-    return date.toLocaleDateString('es-NI', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
-  };
-
-  const formatFullDateTime = (date) => {
-    if (!date || !(date instanceof Date) || isNaN(date.getTime())) return 'Fecha inválida';
-    
-    return `${formatNicaraguaDate(date)} ${formatNicaraguaTime(date)}`;
-  };
-
-  const isToday = (date) => {
-    if (!date || !(date instanceof Date) || isNaN(date.getTime())) return false;
-    
-    const today = new Date();
-    return date.getDate() === today.getDate() &&
-           date.getMonth() === today.getMonth() &&
-           date.getFullYear() === today.getFullYear();
-  };
-
-  const getDayName = (date) => {
-    if (!date || !(date instanceof Date) || isNaN(date.getTime())) return '';
-    
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    
-    if (isToday(date)) return 'Hoy';
-    if (date.getDate() === tomorrow.getDate() && 
-        date.getMonth() === tomorrow.getMonth() && 
-        date.getFullYear() === tomorrow.getFullYear()) {
-      return 'Mañana';
-    }
-    
-    return date.toLocaleDateString('es-NI', { weekday: 'long' });
   };
 
   const getStatusColor = (status) => {
@@ -454,7 +447,7 @@ const DashboardPage = () => {
                   <div key={appointment.id} className="appointment-card">
                     <div className="appointment-time-section">
                       <div className={`appointment-day-badge ${appointment.isToday ? 'today' : ''}`}>
-                        {getDayName(appointment.dateTime)}
+                        {getDayNameFromDate(appointment.dateTime)}
                       </div>
                       <div className="appointment-time">
                         <FontAwesomeIcon icon={faClock} />
@@ -475,13 +468,6 @@ const DashboardPage = () => {
                           {appointment.procedure}
                         </span>
                       </div>
-                    </div>
-                    
-                    <div 
-                      className="appointment-status" 
-                      style={{ backgroundColor: getStatusColor(appointment.status) }}
-                    >
-                      {getStatusLabel(appointment.status)}
                     </div>
                   </div>
                 ))}
@@ -572,7 +558,7 @@ const DashboardPage = () => {
                       <div className="procedure-footer">
                         <div className="procedure-date">
                           <FontAwesomeIcon icon={faClock} />
-                          {procedure.formattedDate || 'Fecha inválida'}
+                          {procedure.formattedDate}
                         </div>
                       </div>
                     </div>

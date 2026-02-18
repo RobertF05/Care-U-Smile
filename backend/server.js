@@ -13,6 +13,7 @@ import monthlyClosingRoutes from './routes/monthlyClosingRoutes.js';
 import systemSettingsRoutes from './routes/systemSettingsRoutes.js';
 import dailyClosingRoutes from './routes/dailyClosingRoutes.js';
 import exportRoutes from './routes/exportRoutes.js';
+import exportDailyRoutes from './exportDailyRoutes.js';
 
 // Importar y probar conexión
 import { testConnection } from './config/supabase.js';
@@ -69,6 +70,7 @@ app.use('/api/monthly-closings', monthlyClosingRoutes);
 app.use('/api/settings', systemSettingsRoutes);
 app.use('/api/daily-closings', dailyClosingRoutes);
 app.use('/api/export', exportRoutes);
+app.use('/api/export', exportDailyRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {

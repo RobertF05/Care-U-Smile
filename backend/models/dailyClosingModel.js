@@ -95,142 +95,167 @@ const DailyClosing = {
   // En dailyClosingModel.js - función getDailyFinancialSummary CORREGIDA
 async getDailyFinancialSummary(date) {
   console.log('🔍 [RESULTADOS EN VIVO] Obteniendo resumen diario para fecha:', date);
+  console.log('📅 Fecha recibida:', date);
   
-  // 1. Obtener TODOS los procedimientos del día
-  // IMPORTANTE: Usar comillas dobles para campos con mayúsculas en la consulta
-  const { data: procedures, error: procError } = await supabaseAdmin
-    .from('procedures')
-    .select(`
-      *,
-      patients!inner (
-        "Patient_ID",
-        first_name,
-        first_last_name
-      )
-    `)
-    .eq('procedure_date::date', date);
-  
-  if (procError) {
-    console.error('❌ Error obteniendo procedimientos:', procError);
-    throw procError;
-  }
-  
-  console.log('📊 Procedimientos encontrados:', procedures?.length || 0);
-  if (procedures && procedures.length > 0) {
-    console.log('📋 Detalle de procedimientos:');
-    procedures.forEach((proc, index) => {
-      console.log(`   ${index + 1}. ID: ${proc.procedure_ID}, Monto: ${proc.clinic_payment_cordobas}`);
-    });
-  } else {
-    console.log('⚠️ NO HAY PROCEDIMIENTOS para la fecha:', date);
-  }
-  
-  // 2. Obtener TODOS los gastos variables del día
-  const { data: expenses, error: expError } = await supabaseAdmin
-    .from('bills')
-    .select('*')
-    .eq('is_recurrent', false)
-    .eq('bill_date', date);
-  
-  if (expError) {
-    console.error('❌ Error obteniendo gastos:', expError);
-    throw expError;
-  }
-  
-  console.log('💰 Gastos encontrados:', expenses?.length || 0);
-  
-  const settings = await this.getSystemSettings();
-  const exchangeRate = settings.exchange_rate || 36.5;
-  
-  // Calcular ingresos totales de la clínica
-  let totalClinicIncome = 0;
-  let totalGeneralIncome = 0;
-  let totalOrthoClinicIncome = 0;
-  let totalOrthoDoctorIncome = 0;
-  
-  (procedures || []).forEach(procedure => {
-    // Usar los nombres de campo correctos de la BD
-    const clinicPayment = parseFloat(procedure.clinic_payment_cordobas) || 0;
-    totalClinicIncome += clinicPayment;
+  try {
+    // 1. PRIMERO: Verificar si hay procedimientos con una consulta simple
+    const { data: checkData, error: checkError } = await supabaseAdmin
+      .from('procedures')
+      .select('procedure_ID, procedure_date, clinic_payment_cordobas')
+      .eq('procedure_date::date', date);
     
-    if (procedure.is_orthodontics) {
-      totalOrthoClinicIncome += clinicPayment;
-      totalOrthoDoctorIncome += parseFloat(procedure.doctor_payment_cordobas) || 0;
-    } else {
-      totalGeneralIncome += clinicPayment;
-    }
-  });
-  
-  // Calcular gastos totales
-  let totalExpenses = 0;
-  const expenseDetails = [];
-  const expenseIds = [];
-  
-  (expenses || []).forEach(expense => {
-    let amount = 0;
-    if (expense.currency_used === 'USD') {
-      const usdAmount = parseFloat(expense.amount_usd) || 0;
-      const rate = parseFloat(expense.exchange_rate_bill) || exchangeRate;
-      amount = usdAmount * rate;
-    } else {
-      amount = parseFloat(expense.amount) || 0;
+    console.log('📊 Consulta simple de verificación:', {
+      encontrados: checkData?.length || 0,
+      error: checkError?.message
+    });
+    
+    if (checkData && checkData.length > 0) {
+      console.log('✅ Procedimientos encontrados en consulta simple:', checkData);
     }
     
-    totalExpenses += amount;
-    expenseIds.push(expense.bill_ID);
+    // 2. Obtener TODOS los procedimientos del día con sintaxis correcta
+    const { data: procedures, error: procError } = await supabaseAdmin
+      .from('procedures')
+      .select(`
+        procedure_ID,
+        procedure_date,
+        procedure_description,
+        clinic_payment_cordobas,
+        doctor_payment_cordobas,
+        is_orthodontics,
+        patients!inner (
+          Patient_ID,
+          first_name,
+          first_last_name
+        )
+      `)
+      .eq('procedure_date::date', date);
     
-    expenseDetails.push({
-      bill_id: expense.bill_ID,
-      description: expense.description,
-      amount: amount,
-      amount_original: expense.amount,
-      amount_usd_original: expense.amount_usd,
-      currency_used: expense.currency_used,
-      category: expense.category,
-      exchange_rate_used: expense.exchange_rate_bill || exchangeRate,
-      is_processed_in_closing: expense.is_processed_in_closing || false
+    if (procError) {
+      console.error('❌ Error obteniendo procedimientos:', procError);
+      throw procError;
+    }
+    
+    console.log('📊 Procedimientos encontrados (con detalles):', procedures?.length || 0);
+    
+    // 3. Obtener TODOS los gastos variables del día
+    const { data: expenses, error: expError } = await supabaseAdmin
+      .from('bills')
+      .select('*')
+      .eq('is_recurrent', false)
+      .eq('bill_date', date);
+    
+    if (expError) {
+      console.error('❌ Error obteniendo gastos:', expError);
+      throw expError;
+    }
+    
+    console.log('💰 Gastos encontrados:', expenses?.length || 0);
+    
+    const settings = await this.getSystemSettings();
+    const exchangeRate = settings.exchange_rate || 36.5;
+    
+    // Calcular ingresos totales de la clínica
+    let totalClinicIncome = 0;
+    let totalGeneralIncome = 0;
+    let totalOrthoClinicIncome = 0;
+    let totalOrthoDoctorIncome = 0;
+    
+    (procedures || []).forEach(procedure => {
+      const clinicPayment = parseFloat(procedure.clinic_payment_cordobas) || 0;
+      totalClinicIncome += clinicPayment;
+      
+      if (procedure.is_orthodontics) {
+        totalOrthoClinicIncome += clinicPayment;
+        totalOrthoDoctorIncome += parseFloat(procedure.doctor_payment_cordobas) || 0;
+      } else {
+        totalGeneralIncome += clinicPayment;
+      }
     });
-  });
-  
-  // Calcular utilidad neta
-  const netProfit = totalClinicIncome - totalExpenses;
-  
-  console.log('💰💰💰 RESUMEN FINAL:', {
-    ingresos_totales: totalClinicIncome,
-    generales: totalGeneralIncome,
-    ortodoncia_clinica: totalOrthoClinicIncome,
-    ortodoncia_doctora: totalOrthoDoctorIncome,
-    gastos_totales: totalExpenses,
-    utilidad_neta: netProfit,
-    cantidad_gastos: expenses?.length || 0,
-    cantidad_procedimientos: procedures?.length || 0
-  });
-  
-  const result = {
-    procedures: procedures || [],
-    total_income: totalClinicIncome,
-    total_general_income: totalGeneralIncome,
-    total_ortho_clinic_income: totalOrthoClinicIncome,
-    total_ortho_doctor_income: totalOrthoDoctorIncome,
-    total_clinic_income: totalClinicIncome,
-    total_variable_expenses: totalExpenses,
-    net_profit: netProfit,
-    exchange_rate: exchangeRate,
-    fecha_nicaragua: date,
-    cantidad_procedimientos: procedures?.length || 0,
-    cantidad_gastos_variables: expenses?.length || 0,
-    expense_ids: expenseIds,
-    expense_details: expenseDetails
-  };
-  
-  console.log('📤 Resultado final a enviar:', {
-    procedimientos: result.cantidad_procedimientos,
-    ingresos: result.total_income,
-    gastos: result.total_variable_expenses,
-    utilidad: result.net_profit
-  });
-  
-  return result;
+    
+    console.log('💰 Cálculo de ingresos:', {
+      total: totalClinicIncome,
+      general: totalGeneralIncome,
+      ortho_clinic: totalOrthoClinicIncome,
+      ortho_doctor: totalOrthoDoctorIncome,
+      procedimientos_usados: procedures?.length || 0
+    });
+    
+    // Calcular gastos totales
+    let totalExpenses = 0;
+    const expenseDetails = [];
+    const expenseIds = [];
+    
+    (expenses || []).forEach(expense => {
+      let amount = 0;
+      if (expense.currency_used === 'USD') {
+        const usdAmount = parseFloat(expense.amount_usd) || 0;
+        const rate = parseFloat(expense.exchange_rate_bill) || exchangeRate;
+        amount = usdAmount * rate;
+      } else {
+        amount = parseFloat(expense.amount) || 0;
+      }
+      
+      totalExpenses += amount;
+      expenseIds.push(expense.bill_ID);
+      
+      expenseDetails.push({
+        bill_id: expense.bill_ID,
+        description: expense.description,
+        amount: amount,
+        amount_original: expense.amount,
+        amount_usd_original: expense.amount_usd,
+        currency_used: expense.currency_used,
+        category: expense.category,
+        exchange_rate_used: expense.exchange_rate_bill || exchangeRate,
+        is_processed_in_closing: expense.is_processed_in_closing || false
+      });
+    });
+    
+    // Calcular utilidad neta
+    const netProfit = totalClinicIncome - totalExpenses;
+    
+    console.log('💰💰💰 RESUMEN FINAL:', {
+      ingresos_totales: totalClinicIncome,
+      generales: totalGeneralIncome,
+      ortodoncia_clinica: totalOrthoClinicIncome,
+      ortodoncia_doctora: totalOrthoDoctorIncome,
+      gastos_totales: totalExpenses,
+      utilidad_neta: netProfit,
+      cantidad_gastos: expenses?.length || 0,
+      cantidad_procedimientos: procedures?.length || 0
+    });
+    
+    const result = {
+      procedures: procedures || [],
+      total_income: totalClinicIncome,
+      total_general_income: totalGeneralIncome,
+      total_ortho_clinic_income: totalOrthoClinicIncome,
+      total_ortho_doctor_income: totalOrthoDoctorIncome,
+      total_clinic_income: totalClinicIncome,
+      total_variable_expenses: totalExpenses,
+      net_profit: netProfit,
+      exchange_rate: exchangeRate,
+      fecha_nicaragua: date,
+      cantidad_procedimientos: procedures?.length || 0,
+      cantidad_gastos_variables: expenses?.length || 0,
+      expense_ids: expenseIds,
+      expense_details: expenseDetails
+    };
+    
+    console.log('📤 Resultado final a enviar:', {
+      procedimientos: result.cantidad_procedimientos,
+      ingresos: result.total_income,
+      gastos: result.total_variable_expenses,
+      utilidad: result.net_profit
+    });
+    
+    return result;
+    
+  } catch (error) {
+    console.error('❌ Error en getDailyFinancialSummary:', error);
+    throw error;
+  }
 },
 
   // ============================================

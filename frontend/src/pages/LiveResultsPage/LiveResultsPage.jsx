@@ -1,4 +1,4 @@
-// LiveResultsPage.jsx
+// LiveResultsPage.jsx (sección corregida - líneas 170-250)
 import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -138,7 +138,6 @@ const LiveResultsPage = () => {
   // Función para obtener la fecha actual en Nicaragua (YYYY-MM-DD)
   const getCurrentNicaraguaDate = () => {
     const now = new Date();
-    // Ajustar a zona horaria de Nicaragua (GMT-6)
     const nicaraguaOffset = -6 * 60;
     const localOffset = now.getTimezoneOffset();
     const totalOffset = nicaraguaOffset - localOffset;
@@ -156,7 +155,6 @@ const LiveResultsPage = () => {
   const getCurrentMonthDates = useCallback(() => {
     const now = new Date();
     
-    // Ajustar a zona horaria de Nicaragua
     const nicaraguaOffset = -6 * 60;
     const localOffset = now.getTimezoneOffset();
     const totalOffset = nicaraguaOffset - localOffset;
@@ -197,7 +195,7 @@ const LiveResultsPage = () => {
   };
 
   // ============================================
-  // FUNCIÓN PRINCIPAL PARA CARGAR DATOS
+  // FUNCIÓN PRINCIPAL PARA CARGAR DATOS (CORREGIDA)
   // ============================================
   const fetchLiveData = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
@@ -240,34 +238,34 @@ const LiveResultsPage = () => {
       const dailyOrthoRes = await getDailySummary(todayStr, 'orthodontics');
       const dailyOrtho = dailyOrthoRes.success ? dailyOrthoRes.data : null;
 
-      // Calcular ingresos totales (sumar general + ortodoncia)
-      const incomeGeneral = dailyGeneral?.total_clinic_income || 0;
-      const incomeOrtho = dailyOrtho?.total_clinic_income || 0;
-      const dailyIncomeFromProcedures = incomeGeneral + incomeOrtho;
+      // 🔴 CORRECCIÓN: Usar el total_income que ya viene sumado del backend
+      let dailyIncomeFromProcedures = 0;
+      
+      // El backend ya devuelve el total en total_income (general + ortodoncia)
+      if (dailyGeneral && dailyGeneral.total_income) {
+        dailyIncomeFromProcedures = dailyGeneral.total_income;
+      } else if (dailyOrtho && dailyOrtho.total_income) {
+        dailyIncomeFromProcedures = dailyOrtho.total_income;
+      }
 
       // Calcular gastos totales (tomar de cualquiera que tenga datos)
       let totalDailyExpenses = 0;
       
-      // Primero intentar con general
       if (dailyGeneral && dailyGeneral.total_variable_expenses) {
         totalDailyExpenses = dailyGeneral.total_variable_expenses;
-      } 
-      // Si no, intentar con ortodoncia
-      else if (dailyOrtho && dailyOrtho.total_variable_expenses) {
+      } else if (dailyOrtho && dailyOrtho.total_variable_expenses) {
         totalDailyExpenses = dailyOrtho.total_variable_expenses;
       }
 
-      console.log('💰💰💰 DESGLOSE DETALLADO:', {
+      console.log('💰💰💰 DESGLOSE DETALLADO (CORREGIDO):', {
         ingresos: {
-          general: incomeGeneral,
-          ortodoncia: incomeOrtho,
-          total: dailyIncomeFromProcedures
+          desde_backend: dailyIncomeFromProcedures,
+          general_individual: dailyGeneral?.total_clinic_income || 0,
+          ortho_individual: dailyOrtho?.total_clinic_income || 0
         },
         gastos: {
           desdeBills: dailyExpensesTotal,
-          desdeGeneral: dailyGeneral?.total_variable_expenses || 0,
-          desdeOrtho: dailyOrtho?.total_variable_expenses || 0,
-          total_USADO: totalDailyExpenses
+          desde_backend: totalDailyExpenses
         },
         utilidad_neta: dailyIncomeFromProcedures - totalDailyExpenses
       });

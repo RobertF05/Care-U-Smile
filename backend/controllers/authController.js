@@ -1,3 +1,4 @@
+// backend/controllers/authController.js
 import User from '../models/userModel.js';
 
 const authController = {
@@ -59,7 +60,7 @@ const authController = {
       
       const newUser = await User.create({
         email,
-        password, // ⚠️ En producción, usar bcrypt
+        password,
         name,
         user_type
       });
@@ -78,36 +79,54 @@ const authController = {
     }
   },
 
-  // Verificar sesión
+  // Verificar sesión - VERSIÓN CORREGIDA CON LOGS
   checkSession: async (req, res) => {
     try {
       const { user_id } = req.query;
       
+      console.log('🔍 Verificando sesión para user_id:', user_id);
+      
       if (!user_id) {
+        console.log('❌ No se proporcionó user_id');
         return res.status(400).json({ 
           success: false, 
           error: 'ID de usuario requerido' 
         });
       }
+
+      // Convertir a número si es necesario
+      const userId = parseInt(user_id);
       
-      const user = await User.findById(user_id);
+      if (isNaN(userId)) {
+        console.log('❌ user_id no es un número válido:', user_id);
+        return res.status(400).json({ 
+          success: false, 
+          error: 'ID de usuario inválido' 
+        });
+      }
+      
+      console.log('🔍 Buscando usuario con ID:', userId);
+      const user = await User.findById(userId);
       
       if (!user) {
+        console.log('❌ Usuario no encontrado para ID:', userId);
         return res.status(404).json({ 
           success: false, 
           error: 'Usuario no encontrado' 
         });
       }
       
+      console.log('✅ Usuario encontrado:', user.email);
+      
       res.json({ 
         success: true, 
         data: { user }
       });
     } catch (error) {
-      console.error('Error verificando sesión:', error);
+      console.error('❌ Error verificando sesión:', error);
       res.status(500).json({ 
         success: false, 
-        error: 'Error en el servidor' 
+        error: 'Error en el servidor: ' + error.message 
       });
     }
   }

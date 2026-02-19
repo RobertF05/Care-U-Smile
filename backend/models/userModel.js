@@ -1,75 +1,90 @@
+// backend/models/userModel.js
 import { supabaseAdmin } from '../config/supabase.js';
 
 const User = {
-  // Buscar usuario por email
-  async findByEmail(email) {
-    const { data, error } = await supabaseAdmin
-      .from('users')
-      .select('*')
-      .eq('email', email)
-      .single();
-    
-    if (error && error.code !== 'PGRST116') throw error;
-    return data;
-  },
-
-  // Buscar usuario por ID
+  // Encontrar usuario por ID (CORREGIDO para usar user_ID)
   async findById(id) {
-    const { data, error } = await supabaseAdmin
-      .from('users')
-      .select('user_id, email, username, user_type, created_at') // ✅ Añadir username
-      .eq('user_id', id)
-      .single();
-    
-    if (error && error.code !== 'PGRST116') throw error;
-    return data;
+    try {
+      console.log('🔍 Buscando usuario por ID:', id);
+      
+      const { data, error } = await supabaseAdmin
+        .from('users')
+        .select('*')
+        .eq('user_ID', id) // 👈 CAMBIADO de 'id' a 'user_ID'
+        .maybeSingle();
+      
+      if (error) {
+        console.error('Error en findById:', error);
+        throw error;
+      }
+      
+      console.log('✅ Usuario encontrado:', data ? 'Sí' : 'No');
+      return data;
+    } catch (error) {
+      console.error('Error en User.findById:', error);
+      return null;
+    }
   },
 
-  // Buscar usuario por username (nuevo método)
-  async findByUsername(username) {
-    const { data, error } = await supabaseAdmin
-      .from('users')
-      .select('*')
-      .eq('username', username)
-      .single();
-    
-    if (error && error.code !== 'PGRST116') throw error;
-    return data;
-  },
-
-  // Crear usuario
-  async create(userData) {
-    const { data, error } = await supabaseAdmin
-      .from('users')
-      .insert([{
-        ...userData,
-        created_at: new Date().toISOString()
-      }])
-      .select('user_id, email, username, user_type, created_at') // ✅ Añadir username
-      .single();
-    
-    if (error) throw error;
-    return data;
+  // Encontrar usuario por email
+  async findByEmail(email) {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('users')
+        .select('*')
+        .eq('email', email)
+        .maybeSingle();
+      
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error en User.findByEmail:', error);
+      return null;
+    }
   },
 
   // Verificar credenciales
   async verifyCredentials(email, password) {
-    const { data, error } = await supabaseAdmin
-      .from('users')
-      .select('*')
-      .eq('email', email)
-      .eq('password', password)
-      .single();
-    
-    if (error && error.code !== 'PGRST116') throw error;
-    
-    if (data) {
-      // Eliminar password de la respuesta
-      const { password: _, ...userWithoutPassword } = data;
-      return userWithoutPassword;
+    try {
+      const user = await this.findByEmail(email);
+      
+      if (!user) return null;
+      
+      // ⚠️ En producción, usa bcrypt.compare()
+      if (user.password !== password) return null;
+      
+      // No enviar la contraseña
+      delete user.password;
+      return user;
+    } catch (error) {
+      console.error('Error en User.verifyCredentials:', error);
+      return null;
     }
-    
-    return null;
+  },
+
+  // Crear nuevo usuario
+  async create(userData) {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('users')
+        .insert([{
+          email: userData.email,
+          password: userData.password,
+          username: userData.name,
+          user_type: userData.user_type || 'USER'
+        }])
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      // No enviar la contraseña
+      delete data.password;
+      return data;
+    } catch (error) {
+      console.error('Error en User.create:', error);
+      throw error;
+    }
   }
 };
 

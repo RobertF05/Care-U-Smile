@@ -42,7 +42,8 @@ export const AppProvider = ({ children }) => {
     totalExpenses: 0
   });
 
-  const apiFetch = async (endpoint, options = {}) => {
+  // En AppContext.jsx - función apiFetch CORREGIDA
+const apiFetch = async (endpoint, options = {}) => {
   setLoading(true);
   setError(null);
 
@@ -55,26 +56,41 @@ export const AppProvider = ({ children }) => {
       ...options.headers,
     };
 
+    // 🔴 CORRECCIÓN: Obtener userId del contexto de autenticación
+    // Asumiendo que en tu AuthContext tienes user con id
+    if (user && user.id) {
+      headers['user-id'] = user.id;
+      console.log('📤 Enviando user-id:', user.id);
+    } else {
+      // Si no hay user en el contexto, intentar obtenerlo del token
+      if (token) {
+        try {
+          const tokenData = JSON.parse(atob(token.split('.')[1]));
+          const userId = tokenData.id || tokenData.userId || tokenData.sub;
+          if (userId) {
+            headers['user-id'] = userId;
+            console.log('📤 Enviando user-id desde token:', userId);
+          }
+        } catch (e) {
+          console.warn('No se pudo decodificar el token para user-id');
+        }
+      }
+    }
+
+    // También enviar el token JWT para compatibilidad
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    // Log de la petición
     console.log(`🌐 apiFetch → Preparando petición:`, {
       method: options.method || 'GET',
       url: `${API_URL}/api${endpoint}`,
-      hasBody: !!options.body,
-    });
-
-    // Log del body si existe
-    if (options.body) {
-      try {
-        const bodyParsed = JSON.parse(options.body);
-        console.log(`📤 apiFetch → BODY a ${endpoint}:`, bodyParsed);
-      } catch (parseErr) {
-        console.warn('No se pudo parsear el body:', parseErr);
+      headers: { 
+        ...headers, 
+        Authorization: headers.Authorization ? 'Bearer ***' : undefined,
+        'user-id': headers['user-id'] || 'no enviado'
       }
-    }
+    });
 
     const response = await fetch(`${API_URL}/api${endpoint}`, {
       headers,
@@ -94,13 +110,10 @@ export const AppProvider = ({ children }) => {
 
     console.log(`📥 apiFetch ← Respuesta de ${endpoint} (${response.status}):`, data);
 
-    // ⚠️ IMPORTANTE: NO lanzar error cuando success: false
-    // Solo lanzar error si hay un problema de red o servidor (status >= 500)
     if (!response.ok && response.status >= 500) {
       throw new Error(data.error || `Error del servidor (${response.status})`);
     }
 
-    // Devolver la respuesta tal cual, incluso si success: false
     return data;
 
   } catch (error) {

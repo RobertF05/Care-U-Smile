@@ -1,4 +1,4 @@
-// LiveResultsPage.jsx (sección corregida - líneas 170-250)
+// LiveResultsPage.jsx (COMPLETO CON CORRECCIONES)
 import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -151,6 +151,18 @@ const LiveResultsPage = () => {
     return `${year}-${month}-${day}`;
   };
 
+  // Formatear fecha para mostrar en español
+  const formatDateForDisplay = (dateStr) => {
+    if (!dateStr) return '';
+    const [year, month, day] = dateStr.split('-');
+    const date = new Date(year, month - 1, day);
+    return date.toLocaleDateString('es-NI', { 
+      day: 'numeric', 
+      month: 'long', 
+      year: 'numeric' 
+    });
+  };
+
   // Obtener fechas del mes actual en Nicaragua
   const getCurrentMonthDates = useCallback(() => {
     const now = new Date();
@@ -206,10 +218,7 @@ const LiveResultsPage = () => {
       const monthDates = getCurrentMonthDates();
       const exchangeRate = systemSettings?.exchange_rate || 36.5;
 
-      console.log('🔍 Cargando datos en vivo...', { 
-        hoy: todayStr, 
-        mes: monthDates 
-      });
+      console.log('🔍 Cargando datos en vivo para fecha:', todayStr);
 
       // ============================================
       // 1. CARGAR GASTOS VARIABLES DEL DÍA (para detalles)
@@ -230,25 +239,20 @@ const LiveResultsPage = () => {
       // ============================================
       // 2. CARGAR DATOS DEL DÍA
       // ============================================
-      console.log('📊 Cargando resumen diario general...');
       const dailyGeneralRes = await getDailySummary(todayStr, 'general');
       const dailyGeneral = dailyGeneralRes.success ? dailyGeneralRes.data : null;
       
-      console.log('📊 Cargando resumen diario ortodoncia...');
       const dailyOrthoRes = await getDailySummary(todayStr, 'orthodontics');
       const dailyOrtho = dailyOrthoRes.success ? dailyOrthoRes.data : null;
 
-      // 🔴 CORRECCIÓN: Usar el total_income que ya viene sumado del backend
       let dailyIncomeFromProcedures = 0;
       
-      // El backend ya devuelve el total en total_income (general + ortodoncia)
       if (dailyGeneral && dailyGeneral.total_income) {
         dailyIncomeFromProcedures = dailyGeneral.total_income;
       } else if (dailyOrtho && dailyOrtho.total_income) {
         dailyIncomeFromProcedures = dailyOrtho.total_income;
       }
 
-      // Calcular gastos totales (tomar de cualquiera que tenga datos)
       let totalDailyExpenses = 0;
       
       if (dailyGeneral && dailyGeneral.total_variable_expenses) {
@@ -257,18 +261,10 @@ const LiveResultsPage = () => {
         totalDailyExpenses = dailyOrtho.total_variable_expenses;
       }
 
-      console.log('💰💰💰 DESGLOSE DETALLADO (CORREGIDO):', {
-        ingresos: {
-          desde_backend: dailyIncomeFromProcedures,
-          general_individual: dailyGeneral?.total_clinic_income || 0,
-          ortho_individual: dailyOrtho?.total_clinic_income || 0
-        },
-        gastos: {
-          desdeBills: dailyExpensesTotal,
-          desde_backend: totalDailyExpenses
-        },
-        utilidad_neta: dailyIncomeFromProcedures - totalDailyExpenses
-      });
+      // Si no hay gastos desde el backend, usar los calculados de bills
+      if (totalDailyExpenses === 0 && dailyExpensesTotal > 0) {
+        totalDailyExpenses = dailyExpensesTotal;
+      }
 
       setDailyData({
         date: todayStr,
@@ -313,12 +309,50 @@ const LiveResultsPage = () => {
     }
   }, [getDailySummary, getFinancialSummary, apiFetch, getCurrentMonthDates, systemSettings]);
 
-  // Solo se ejecuta al montar el componente
+  // ============================================
+  // EFECTOS PARA ACTUALIZACIÓN AUTOMÁTICA
+  // ============================================
+  
+  // Efecto principal: carga datos al montar y cuando el usuario cambia
   useEffect(() => {
     if (user) {
       fetchLiveData(true);
     }
-  }, [user]);
+  }, [user, fetchLiveData]); // Incluimos fetchLiveData en dependencias
+
+  // 🔴 CORRECCIÓN: Efecto para recargar al cambiar el día
+  useEffect(() => {
+    if (!user) return;
+
+    // Función para verificar si cambió el día y recargar
+    const checkAndRefresh = () => {
+      const todayStr = getCurrentNicaraguaDate();
+      if (dailyData.date && dailyData.date !== todayStr) {
+        console.log('📅 Día cambiado, recargando datos...');
+        fetchLiveData(false); // Recargar sin mostrar loading
+      }
+    };
+
+    // Verificar cada minuto si cambió el día
+    const intervalId = setInterval(checkAndRefresh, 60000); // 60 segundos
+
+    // También verificar cuando la ventana recibe foco (el usuario vuelve a la pestaña)
+    const handleFocus = () => {
+      const todayStr = getCurrentNicaraguaDate();
+      if (dailyData.date && dailyData.date !== todayStr) {
+        console.log('📅 Día cambiado (focus), recargando datos...');
+        fetchLiveData(false);
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+
+    // Limpiar al desmontar
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [user, dailyData.date, fetchLiveData, getCurrentNicaraguaDate]);
 
   const handleManualRefresh = () => {
     fetchLiveData(true);
@@ -396,11 +430,7 @@ const LiveResultsPage = () => {
         <div className="section-header">
           <h3>
             <FontAwesomeIcon icon={faCalendarDay} />
-            Resultados del Día ({dailyData.date ? new Date(dailyData.date + 'T12:00:00').toLocaleDateString('es-NI', { 
-              day: 'numeric', 
-              month: 'long', 
-              year: 'numeric' 
-            }) : 'Cargando...'})
+            Resultados del Día ({dailyData.date ? formatDateForDisplay(dailyData.date) : 'Cargando...'})
           </h3>
           {dailyData.expenses.length > 0 && (
             <div className="section-badge">
@@ -513,7 +543,7 @@ const LiveResultsPage = () => {
         <div className="section-header">
           <h3>
             <FontAwesomeIcon icon={faCalendarAlt} />
-            Resultados del Mes 
+            Resultados del Mes ({monthlyData.startDate ? formatDateForDisplay(monthlyData.startDate).split('de')[1]?.trim() || '' : ''})
           </h3>
         </div>
 
@@ -573,6 +603,9 @@ const LiveResultsPage = () => {
           <p>
             <strong>📊 Resumen:</strong> Los ingresos son la suma de procedimientos generales y ortodoncia. 
             Los gastos son los registrados en la tabla bills. La utilidad neta es la diferencia.
+          </p>
+          <p className="auto-update-note">
+            <FontAwesomeIcon icon={faClock} /> Los datos se actualizan automáticamente cuando cambia el día.
           </p>
         </div>
       </div>

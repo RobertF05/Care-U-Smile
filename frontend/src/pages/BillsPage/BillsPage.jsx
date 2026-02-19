@@ -1,3 +1,4 @@
+// frontend/src/pages/BillsPage/BillsPage.jsx
 import React, { useState, useEffect, useMemo, useContext } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
@@ -24,6 +25,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { AppContext } from '../../context/AppContext';
 import { AuthContext } from '../../context/AuthContext';
+import { useNotification } from '../../context/NotificationContext';
 import './BillsPage.css';
 
 // Categorías de gastos comunes en una clínica odontológica
@@ -63,6 +65,8 @@ const BillsPage = () => {
     systemSettings
   } = useContext(AppContext);
 
+  const { addNotification } = useNotification();
+
   // Estados
   const [showFilters, setShowFilters] = useState(true);
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -86,7 +90,7 @@ const BillsPage = () => {
     bill_date: new Date().toISOString().split('T')[0],
     category: 'Materiales Odontológicos',
     currency_used: 'NIO',
-    exchange_rate_bill: systemSettings.exchange_rate || 36.5, // Usar tipo de cambio dinámico
+    exchange_rate_bill: systemSettings.exchange_rate || 36.5,
     is_recurrent: false
   });
 
@@ -97,7 +101,7 @@ const BillsPage = () => {
     bill_date: '',
     category: '',
     currency_used: 'NIO',
-    exchange_rate_bill: systemSettings.exchange_rate || 36.5, // Usar tipo de cambio dinámico
+    exchange_rate_bill: systemSettings.exchange_rate || 36.5,
     is_recurrent: false
   });
 
@@ -112,9 +116,7 @@ const BillsPage = () => {
   useEffect(() => {
     const exchangeRate = systemSettings.exchange_rate || 36.5;
     
-    // Actualizar el formulario nuevo si el usuario no ha modificado el tipo de cambio
     setNewBill(prev => {
-      // Solo actualizar si el usuario no ha tocado el campo
       if (prev.exchange_rate_bill === (systemSettings.exchange_rate || 36.5)) {
         return {
           ...prev,
@@ -124,7 +126,6 @@ const BillsPage = () => {
       return prev;
     });
     
-    // Actualizar el formulario de edición
     setEditBill(prev => ({
       ...prev,
       exchange_rate_bill: exchangeRate
@@ -156,7 +157,7 @@ const BillsPage = () => {
     });
   };
 
-  // Función para manejar cambios en moneda CON TIPO DE CAMBIO DINÁMICO
+  // Función para manejar cambios en moneda
   const handleCurrencyChange = (field, value, isNewBill = true) => {
     const setter = isNewBill ? setNewBill : setEditBill;
     const current = isNewBill ? newBill : editBill;
@@ -165,7 +166,6 @@ const BillsPage = () => {
     setter(prev => {
       const updated = { ...prev, [field]: value };
       
-      // Si cambia el tipo de cambio, recalcular
       if (field === 'exchange_rate_bill') {
         const rate = parseFloat(value) || exchangeRate;
         if (updated.currency_used === 'USD' && updated.amount_USD) {
@@ -175,19 +175,16 @@ const BillsPage = () => {
         }
       }
       
-      // Si cambia la cantidad en dólares
       if (field === 'amount_USD' && updated.currency_used === 'USD') {
         const rate = parseFloat(updated.exchange_rate_bill) || exchangeRate;
         updated.amount = (parseFloat(value) || 0) * rate;
       }
       
-      // Si cambia la cantidad en córdobas
       if (field === 'amount' && updated.currency_used === 'NIO') {
         const rate = parseFloat(updated.exchange_rate_bill) || exchangeRate;
         updated.amount_USD = (parseFloat(value) || 0) / rate;
       }
       
-      // Si cambia la moneda, recalcular
       if (field === 'currency_used') {
         const rate = parseFloat(updated.exchange_rate_bill) || exchangeRate;
         if (value === 'USD' && updated.amount_USD) {
@@ -205,18 +202,15 @@ const BillsPage = () => {
   const filteredBills = useMemo(() => {
     let filtered = [...bills];
 
-    // Filtrar por categoría
     if (categoryFilter !== 'all') {
       filtered = filtered.filter(bill => bill.category === categoryFilter);
     }
 
-    // Filtrar por tipo
     if (typeFilter !== 'all') {
       const isFixed = typeFilter === 'FIJO';
       filtered = filtered.filter(bill => bill.is_recurrent === isFixed);
     }
 
-    // Filtrar por búsqueda
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(bill => 
@@ -226,11 +220,10 @@ const BillsPage = () => {
       );
     }
 
-    // Ordenar por fecha (más reciente primero)
     return filtered.sort((a, b) => new Date(b.bill_date) - new Date(a.bill_date));
   }, [bills, categoryFilter, typeFilter, searchTerm]);
 
-  // Estadísticas (actualizadas para incluir dólares)
+  // Estadísticas
   const stats = useMemo(() => {
     const total = bills.length;
     const fixedBills = bills.filter(bill => bill.is_recurrent);
@@ -243,7 +236,6 @@ const BillsPage = () => {
     const variableAmount = variableBills.reduce((sum, bill) => sum + (bill.amount || 0), 0);
     const variableAmountUSD = variableBills.reduce((sum, bill) => sum + (bill.amount_usd || 0), 0);
     
-    // Estadísticas por categoría
     const categoryStats = {};
     bills.forEach(bill => {
       if (!categoryStats[bill.category]) {
@@ -287,7 +279,7 @@ const BillsPage = () => {
     }));
   };
 
-  // Crear nuevo gasto CON SOPORTE PARA DÓLARES
+  // Crear nuevo gasto - MODIFICADO: alert -> addNotification
   const handleCreateBill = async (e) => {
     e.preventDefault();
     
@@ -305,7 +297,6 @@ const BillsPage = () => {
 
       await createBill(billData);
       
-      // Resetear formulario (mantener tipo de cambio dinámico)
       setNewBill({
         description: '',
         amount: '',
@@ -313,27 +304,29 @@ const BillsPage = () => {
         bill_date: new Date().toISOString().split('T')[0],
         category: 'Materiales Odontológicos',
         currency_used: 'NIO',
-        exchange_rate_bill: systemSettings.exchange_rate || 36.5, // Mantener tipo de cambio dinámico
+        exchange_rate_bill: systemSettings.exchange_rate || 36.5,
         is_recurrent: false
       });
       
       setShowAddModal(false);
       
-      alert('✅ Gasto registrado exitosamente');
+      // 🔴 CAMBIO: alert -> addNotification
+      addNotification('✅ Gasto registrado exitosamente', 'success', 5000);
       
     } catch (error) {
       console.error('Error al crear gasto:', error);
-      alert(`❌ Error: ${error.message}`);
+      // 🔴 CAMBIO: alert -> addNotification
+      addNotification(`❌ Error: ${error.message}`, 'error', 5000);
     }
   };
 
-  // Preparar edición CON SOPORTE PARA DÓLARES
+  // Preparar edición
   const handleEditBill = (bill) => {
     setSelectedBill(bill);
     setEditBill({
       description: bill.description,
       amount: bill.amount || '',
-      amount_USD: bill.amount_usd || '', // Usar amount_usd de la BD
+      amount_USD: bill.amount_usd || '',
       bill_date: bill.bill_date.split('T')[0],
       category: bill.category,
       currency_used: bill.currency_used || 'NIO',
@@ -343,7 +336,7 @@ const BillsPage = () => {
     setShowEditModal(true);
   };
 
-  // Actualizar gasto CON SOPORTE PARA DÓLARES
+  // Actualizar gasto - MODIFICADO: alert -> addNotification
   const handleUpdateBill = async (e) => {
     e.preventDefault();
     
@@ -364,23 +357,27 @@ const BillsPage = () => {
       setShowEditModal(false);
       setSelectedBill(null);
       
-      alert('✅ Gasto actualizado exitosamente');
+      // 🔴 CAMBIO: alert -> addNotification
+      addNotification('✅ Gasto actualizado exitosamente', 'success', 5000);
       
     } catch (error) {
       console.error('Error al actualizar gasto:', error);
-      alert(`❌ Error: ${error.message}`);
+      // 🔴 CAMBIO: alert -> addNotification
+      addNotification(`❌ Error: ${error.message}`, 'error', 5000);
     }
   };
 
-  // Eliminar gasto
+  // Eliminar gasto - MODIFICADO: alert dentro de confirm -> addNotification
   const handleDeleteBill = async (billId) => {
     if (window.confirm('¿Está seguro de que desea eliminar este gasto?\nEsta acción no se puede deshacer.')) {
       try {
         await deleteBill(billId);
-        alert('✅ Gasto eliminado exitosamente');
+        // 🔴 CAMBIO: alert -> addNotification
+        addNotification('✅ Gasto eliminado exitosamente', 'success', 5000);
       } catch (error) {
         console.error('Error al eliminar gasto:', error);
-        alert(`❌ Error: ${error.message}`);
+        // 🔴 CAMBIO: alert -> addNotification
+        addNotification(`❌ Error: ${error.message}`, 'error', 5000);
       }
     }
   };
@@ -707,7 +704,7 @@ const BillsPage = () => {
         </div>
       )}
 
-      {/* Modal para agregar gasto CON SOPORTE PARA DÓLARES Y TIPO DE CAMBIO DINÁMICO */}
+      {/* Modal para agregar gasto */}
       {showAddModal && (
         <div className="modal-overlay">
           <div className="modal-content">
@@ -878,7 +875,7 @@ const BillsPage = () => {
         </div>
       )}
 
-      {/* Modal para editar gasto CON SOPORTE PARA DÓLARES Y TIPO DE CAMBIO DINÁMICO */}
+      {/* Modal para editar gasto */}
       {showEditModal && selectedBill && (
         <div className="modal-overlay">
           <div className="modal-content">
@@ -1130,7 +1127,7 @@ const BillsPage = () => {
                 </div>
               </div>
 
-              {/* Rango de fechas */}
+              {/* Rango de fechas - MODIFICADO: alert -> addNotification */}
               <div className="stats-section">
                 <h4>Estadísticas por Período</h4>
                 <div className="date-range-selector">
@@ -1155,14 +1152,19 @@ const BillsPage = () => {
                     onClick={async () => {
                       const periodStats = await getDateRangeStats();
                       if (periodStats) {
-                        alert(`Estadísticas del período:\n\n` +
-                              `Gastos totales: ${formatCurrency(periodStats.total_expenses)}\n` +
-                              `Gastos totales en USD: ${formatCurrencyUSD(periodStats.total_expenses_usd || 0)}\n` +
-                              `Gastos fijos: ${formatCurrency(periodStats.fixed_expenses)}\n` +
-                              `Gastos fijos en USD: ${formatCurrencyUSD(periodStats.fixed_expenses_usd || 0)}\n` +
-                              `Gastos variables: ${formatCurrency(periodStats.variable_expenses)}\n` +
-                              `Gastos variables en USD: ${formatCurrencyUSD(periodStats.variable_expenses_usd || 0)}\n` +
-                              `Número de gastos: ${periodStats.total_bills}`);
+                        // 🔴 CAMBIO: alert -> addNotification
+                        addNotification(
+                          `📊 Estadísticas del período:\n` +
+                          `Gastos totales: ${formatCurrency(periodStats.total_expenses)}\n` +
+                          `Gastos totales en USD: ${formatCurrencyUSD(periodStats.total_expenses_usd || 0)}\n` +
+                          `Gastos fijos: ${formatCurrency(periodStats.fixed_expenses)}\n` +
+                          `Gastos fijos en USD: ${formatCurrencyUSD(periodStats.fixed_expenses_usd || 0)}\n` +
+                          `Gastos variables: ${formatCurrency(periodStats.variable_expenses)}\n` +
+                          `Gastos variables en USD: ${formatCurrencyUSD(periodStats.variable_expenses_usd || 0)}\n` +
+                          `Número de gastos: ${periodStats.total_bills}`,
+                          'info',
+                          10000
+                        );
                       }
                     }}
                   >

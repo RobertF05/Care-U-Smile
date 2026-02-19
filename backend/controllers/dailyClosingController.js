@@ -1,3 +1,4 @@
+// backend/controllers/dailyClosingController.js
 import DailyClosing from '../models/dailyClosingModel.js';
 
 const dailyClosingController = {
@@ -58,7 +59,7 @@ const dailyClosingController = {
     }
   },
 
-  // Crear cierre diario (AHORA USA LA FUNCIÓN PARA CIERRES)
+  // Crear cierre diario
   create: async (req, res) => {
     try {
       const { date, closing_date, closing_type = 'general', comentary = '' } = req.body;
@@ -90,7 +91,6 @@ const dailyClosingController = {
         });
       }
 
-      // 🔴 USAR LA NUEVA FUNCIÓN PARA CIERRES
       const financialSummary = await DailyClosing.getDailyClosingSummary(effectiveDate, closing_type);
       
       if (financialSummary.cantidad_procedimientos === 0 && financialSummary.cantidad_gastos_variables === 0) {
@@ -239,43 +239,42 @@ const dailyClosingController = {
     }
   },
 
-  // En dailyClosingController.js - getDailySummary
-// Obtener resumen financiero del día (VERSIÓN CORREGIDA - SIN divisiones)
-getDailySummary: async (req, res) => {
-  try {
-    const { date } = req.query; // 👈 Solo necesitamos la fecha
-    
-    if (!date) {
-      return res.status(400).json({ 
+  // Obtener resumen financiero del día (VERSIÓN CORREGIDA)
+  getDailySummary: async (req, res) => {
+    try {
+      const { date } = req.query;
+      
+      if (!date) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'La fecha es requerida' 
+        });
+      }
+      
+      console.log('📥 Obteniendo resumen diario para fecha:', date);
+      
+      // Llamar a la función sin tipo (obtiene TODOS los procedimientos)
+      const summary = await DailyClosing.getDailyFinancialSummary(date);
+      
+      // Verificar si existe algún cierre (para referencia)
+      const existsGeneral = await DailyClosing.exists(date, 'general');
+      const existsOrtho = await DailyClosing.exists(date, 'orthodontics');
+      
+      res.json({ 
+        success: true, 
+        data: {
+          ...summary,
+          closing_exists: existsGeneral || existsOrtho
+        }
+      });
+    } catch (error) {
+      console.error('❌ Error en getDailySummary:', error);
+      res.status(500).json({ 
         success: false, 
-        error: 'La fecha es requerida' 
+        error: error.message 
       });
     }
-    
-    console.log('📥 Obteniendo resumen diario para fecha:', date);
-    
-    // Llamar a la función sin tipo (o con 'general' como default)
-    const summary = await DailyClosing.getDailyFinancialSummary(date, 'general');
-    
-    // Verificar si existe algún cierre (para referencia)
-    const existsGeneral = await DailyClosing.exists(date, 'general');
-    const existsOrtho = await DailyClosing.exists(date, 'orthodontics');
-    
-    res.json({ 
-      success: true, 
-      data: {
-        ...summary,
-        closing_exists: existsGeneral || existsOrtho
-      }
-    });
-  } catch (error) {
-    console.error('❌ Error en getDailySummary:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
-    });
-  }
-},
+  },
 
   // Obtener estadísticas por rango de fechas
   getStatsByDateRange: async (req, res) => {
@@ -359,7 +358,7 @@ getDailySummary: async (req, res) => {
         });
       }
       
-      const expenses = await DailyClosing.getDailyVariableExpensesAll(date);
+      const expenses = await DailyClosing.getDailyVariableExpenses(date);
       
       res.json({ 
         success: true, 

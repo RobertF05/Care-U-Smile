@@ -1,3 +1,4 @@
+// frontend/src/pages/MonthlyClosingsPage/MonthlyClosingsPage.jsx
 import React, { useState, useEffect, useMemo, useContext } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
@@ -39,11 +40,12 @@ import {
   faReceipt,
   faUsers,
   faStethoscope,
-  faTrashAlt, // NUEVO: Icono para eliminar
-  faExclamationCircle // NUEVO: Icono para advertencias
+  faTrashAlt,
+  faExclamationCircle
 } from '@fortawesome/free-solid-svg-icons';
 import { AppContext } from '../../context/AppContext';
 import { AuthContext } from '../../context/AuthContext';
+import { useNotification } from '../../context/NotificationContext';
 import './MonthlyClosingsPage.css';
 
 // Meses en español
@@ -68,6 +70,8 @@ const MonthlyClosingsPage = () => {
     systemSettings
   } = useContext(AppContext);
 
+  const { addNotification } = useNotification();
+
   // Estados
   const [showFilters, setShowFilters] = useState(true);
   const [yearFilter, setYearFilter] = useState(new Date().getFullYear().toString());
@@ -88,12 +92,12 @@ const MonthlyClosingsPage = () => {
   const [externalDoctorDetails, setExternalDoctorDetails] = useState(null);
   const [showExternalDoctorsModal, setShowExternalDoctorsModal] = useState(false);
   
-  // NUEVO: Estados para eliminar cierre
+  // Estados para eliminar cierre
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [closingToDelete, setClosingToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
   
-  // NUEVO: Estado para gastos variables en cierres diarios
+  // Estado para gastos variables en cierres diarios
   const [showVariableExpensesModal, setShowVariableExpensesModal] = useState(false);
   const [variableExpensesDetails, setVariableExpensesDetails] = useState(null);
   
@@ -231,11 +235,12 @@ const MonthlyClosingsPage = () => {
     }));
   };
 
-  // NUEVO: Función para obtener detalles de gastos variables de un cierre diario
+  // Función para obtener detalles de gastos variables de un cierre diario - MODIFICADO: alert -> addNotification
   const fetchVariableExpensesDetails = async (closing) => {
     try {
       if (closing.type !== 'daily') {
-        alert('Esta opción solo está disponible para cierres diarios');
+        // 🔴 CAMBIO: alert -> addNotification
+        addNotification('Esta opción solo está disponible para cierres diarios', 'warning', 5000);
         return;
       }
       
@@ -257,11 +262,12 @@ const MonthlyClosingsPage = () => {
       }
     } catch (error) {
       console.error('Error obteniendo detalles de gastos variables:', error);
-      alert(`❌ Error: ${error.message}`);
+      // 🔴 CAMBIO: alert -> addNotification
+      addNotification(`❌ Error: ${error.message}`, 'error', 5000);
     }
   };
 
-  // Función para obtener detalles de doctores externos
+  // Función para obtener detalles de doctores externos - MODIFICADO: alert -> addNotification
   const fetchExternalDoctorDetails = async (closing) => {
     try {
       let startDate, endDate;
@@ -294,68 +300,69 @@ const MonthlyClosingsPage = () => {
       }
     } catch (error) {
       console.error('Error obteniendo detalles de doctores externos:', error);
-      alert(`❌ Error: ${error.message}`);
+      // 🔴 CAMBIO: alert -> addNotification
+      addNotification(`❌ Error: ${error.message}`, 'error', 5000);
     }
   };
 
-  // 🔴 CORREGIDO: handleDeleteClosing en MonthlyClosingsPage.jsx
-const handleDeleteClosing = async () => {
-  if (!closingToDelete) return;
-  
-  setDeleting(true);
-  
-  try {
-    const confirmMessage = closingToDelete.type === 'monthly' 
-      ? `¿Está seguro de eliminar el cierre mensual de ${closingToDelete.month} ${closingToDelete.year}?\n\nEsta acción no se puede deshacer.`
-      : `¿Está seguro de eliminar el cierre diario del ${closingToDelete.date_exact}?\n\nEsta acción no se puede deshacer.`;
+  // Eliminar cierre - MODIFICADO: alert -> addNotification
+  const handleDeleteClosing = async () => {
+    if (!closingToDelete) return;
     
-    if (!window.confirm(confirmMessage)) {
+    setDeleting(true);
+    
+    try {
+      const confirmMessage = closingToDelete.type === 'monthly' 
+        ? `¿Está seguro de eliminar el cierre mensual de ${closingToDelete.month} ${closingToDelete.year}?\n\nEsta acción no se puede deshacer.`
+        : `¿Está seguro de eliminar el cierre diario del ${closingToDelete.date_exact}?\n\nEsta acción no se puede deshacer.`;
+      
+      if (!window.confirm(confirmMessage)) {
+        setDeleting(false);
+        setShowDeleteModal(false);
+        setClosingToDelete(null);
+        return;
+      }
+      
+      let endpoint;
+      if (closingToDelete.type === 'monthly') {
+        const closingId = closingToDelete.closing_id || closingToDelete.closing_ID || closingToDelete.id;
+        endpoint = `/monthly-closings/${closingId}`;
+        console.log('🗑️ Eliminando cierre mensual:', { id: closingId, endpoint });
+      } else {
+        const closingId = closingToDelete.daily_closing_id || closingToDelete.id;
+        endpoint = `/daily-closings/${closingId}`;
+        console.log('🗑️ Eliminando cierre diario:', { id: closingId, endpoint });
+      }
+      
+      const response = await apiFetch(endpoint, {
+        method: 'DELETE'
+      });
+      
+      if (response.success) {
+        // 🔴 CAMBIO: alert -> addNotification
+        addNotification('✅ Cierre eliminado exitosamente', 'success', 5000);
+        
+        if (closingToDelete.type === 'monthly') {
+          fetchMonthlyClosings();
+        } else {
+          fetchDailyClosings();
+        }
+      } else {
+        throw new Error(response.error || 'Error al eliminar cierre');
+      }
+      
+    } catch (error) {
+      console.error('Error eliminando cierre:', error);
+      // 🔴 CAMBIO: alert -> addNotification
+      addNotification(`❌ Error al eliminar cierre: ${error.message}`, 'error', 5000);
+    } finally {
       setDeleting(false);
       setShowDeleteModal(false);
       setClosingToDelete(null);
-      return;
     }
-    
-    let endpoint;
-    if (closingToDelete.type === 'monthly') {
-      // 🔴 CORREGIDO: Asegurar el ID correcto
-      const closingId = closingToDelete.closing_id || closingToDelete.closing_ID || closingToDelete.id;
-      endpoint = `/monthly-closings/${closingId}`;
-      console.log('🗑️ Eliminando cierre mensual:', { id: closingId, endpoint });
-    } else {
-      const closingId = closingToDelete.daily_closing_id || closingToDelete.id;
-      endpoint = `/daily-closings/${closingId}`;
-      console.log('🗑️ Eliminando cierre diario:', { id: closingId, endpoint });
-    }
-    
-    const response = await apiFetch(endpoint, {
-      method: 'DELETE'
-    });
-    
-    if (response.success) {
-      alert('✅ Cierre eliminado exitosamente');
-      
-      // Recargar cierres según el tipo
-      if (closingToDelete.type === 'monthly') {
-        fetchMonthlyClosings();
-      } else {
-        fetchDailyClosings();
-      }
-    } else {
-      throw new Error(response.error || 'Error al eliminar cierre');
-    }
-    
-  } catch (error) {
-    console.error('Error eliminando cierre:', error);
-    alert(`❌ Error al eliminar cierre: ${error.message}`);
-  } finally {
-    setDeleting(false);
-    setShowDeleteModal(false);
-    setClosingToDelete(null);
-  }
-};
+  };
 
-  // Combinar y filtrar todos los cierres (MODIFICADO para incluir gastos variables)
+  // Combinar y filtrar todos los cierres
   const allClosings = useMemo(() => {
     const monthly = monthlyClosings.map(closing => {
       const clinicIncome = (closing.total_general_income || 0) + (closing.total_clinical_orthodontic_income || 0);
@@ -400,7 +407,6 @@ const handleDeleteClosing = async () => {
       date_sort: closing.closing_date,
       total_clinic_income: closing.total_clinic_income || 0,
       total_clinic_income_usd: (closing.total_clinic_income || 0) / exchangeRate,
-      // IMPORTANTE: Ahora los gastos variables se guardan en total_variable_expenses
       total_variable_expenses: closing.total_variable_expenses || 0,
       total_variable_expenses_usd: (closing.total_variable_expenses || 0) / exchangeRate,
       total_expenses: closing.total_variable_expenses || 0,
@@ -413,7 +419,7 @@ const handleDeleteClosing = async () => {
       total_doctor_income_usd: (closing.total_doctor_income || 0) / exchangeRate,
       total_external_doctor_payments: closing.total_external_doctor_payments || 0,
       total_external_doctor_payments_usd: (closing.total_external_doctor_payments || 0) / exchangeRate,
-      has_expenses: (closing.total_variable_expenses || 0) > 0 // Indicador de gastos
+      has_expenses: (closing.total_variable_expenses || 0) > 0
     }));
 
     return [...monthly, ...daily];
@@ -485,7 +491,7 @@ const handleDeleteClosing = async () => {
     }
   };
 
-  // Crear cierre mensual (MODIFICADO para mejor manejo de gastos)
+  // Crear cierre mensual - MODIFICADO: alert -> addNotification
   const handleCreateClosing = async (e) => {
     e.preventDefault();
     setCreating(true);
@@ -494,7 +500,8 @@ const handleDeleteClosing = async () => {
       const exists = await checkMonthlyClosingExists(newClosing.month, newClosing.year, newClosing.closing_type);
       
       if (exists) {
-        alert(`⚠️ Ya existe un cierre ${getClosingTypeLabel(newClosing.closing_type)} para ${newClosing.month} ${newClosing.year}`);
+        // 🔴 CAMBIO: alert -> addNotification
+        addNotification(`⚠️ Ya existe un cierre ${getClosingTypeLabel(newClosing.closing_type)} para ${newClosing.month} ${newClosing.year}`, 'warning', 5000);
         setCreating(false);
         return;
       }
@@ -558,7 +565,6 @@ const handleDeleteClosing = async () => {
           message += `   (Ya deducido de las ganancias mostradas arriba)`;
         }
         
-        // NUEVO: Información sobre gastos variables que ya estaban en cierres diarios
         if (response.data.expense_info) {
           message += `\n\n📋 INFORMACIÓN DE GASTOS:\n`;
           message += `   • Gastos variables totales: ${response.data.expense_info.variable_expenses_count}\n`;
@@ -569,7 +575,8 @@ const handleDeleteClosing = async () => {
           }
         }
         
-        alert(message);
+        // 🔴 CAMBIO: alert -> addNotification
+        addNotification(message, 'success', 10000);
         
         setShowCreateModal(false);
         setNewClosing({
@@ -588,13 +595,14 @@ const handleDeleteClosing = async () => {
       
     } catch (error) {
       console.error('❌ Error detallado al crear cierre:', error);
-      alert(`❌ Error: ${error.message}`);
+      // 🔴 CAMBIO: alert -> addNotification
+      addNotification(`❌ Error: ${error.message}`, 'error', 5000);
     } finally {
       setCreating(false);
     }
   };
 
-  // Obtener resumen diario previo (MODIFICADO para incluir gastos variables)
+  // Obtener resumen diario previo - MODIFICADO: alert -> addNotification
   const handleGetDailySummary = async () => {
     try {
       setCreatingDaily(true);
@@ -603,26 +611,28 @@ const handleDeleteClosing = async () => {
       if (summaryResponse.success) {
         setDailySummary(summaryResponse.data);
         
-        // Mostrar advertencia si hay gastos variables pero no procedimientos
         if (summaryResponse.data.cantidad_gastos_variables > 0 && summaryResponse.data.cantidad_procedimientos === 0) {
-          alert(`⚠️ Se encontraron ${summaryResponse.data.cantidad_gastos_variables} gastos variables por ${formatCurrencySimple(summaryResponse.data.total_variable_expenses)} pero no hay procedimientos. El cierre registrará solo los gastos.`);
+          // 🔴 CAMBIO: alert -> addNotification
+          addNotification(`⚠️ Se encontraron ${summaryResponse.data.cantidad_gastos_variables} gastos variables por ${formatCurrencySimple(summaryResponse.data.total_variable_expenses)} pero no hay procedimientos. El cierre registrará solo los gastos.`, 'warning', 7000);
         }
         
         if (summaryResponse.data.closing_exists) {
-          alert(`⚠️ Ya existe un cierre ${newDailyClosing.closing_type === 'orthodontics' ? 'de ortodoncia' : 'general'} para esta fecha`);
+          // 🔴 CAMBIO: alert -> addNotification
+          addNotification(`⚠️ Ya existe un cierre ${newDailyClosing.closing_type === 'orthodontics' ? 'de ortodoncia' : 'general'} para esta fecha`, 'warning', 5000);
         }
       } else {
         throw new Error('Error al obtener el resumen diario');
       }
     } catch (error) {
       console.error('Error al obtener resumen:', error);
-      alert(`❌ Error: ${error.message}`);
+      // 🔴 CAMBIO: alert -> addNotification
+      addNotification(`❌ Error: ${error.message}`, 'error', 5000);
     } finally {
       setCreatingDaily(false);
     }
   };
 
-  // Crear cierre diario (MODIFICADO para incluir gastos variables)
+  // Crear cierre diario - MODIFICADO: alert dentro de confirm se mantiene, pero alert de éxito se reemplaza
   const handleCreateDailyClosing = async (e) => {
     e.preventDefault();
     setCreatingDaily(true);
@@ -631,7 +641,8 @@ const handleDeleteClosing = async () => {
       const existsResponse = await checkDailyClosingExists(newDailyClosing.date, newDailyClosing.closing_type);
       
       if (existsResponse.data.exists) {
-        alert(`⚠️ Ya existe un cierre ${newDailyClosing.closing_type === 'orthodontics' ? 'de ortodoncia' : 'general'} para esta fecha`);
+        // 🔴 CAMBIO: alert -> addNotification
+        addNotification(`⚠️ Ya existe un cierre ${newDailyClosing.closing_type === 'orthodontics' ? 'de ortodoncia' : 'general'} para esta fecha`, 'warning', 5000);
         setCreatingDaily(false);
         return;
       }
@@ -645,10 +656,10 @@ const handleDeleteClosing = async () => {
       const summary = summaryResponse.data;
 
       console.log('📊 Resumen para cierre:', {
-  procedimientos: summary.cantidad_procedimientos,
-  gastos_variables: summary.cantidad_gastos_variables,
-  total_gastos: summary.total_variable_expenses
-});
+        procedimientos: summary.cantidad_procedimientos,
+        gastos_variables: summary.cantidad_gastos_variables,
+        total_gastos: summary.total_variable_expenses
+      });
       
       // Advertencia mejorada considerando gastos variables
       if (summary.cantidad_procedimientos === 0 && summary.cantidad_gastos_variables === 0) {
@@ -713,7 +724,8 @@ const handleDeleteClosing = async () => {
           }
         }
         
-        alert(message);
+        // 🔴 CAMBIO: alert -> addNotification
+        addNotification(message, 'success', 10000);
         
         setShowCreateDailyModal(false);
         setNewDailyClosing({
@@ -730,7 +742,8 @@ const handleDeleteClosing = async () => {
       
     } catch (error) {
       console.error('Error al crear cierre diario:', error);
-      alert(`❌ Error: ${error.message}`);
+      // 🔴 CAMBIO: alert -> addNotification
+      addNotification(`❌ Error: ${error.message}`, 'error', 5000);
     } finally {
       setCreatingDaily(false);
     }
@@ -742,7 +755,7 @@ const handleDeleteClosing = async () => {
     setShowDetailModal(true);
   };
 
-  // NUEVO: Función para preparar eliminación
+  // Función para preparar eliminación
   const handleDeleteClick = (closing, e) => {
     e.stopPropagation();
     setClosingToDelete(closing);
@@ -820,7 +833,7 @@ const handleDeleteClosing = async () => {
       
     } catch (error) {
       console.error('Error al exportar PDF:', error);
-      alert('Error al exportar a PDF');
+      addNotification('Error al exportar a PDF', 'error', 5000);
     }
   };
 
@@ -838,7 +851,7 @@ const handleDeleteClosing = async () => {
       
     } catch (error) {
       console.error('Error al exportar Excel detallado:', error);
-      alert('Error al exportar a Excel detallado');
+      addNotification('Error al exportar a Excel detallado', 'error', 5000);
     }
   };
 
@@ -858,7 +871,7 @@ const handleDeleteClosing = async () => {
       
     } catch (error) {
       console.error('Error al exportar Excel general:', error);
-      alert('Error al exportar a Excel general');
+      addNotification('Error al exportar a Excel general', 'error', 5000);
     }
   };
 
@@ -1077,7 +1090,6 @@ const handleDeleteClosing = async () => {
                       </div>
                     )}
                     
-                    {/* NUEVO: Mostrar indicador de gastos variables para cierres diarios */}
                     {closing.type === 'daily' && closing.has_expenses && (
                       <div className="expense-indicator" title="Este cierre incluye gastos variables">
                         <FontAwesomeIcon icon={faReceipt} />
@@ -1167,7 +1179,6 @@ const handleDeleteClosing = async () => {
                       <span className="btn-tooltip">Excel Detallado</span>
                     </button>
                     
-                    {/* NUEVO: Botón para ver gastos variables en cierres diarios */}
                     {closing.type === 'daily' && closing.has_expenses && (
                       <button 
                         className="action-btn expenses"
@@ -1178,7 +1189,6 @@ const handleDeleteClosing = async () => {
                       </button>
                     )}
                     
-                    {/* Botón para ver detalles de doctores externos */}
                     {closing.total_external_doctor_payments > 0 && (
                       <button 
                         className="action-btn external"
@@ -1189,7 +1199,6 @@ const handleDeleteClosing = async () => {
                       </button>
                     )}
                     
-                    {/* NUEVO: Botón para eliminar cierre */}
                     <button 
                       className="action-btn delete"
                       onClick={(e) => handleDeleteClick(closing, e)}
@@ -1207,7 +1216,7 @@ const handleDeleteClosing = async () => {
                 </div>
               </div>
 
-              {/* Detalles expandidos (MODIFICADO para mostrar gastos variables en diarios) */}
+              {/* Detalles expandidos */}
               {expandedClosings[closing.id] && (
                 <div className="closing-details">
                   <div className="financial-summary">
@@ -1267,7 +1276,6 @@ const handleDeleteClosing = async () => {
                               </div>
                             </div>
                             
-                            {/* Sección de doctores externos */}
                             {closing.total_external_doctor_payments > 0 && (
                               <div className="summary-section external-section">
                                 <div className="section-title">
@@ -1466,7 +1474,6 @@ const handleDeleteClosing = async () => {
                             </div>
                           )}
                           
-                          {/* NUEVO: Sección de gastos variables para cierres diarios */}
                           {closing.has_expenses && (
                             <div className="summary-item expenses-daily">
                               <div className="summary-header">
@@ -1488,7 +1495,6 @@ const handleDeleteClosing = async () => {
                           )}
                         </div>
                         
-                        {/* Doctores externos para cierres diarios */}
                         {closing.total_external_doctor_payments > 0 && (
                           <div className="summary-section external-section">
                             <div className="section-title">
@@ -1531,7 +1537,6 @@ const handleDeleteClosing = async () => {
                           </span>
                         </div>
                         
-                        {/* Mostrar gastos si existen */}
                         {closing.has_expenses && (
                           <div className="net-profit-item expense-note">
                             <span className="net-profit-label">
@@ -1543,7 +1548,6 @@ const handleDeleteClosing = async () => {
                           </div>
                         )}
                         
-                        {/* Mostrar doctores externos en resumen final */}
                         {closing.total_external_doctor_payments > 0 && (
                           <div className="net-profit-item external-note">
                             <span className="net-profit-label">
@@ -1640,7 +1644,7 @@ const handleDeleteClosing = async () => {
         </div>
       )}
 
-      {/* Modal para crear cierre mensual (sin cambios) */}
+      {/* Modal para crear cierre mensual */}
       {showCreateModal && (
         <div className="modal-overlay">
           <div className="modal-content">
@@ -1778,7 +1782,7 @@ const handleDeleteClosing = async () => {
         </div>
       )}
 
-      {/* Modal para crear cierre diario (MODIFICADO con información de gastos) */}
+      {/* Modal para crear cierre diario */}
       {showCreateDailyModal && (
         <div className="modal-overlay">
           <div className="modal-content">
@@ -1860,7 +1864,6 @@ const handleDeleteClosing = async () => {
                       <span className="preview-value">{dailySummary.cantidad_procedimientos || 0}</span>
                     </div>
                     
-                    {/* NUEVO: Mostrar gastos variables en el resumen */}
                     {dailySummary.cantidad_gastos_variables > 0 && (
                       <div className="preview-item expense">
                         <span>
@@ -1899,7 +1902,6 @@ const handleDeleteClosing = async () => {
                       </div>
                     )}
                     
-                    {/* Mostrar utilidad después de gastos */}
                     <div className="preview-item total">
                       <span>Utilidad neta clínica (después de gastos):</span>
                       <span 
@@ -1989,7 +1991,7 @@ const handleDeleteClosing = async () => {
         </div>
       )}
 
-      {/* NUEVO: Modal de detalles de gastos variables */}
+      {/* Modal de detalles de gastos variables */}
       {showVariableExpensesModal && variableExpensesDetails && (
         <div className="modal-overlay">
           <div className="modal-content wide">
@@ -2095,7 +2097,7 @@ const handleDeleteClosing = async () => {
         </div>
       )}
 
-      {/* Modal de detalles de doctores externos (sin cambios) */}
+      {/* Modal de detalles de doctores externos */}
       {showExternalDoctorsModal && externalDoctorDetails && (
         <div className="modal-overlay">
           <div className="modal-content wide">
@@ -2214,7 +2216,7 @@ const handleDeleteClosing = async () => {
         </div>
       )}
 
-      {/* Modal de detalles general del cierre (sin cambios) */}
+      {/* Modal de detalles general del cierre */}
       {showDetailModal && selectedClosing && (
         <div className="modal-overlay">
           <div className="modal-content wide">
@@ -2295,7 +2297,6 @@ const handleDeleteClosing = async () => {
                 <div className="financial-breakdown">
                   
                   {selectedClosing.type === 'monthly' ? (
-                    // Resumen mensual (sin cambios)
                     <>
                       {selectedClosing.sub_type === 'all' && (
                         <>
@@ -2336,7 +2337,6 @@ const handleDeleteClosing = async () => {
                             </div>
                           </div>
 
-                          {/* Sección de doctores externos */}
                           {selectedClosing.total_external_doctor_payments > 0 && (
                             <div className="breakdown-section external">
                               <h5>
@@ -2489,7 +2489,6 @@ const handleDeleteClosing = async () => {
                       )}
                     </>
                   ) : (
-                    // Resumen diario (MODIFICADO para incluir gastos)
                     <>
                       <div className="breakdown-section income">
                         <h5>
@@ -2522,7 +2521,6 @@ const handleDeleteClosing = async () => {
                           </div>
                         )}
                         
-                        {/* NUEVO: Mostrar gastos variables si existen */}
                         {selectedClosing.has_expenses && (
                           <div className="breakdown-item expense">
                             <span>
@@ -2533,7 +2531,6 @@ const handleDeleteClosing = async () => {
                         )}
                       </div>
 
-                      {/* Doctores externos para cierres diarios */}
                       {selectedClosing.total_external_doctor_payments > 0 && (
                         <div className="breakdown-section external">
                           <h5>
@@ -2567,7 +2564,6 @@ const handleDeleteClosing = async () => {
                       </span>
                     </div>
                     
-                    {/* Mostrar gastos si existen */}
                     {selectedClosing.has_expenses && (
                       <div className="breakdown-item">
                         <span>
@@ -2579,7 +2575,6 @@ const handleDeleteClosing = async () => {
                       </div>
                     )}
                     
-                    {/* Mostrar deducción de doctores externos */}
                     {selectedClosing.total_external_doctor_payments > 0 && (
                       <div className="breakdown-item external-note">
                         <span>
@@ -2665,7 +2660,7 @@ const handleDeleteClosing = async () => {
         </div>
       )}
 
-      {/* NUEVO: Modal de confirmación para eliminar */}
+      {/* Modal de confirmación para eliminar */}
       {showDeleteModal && closingToDelete && (
         <div className="modal-overlay">
           <div className="modal-content small">

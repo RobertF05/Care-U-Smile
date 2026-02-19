@@ -1,8 +1,42 @@
-// Middleware simple de autenticación (sin JWT)
-// Puedes implementar tu propia lógica según necesites
+// backend/middlewares/authMiddleware.js
+import jwt from 'jsonwebtoken';
 
 const authMiddleware = {
-  // Verificación básica (ejemplo: header con user-id)
+  // Verificar tanto token JWT como user-id
+  verifyToken: (req, res, next) => {
+    // Primero intentar con user-id (tu sistema actual)
+    const userId = req.headers['user-id'];
+    
+    if (userId) {
+      req.userId = userId;
+      return next();
+    }
+    
+    // Si no, intentar con token JWT
+    try {
+      const token = req.header('Authorization')?.replace('Bearer ', '');
+      
+      if (!token) {
+        return res.status(401).json({ 
+          success: false, 
+          error: 'Autenticación requerida' 
+        });
+      }
+
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'tu_secreto_jwt');
+      req.user = decoded;
+      req.userId = decoded.id || decoded.userId;
+      next();
+    } catch (error) {
+      console.error('Error verificando token:', error);
+      res.status(401).json({ 
+        success: false, 
+        error: 'Token inválido o expirado' 
+      });
+    }
+  },
+
+  // Mantener verifyBasicAuth para compatibilidad
   verifyBasicAuth: (req, res, next) => {
     const userId = req.headers['user-id'];
     
@@ -13,27 +47,13 @@ const authMiddleware = {
       });
     }
     
-    // Aquí podrías verificar en la base de datos si el usuario existe
     req.userId = userId;
     next();
   },
 
-  // Verificar si es administrador
   isAdmin: async (req, res, next) => {
     try {
-      const userId = req.headers['user-id'];
-      
-      if (!userId) {
-        return res.status(401).json({ 
-          success: false, 
-          error: 'Autenticación requerida' 
-        });
-      }
-      
-      // Verificar rol en base de datos
-      // Esta es una implementación de ejemplo
-      // Deberías ajustarla según tu estructura de usuarios
-      
+      // Implementar lógica de admin
       next();
     } catch (error) {
       console.error('Error verificando admin:', error);

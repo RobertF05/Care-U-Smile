@@ -95,25 +95,15 @@ const DailyClosing = {
   // En dailyClosingModel.js - función getDailyFinancialSummary CORREGIDA
 async getDailyFinancialSummary(date) {
   console.log('🔍 [RESULTADOS EN VIVO] Obteniendo resumen diario para fecha:', date);
-  console.log('📅 Fecha recibida:', date);
-  
+
   try {
-    // 1. PRIMERO: Verificar si hay procedimientos con una consulta simple
-    const { data: checkData, error: checkError } = await supabaseAdmin
-      .from('procedures')
-      .select('procedure_ID, procedure_date, clinic_payment_cordobas')
-      .eq('procedure_date::date', date);
-    
-    console.log('📊 Consulta simple de verificación:', {
-      encontrados: checkData?.length || 0,
-      error: checkError?.message
-    });
-    
-    if (checkData && checkData.length > 0) {
-      console.log('✅ Procedimientos encontrados en consulta simple:', checkData);
-    }
-    
-    // 2. Obtener TODOS los procedimientos del día con sintaxis correcta
+    // 🔥 Construir rango correcto para timestamp
+    const start = `${date}T00:00:00`;
+    const end = `${date}T23:59:59`;
+
+    console.log('🕒 Rango usado:', { start, end });
+
+    // 1️⃣ Obtener procedimientos del día (FORMA CORRECTA)
     const { data: procedures, error: procError } = await supabaseAdmin
       .from('procedures')
       .select(`
@@ -129,65 +119,65 @@ async getDailyFinancialSummary(date) {
           first_last_name
         )
       `)
-      .eq('procedure_date::date', date);
-    
+      .gte('procedure_date', start)
+      .lte('procedure_date', end);
+
     if (procError) {
       console.error('❌ Error obteniendo procedimientos:', procError);
       throw procError;
     }
-    
-    console.log('📊 Procedimientos encontrados (con detalles):', procedures?.length || 0);
-    
-    // 3. Obtener TODOS los gastos variables del día
+
+    console.log('📊 Procedimientos encontrados:', procedures?.length || 0);
+
+    // 2️⃣ Obtener gastos variables del día
     const { data: expenses, error: expError } = await supabaseAdmin
       .from('bills')
       .select('*')
       .eq('is_recurrent', false)
       .eq('bill_date', date);
-    
+
     if (expError) {
       console.error('❌ Error obteniendo gastos:', expError);
       throw expError;
     }
-    
+
     console.log('💰 Gastos encontrados:', expenses?.length || 0);
-    
+
     const settings = await this.getSystemSettings();
     const exchangeRate = settings.exchange_rate || 36.5;
-    
-    // Calcular ingresos totales de la clínica
+
+    // =============================
+    // 💰 CALCULAR INGRESOS
+    // =============================
     let totalClinicIncome = 0;
     let totalGeneralIncome = 0;
     let totalOrthoClinicIncome = 0;
     let totalOrthoDoctorIncome = 0;
-    
+
     (procedures || []).forEach(procedure => {
       const clinicPayment = parseFloat(procedure.clinic_payment_cordobas) || 0;
+      const doctorPayment = parseFloat(procedure.doctor_payment_cordobas) || 0;
+
       totalClinicIncome += clinicPayment;
-      
+
       if (procedure.is_orthodontics) {
         totalOrthoClinicIncome += clinicPayment;
-        totalOrthoDoctorIncome += parseFloat(procedure.doctor_payment_cordobas) || 0;
+        totalOrthoDoctorIncome += doctorPayment;
       } else {
         totalGeneralIncome += clinicPayment;
       }
     });
-    
-    console.log('💰 Cálculo de ingresos:', {
-      total: totalClinicIncome,
-      general: totalGeneralIncome,
-      ortho_clinic: totalOrthoClinicIncome,
-      ortho_doctor: totalOrthoDoctorIncome,
-      procedimientos_usados: procedures?.length || 0
-    });
-    
-    // Calcular gastos totales
+
+    // =============================
+    // 💸 CALCULAR GASTOS
+    // =============================
     let totalExpenses = 0;
     const expenseDetails = [];
     const expenseIds = [];
-    
+
     (expenses || []).forEach(expense => {
       let amount = 0;
+
       if (expense.currency_used === 'USD') {
         const usdAmount = parseFloat(expense.amount_usd) || 0;
         const rate = parseFloat(expense.exchange_rate_bill) || exchangeRate;
@@ -195,14 +185,14 @@ async getDailyFinancialSummary(date) {
       } else {
         amount = parseFloat(expense.amount) || 0;
       }
-      
+
       totalExpenses += amount;
       expenseIds.push(expense.bill_ID);
-      
+
       expenseDetails.push({
         bill_id: expense.bill_ID,
         description: expense.description,
-        amount: amount,
+        amount,
         amount_original: expense.amount,
         amount_usd_original: expense.amount_usd,
         currency_used: expense.currency_used,
@@ -211,21 +201,12 @@ async getDailyFinancialSummary(date) {
         is_processed_in_closing: expense.is_processed_in_closing || false
       });
     });
-    
-    // Calcular utilidad neta
+
+    // =============================
+    // 📊 RESULTADOS FINALES
+    // =============================
     const netProfit = totalClinicIncome - totalExpenses;
-    
-    console.log('💰💰💰 RESUMEN FINAL:', {
-      ingresos_totales: totalClinicIncome,
-      generales: totalGeneralIncome,
-      ortodoncia_clinica: totalOrthoClinicIncome,
-      ortodoncia_doctora: totalOrthoDoctorIncome,
-      gastos_totales: totalExpenses,
-      utilidad_neta: netProfit,
-      cantidad_gastos: expenses?.length || 0,
-      cantidad_procedimientos: procedures?.length || 0
-    });
-    
+
     const result = {
       procedures: procedures || [],
       total_income: totalClinicIncome,
@@ -242,16 +223,16 @@ async getDailyFinancialSummary(date) {
       expense_ids: expenseIds,
       expense_details: expenseDetails
     };
-    
-    console.log('📤 Resultado final a enviar:', {
+
+    console.log('📤 Resultado final:', {
       procedimientos: result.cantidad_procedimientos,
       ingresos: result.total_income,
       gastos: result.total_variable_expenses,
       utilidad: result.net_profit
     });
-    
+
     return result;
-    
+
   } catch (error) {
     console.error('❌ Error en getDailyFinancialSummary:', error);
     throw error;

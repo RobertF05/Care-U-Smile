@@ -139,8 +139,8 @@ const LiveResultsPage = () => {
   const getCurrentNicaraguaDate = () => {
     const now = new Date();
     // Ajustar a zona horaria de Nicaragua (GMT-6)
-    const nicaraguaOffset = -6 * 60; // -6 horas en minutos
-    const localOffset = now.getTimezoneOffset(); // offset local en minutos
+    const nicaraguaOffset = -6 * 60;
+    const localOffset = now.getTimezoneOffset();
     const totalOffset = nicaraguaOffset - localOffset;
     
     const nicaraguaTime = new Date(now.getTime() + (totalOffset * 60 * 1000));
@@ -149,12 +149,6 @@ const LiveResultsPage = () => {
     const month = String(nicaraguaTime.getMonth() + 1).padStart(2, '0');
     const day = String(nicaraguaTime.getDate()).padStart(2, '0');
     
-    console.log('📅 Fecha Nicaragua calculada:', {
-      utc: now.toISOString(),
-      nicaragua: `${year}-${month}-${day}`,
-      hora_nicaragua: nicaraguaTime.getHours()
-    });
-    
     return `${year}-${month}-${day}`;
   };
 
@@ -162,7 +156,7 @@ const LiveResultsPage = () => {
   const getCurrentMonthDates = useCallback(() => {
     const now = new Date();
     
-    // Ajustar a zona horaria de Nicaragua (GMT-6)
+    // Ajustar a zona horaria de Nicaragua
     const nicaraguaOffset = -6 * 60;
     const localOffset = now.getTimezoneOffset();
     const totalOffset = nicaraguaOffset - localOffset;
@@ -171,12 +165,9 @@ const LiveResultsPage = () => {
     const year = nicaraguaTime.getFullYear();
     const month = nicaraguaTime.getMonth();
     
-    // Primer día del mes actual en Nicaragua
     const firstDay = new Date(year, month, 1);
-    // Último día del mes actual en Nicaragua
     const lastDay = new Date(year, month + 1, 0);
     
-    // Formatear a YYYY-MM-DD
     const formatDate = (date) => {
       const y = date.getFullYear();
       const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -184,10 +175,10 @@ const LiveResultsPage = () => {
       return `${y}-${m}-${d}`;
     };
     
-    const firstDayStr = formatDate(firstDay);
-    const lastDayStr = formatDate(lastDay);
-    
-    return { start: firstDayStr, end: lastDayStr };
+    return { 
+      start: formatDate(firstDay), 
+      end: formatDate(lastDay) 
+    };
   }, []);
 
   // Función para calcular total de gastos en córdobas
@@ -213,14 +204,13 @@ const LiveResultsPage = () => {
     setError(null);
     
     try {
-      // Usar fecha de Nicaragua
       const todayStr = getCurrentNicaraguaDate();
       const monthDates = getCurrentMonthDates();
       const exchangeRate = systemSettings?.exchange_rate || 36.5;
 
       console.log('🔍 Cargando datos en vivo...', { 
-        hoy_nicaragua: todayStr, 
-        mes_nicaragua: monthDates 
+        hoy: todayStr, 
+        mes: monthDates 
       });
 
       // ============================================
@@ -230,19 +220,17 @@ const LiveResultsPage = () => {
       let dailyExpensesTotal = 0;
       
       try {
-        console.log('📥 Cargando gastos variables del día para detalles...');
         const dailyExpensesRes = await apiFetch(`/bills?startDate=${todayStr}&endDate=${todayStr}&type=VARIABLE&limit=100`);
         if (dailyExpensesRes.success) {
           dailyExpenses = dailyExpensesRes.data || [];
           dailyExpensesTotal = calculateTotalExpenses(dailyExpenses, exchangeRate);
-          console.log(`💰 Gastos variables del día: ${dailyExpenses.length} items, Total: C$${dailyExpensesTotal}`);
         }
       } catch (expErr) {
         console.warn('No se pudieron cargar gastos diarios:', expErr);
       }
 
       // ============================================
-      // 2. CARGAR DATOS DE PROCEDIMIENTOS DEL DÍA
+      // 2. CARGAR DATOS DEL DÍA
       // ============================================
       console.log('📊 Cargando resumen diario general...');
       const dailyGeneralRes = await getDailySummary(todayStr, 'general');
@@ -252,51 +240,38 @@ const LiveResultsPage = () => {
       const dailyOrthoRes = await getDailySummary(todayStr, 'orthodontics');
       const dailyOrtho = dailyOrthoRes.success ? dailyOrthoRes.data : null;
 
-      // Calcular ingresos totales (cada tipo aporta sus propios ingresos)
-      let dailyIncomeFromProcedures = 0;
-      let incomeGeneral = 0;
-      let incomeOrtho = 0;
+      // Calcular ingresos totales (sumar general + ortodoncia)
+      const incomeGeneral = dailyGeneral?.total_clinic_income || 0;
+      const incomeOrtho = dailyOrtho?.total_clinic_income || 0;
+      const dailyIncomeFromProcedures = incomeGeneral + incomeOrtho;
 
-      if (dailyGeneral && dailyGeneral.total_clinic_income) {
-        incomeGeneral = dailyGeneral.total_clinic_income;
-        dailyIncomeFromProcedures += incomeGeneral;
-      }
-
-      if (dailyOrtho && dailyOrtho.total_clinic_income) {
-        incomeOrtho = dailyOrtho.total_clinic_income;
-        dailyIncomeFromProcedures += incomeOrtho;
-      }
-
-      // ===== CORRECCIÓN CRÍTICA: GASTOS =====
-      // Los gastos son los mismos para ambos tipos, así que NO debemos sumarlos
-      // Solo usamos el primero que encuentre con datos
+      // Calcular gastos totales (tomar de cualquiera que tenga datos)
       let totalDailyExpenses = 0;
-      let expensesGeneral = 0;
-      let expensesOrtho = 0;
-
+      
+      // Primero intentar con general
       if (dailyGeneral && dailyGeneral.total_variable_expenses) {
-        expensesGeneral = dailyGeneral.total_variable_expenses;
-        totalDailyExpenses = expensesGeneral; // Usamos el de general
-      } else if (dailyOrtho && dailyOrtho.total_variable_expenses) {
-        expensesOrtho = dailyOrtho.total_variable_expenses;
-        totalDailyExpenses = expensesOrtho; // Usamos el de ortodoncia
+        totalDailyExpenses = dailyGeneral.total_variable_expenses;
+      } 
+      // Si no, intentar con ortodoncia
+      else if (dailyOrtho && dailyOrtho.total_variable_expenses) {
+        totalDailyExpenses = dailyOrtho.total_variable_expenses;
       }
 
-      console.log('💰💰💰 DESGLOSE DETALLADO (CORREGIDO):', {
+      console.log('💰💰💰 DESGLOSE DETALLADO:', {
         ingresos: {
           general: incomeGeneral,
           ortodoncia: incomeOrtho,
           total: dailyIncomeFromProcedures
         },
         gastos: {
-          general: expensesGeneral,
-          ortodoncia: expensesOrtho,
           desdeBills: dailyExpensesTotal,
-          total_USADO: totalDailyExpenses // Este es el valor correcto
+          desdeGeneral: dailyGeneral?.total_variable_expenses || 0,
+          desdeOrtho: dailyOrtho?.total_variable_expenses || 0,
+          total_USADO: totalDailyExpenses
         },
         utilidad_neta: dailyIncomeFromProcedures - totalDailyExpenses
       });
-      
+
       setDailyData({
         date: todayStr,
         total_income: dailyIncomeFromProcedures,
@@ -309,12 +284,10 @@ const LiveResultsPage = () => {
       // ============================================
       // 3. CARGAR DATOS MENSUALES
       // ============================================
-      console.log('📊 Cargando resumen mensual completo...');
       const monthlyRes = await getFinancialSummary(monthDates.start, monthDates.end, 'all');
       const monthly = monthlyRes.success ? monthlyRes.data : null;
 
       if (monthly) {
-        // Ingresos totales = general + ortodoncia (solo ganancia clínica)
         const monthlyTotalIncome = (monthly.total_general_income || 0) + (monthly.total_clinical_orthodontic_income || 0);
         const monthlyFixedExpenses = monthly.total_fixed_expenses || 0;
         const monthlyVariableExpenses = monthly.total_variable_expenses || 0;
@@ -329,34 +302,6 @@ const LiveResultsPage = () => {
           total_expenses: monthlyTotalExpenses,
           net_profit: monthlyTotalIncome - monthlyTotalExpenses,
           hasData: true
-        });
-      } else {
-        // Si no hay datos combinados, intentar por separado
-        console.log('📊 Cargando datos mensuales por separado...');
-        
-        const monthlyGeneralRes = await getFinancialSummary(monthDates.start, monthDates.end, 'general');
-        const monthlyGeneral = monthlyGeneralRes.success ? monthlyGeneralRes.data : null;
-        
-        const monthlyOrthoRes = await getFinancialSummary(monthDates.start, monthDates.end, 'orthodontics');
-        const monthlyOrtho = monthlyOrthoRes.success ? monthlyOrthoRes.data : null;
-        
-        const monthlyGeneralIncome = monthlyGeneral?.clinic_income || 0;
-        const monthlyOrthoIncome = monthlyOrtho?.clinic_income || 0;
-        const monthlyTotalIncome = monthlyGeneralIncome + monthlyOrthoIncome;
-        
-        const monthlyFixedExpenses = monthlyGeneral?.total_fixed_expenses || monthlyOrtho?.total_fixed_expenses || 0;
-        const monthlyVariableExpenses = monthlyGeneral?.total_variable_expenses || monthlyOrtho?.total_variable_expenses || 0;
-        const monthlyTotalExpenses = monthlyFixedExpenses + monthlyVariableExpenses;
-        
-        setMonthlyData({
-          startDate: monthDates.start,
-          endDate: monthDates.end,
-          total_income: monthlyTotalIncome,
-          fixed_expenses: monthlyFixedExpenses,
-          variable_expenses: monthlyVariableExpenses,
-          total_expenses: monthlyTotalExpenses,
-          net_profit: monthlyTotalIncome - monthlyTotalExpenses,
-          hasData: monthlyTotalIncome > 0
         });
       }
 
@@ -377,12 +322,10 @@ const LiveResultsPage = () => {
     }
   }, [user]);
 
-  // Función para manejar actualización manual
   const handleManualRefresh = () => {
     fetchLiveData(true);
   };
 
-  // Funciones para toggle de secciones
   const toggleDailyDetails = () => {
     setExpandedSections(prev => ({
       ...prev,
@@ -436,7 +379,6 @@ const LiveResultsPage = () => {
             className="refresh-btn" 
             onClick={handleManualRefresh} 
             disabled={loading}
-            title="Actualizar datos manualmente"
           >
             <FontAwesomeIcon icon={faSyncAlt} spin={loading} />
             {loading ? 'Actualizando...' : 'Actualizar ahora'}
@@ -486,7 +428,7 @@ const LiveResultsPage = () => {
             <DualCurrency amountNIO={dailyData.net_profit} />
           </div>
           
-          {/* Depurador visual - puedes eliminarlo después */}
+          {/* Depurador visual temporal */}
           <div style={{
             background: '#f0f0f0',
             padding: '10px',
@@ -496,18 +438,11 @@ const LiveResultsPage = () => {
             fontFamily: 'monospace',
             textAlign: 'left'
           }}>
-            <div>📊 DEPURACIÓN:</div>
-            <div>Ingresos: C${dailyData.total_income.toFixed(2)}</div>
-            <div>Gastos: C${dailyData.total_expenses.toFixed(2)}</div>
-            <div>Utilidad: C${dailyData.net_profit.toFixed(2)}</div>
-            <div>Fecha: {dailyData.date}</div>
+            <div>📊 Ingresos: C${dailyData.total_income.toFixed(2)}</div>
+            <div>📊 Gastos: C${dailyData.total_expenses.toFixed(2)}</div>
+            <div>📊 Utilidad: C${dailyData.net_profit.toFixed(2)}</div>
           </div>
           
-          {dailyData.total_income > 0 && (
-            <div className="profit-margin">
-              Margen: {((dailyData.net_profit / dailyData.total_income) * 100).toFixed(2)}%
-            </div>
-          )}
           {dailyData.total_income === 0 && dailyData.total_expenses > 0 && (
             <div className="profit-margin warning">
               Solo hay gastos registrados (sin ingresos)
@@ -515,11 +450,10 @@ const LiveResultsPage = () => {
           )}
         </div>
 
-        {/* DETALLES DEL DÍA (expandibles) */}
+        {/* DETALLES DEL DÍA */}
         {expandedSections.daily && (
           <div className="expanded-details">
             <div className="details-grid">
-              {/* Ingresos Totales */}
               <div className="detail-item-card income">
                 <div className="detail-label">
                   <FontAwesomeIcon icon={faDollarSign} />
@@ -533,7 +467,6 @@ const LiveResultsPage = () => {
                 </div>
               </div>
 
-              {/* Gastos Variables */}
               <div className="detail-item-card expense">
                 <div className="detail-label">
                   <FontAwesomeIcon icon={faReceipt} />
@@ -543,12 +476,12 @@ const LiveResultsPage = () => {
                   <DualCurrency amountNIO={dailyData.total_expenses} />
                 </div>
                 <div className="detail-description">
-                  Gastos del día (solo de tabla bills)
+                  Gastos del día (tabla bills)
                 </div>
               </div>
             </div>
 
-            {/* Lista de gastos (si existen) */}
+            {/* Lista de gastos */}
             {dailyData.expenses && dailyData.expenses.length > 0 && (
               <div className="expenses-section">
                 <button 
@@ -583,15 +516,9 @@ const LiveResultsPage = () => {
           <h3>
             <FontAwesomeIcon icon={faCalendarAlt} />
             Resultados del Mes 
-            {monthlyData.startDate && monthlyData.endDate && (
-              <span className="date-range">
-                ({new Date(monthlyData.startDate + 'T12:00:00').toLocaleDateString('es-NI', { day: 'numeric', month: 'long' })} - {new Date(monthlyData.endDate + 'T12:00:00').toLocaleDateString('es-NI')})
-              </span>
-            )}
           </h3>
         </div>
 
-        {/* TARJETA PRINCIPAL: UTILIDAD NETA DEL MES */}
         <div 
           className={`main-profit-card ${monthlyData.net_profit >= 0 ? 'profit' : 'loss'}`}
           onClick={toggleMonthlyDetails}
@@ -607,70 +534,33 @@ const LiveResultsPage = () => {
           <div className="profit-value-large">
             <DualCurrency amountNIO={monthlyData.net_profit} />
           </div>
-          {monthlyData.total_income > 0 && (
-            <div className="profit-margin">
-              Margen: {((monthlyData.net_profit / monthlyData.total_income) * 100).toFixed(2)}%
-            </div>
-          )}
         </div>
 
-        {/* DETALLES DEL MES (expandibles) */}
         {expandedSections.monthly && (
           <div className="expanded-details">
             <div className="details-grid">
-              {/* Ingresos Totales */}
               <div className="detail-item-card income">
-                <div className="detail-label">
-                  <FontAwesomeIcon icon={faDollarSign} />
-                  Ingresos Totales
-                </div>
+                <div className="detail-label">Ingresos Totales</div>
                 <div className="detail-value">
                   <DualCurrency amountNIO={monthlyData.total_income} />
                 </div>
-                <div className="detail-description">
-                  Ganancia clínica del mes
-                </div>
               </div>
-
-              {/* Gastos Fijos */}
               <div className="detail-item-card expense">
-                <div className="detail-label">
-                  <FontAwesomeIcon icon={faMoneyBillWave} />
-                  Gastos Fijos
-                </div>
+                <div className="detail-label">Gastos Fijos</div>
                 <div className="detail-value">
                   <DualCurrency amountNIO={monthlyData.fixed_expenses} />
                 </div>
-                <div className="detail-description">
-                  Gastos recurrentes mensuales
-                </div>
               </div>
-
-              {/* Gastos Variables */}
               <div className="detail-item-card expense">
-                <div className="detail-label">
-                  <FontAwesomeIcon icon={faReceipt} />
-                  Gastos Variables
-                </div>
+                <div className="detail-label">Gastos Variables</div>
                 <div className="detail-value">
                   <DualCurrency amountNIO={monthlyData.variable_expenses} />
                 </div>
-                <div className="detail-description">
-                  Gastos ocasionales del mes
-                </div>
               </div>
-
-              {/* Total Gastos */}
               <div className="detail-item-card total-expense">
-                <div className="detail-label">
-                  <FontAwesomeIcon icon={faMoneyBillWave} />
-                  Total Gastos
-                </div>
+                <div className="detail-label">Total Gastos</div>
                 <div className="detail-value">
                   <DualCurrency amountNIO={monthlyData.total_expenses} />
-                </div>
-                <div className="detail-description">
-                  Fijos + Variables
                 </div>
               </div>
             </div>
@@ -683,19 +573,8 @@ const LiveResultsPage = () => {
         <FontAwesomeIcon icon={faInfoCircle} />
         <div className="info-content">
           <p>
-            <strong>📊 ¿Qué significan estos números?</strong>
-          </p>
-          <ul>
-            <li><strong>Ingresos Totales:</strong> Solo la ganancia de la clínica (NO incluye pago a doctora de ortodoncia ni a doctores externos)</li>
-            <li><strong>Gastos Variables:</strong> Gastos ocasionales registrados en la tabla bills</li>
-            <li><strong>Gastos Fijos:</strong> Solo aplican en resultados mensuales</li>
-            <li><strong>Utilidad Neta:</strong> Ingresos - Gastos (lo que realmente gana la clínica)</li>
-          </ul>
-          <p className="info-note-small">
-            <FontAwesomeIcon icon={faClock} /> Los datos se actualizan al entrar a esta página y al presionar "Actualizar ahora".
-            {systemSettings && (
-              <> • Tipo de cambio: <strong>C${systemSettings.exchange_rate?.toFixed(2) || '36.50'} = $1 USD</strong></>
-            )}
+            <strong>📊 Resumen:</strong> Los ingresos son la suma de procedimientos generales y ortodoncia. 
+            Los gastos son los registrados en la tabla bills. La utilidad neta es la diferencia.
           </p>
         </div>
       </div>

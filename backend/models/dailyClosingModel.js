@@ -94,298 +94,225 @@ const DailyClosing = {
   // FUNCIONES PARA PROCEDIMIENTOS
   // ============================================
 
-  // Obtener procedimientos del día (VERSIÓN CORREGIDA)
-async getDailyProcedures(date, closingType = 'general') {
-  console.log('🔍 getDailyProcedures - Iniciando búsqueda:', {
-    fechaRecibida: date,
-    tipo: closingType
-  });
+  // Obtener procedimientos del día por tipo
+  async getDailyProcedures(date, closingType = 'general') {
+    console.log('🔍 getDailyProcedures - Iniciando búsqueda:', {
+      fechaRecibida: date,
+      tipo: closingType
+    });
 
-  // IMPORTANTE: La fecha en la BD está en timestamp sin zona horaria
-  // Pero se guardó en hora de Nicaragua. Para buscarla correctamente:
-  
-  // 1. La fecha que recibimos es YYYY-MM-DD en hora Nicaragua
-  // 2. En la BD, procedure_date está guardada como timestamp sin zona
-  // 3. Pero representa la hora de Nicaragua
-  
-  // En lugar de convertir a UTC, buscamos directamente por rango de fechas
-  // usando la fecha que ya tenemos en formato Nicaragua
-  
-  const startOfDay = `${date} 00:00:00`;
-  const endOfDay = `${date} 23:59:59`;
-  
-  console.log('🔍 Rango de tiempo calculado:', {
-    fechaNicaragua: date,
-    inicio: startOfDay,
-    fin: endOfDay
-  });
-  
-  // Usar la fecha directamente sin conversión UTC
-  let query = supabaseAdmin
-    .from('procedures')
-    .select(`
-      *,
-      patients (first_name, first_last_name)
-    `)
-    .eq('is_orthodontics', closingType === 'orthodontics')
-    .gte('procedure_date', startOfDay)
-    .lte('procedure_date', endOfDay);
-  
-  const { data, error } = await query;
-  
-  if (error) {
-    console.error('❌ Error obteniendo procedimientos:', error);
-    throw error;
-  }
-  
-  console.log(`✅ Encontrados ${data.length} procedimientos para el día ${date}`);
-  
-  // Ya no necesitamos formatear la fecha UTC porque no hicimos conversión
-  return data || [];
-},
+    const startOfDay = `${date} 00:00:00`;
+    const endOfDay = `${date} 23:59:59`;
+    
+    console.log('🔍 Rango de tiempo calculado:', {
+      fechaNicaragua: date,
+      inicio: startOfDay,
+      fin: endOfDay
+    });
+    
+    let query = supabaseAdmin
+      .from('procedures')
+      .select(`
+        *,
+        patients (first_name, first_last_name)
+      `)
+      .eq('is_orthodontics', closingType === 'orthodontics')
+      .gte('procedure_date', startOfDay)
+      .lte('procedure_date', endOfDay);
+    
+    const { data, error } = await query;
+    
+    if (error) {
+      console.error('❌ Error obteniendo procedimientos:', error);
+      throw error;
+    }
+    
+    console.log(`✅ Encontrados ${data.length} procedimientos ${closingType} para el día ${date}`);
+    
+    return data || [];
+  },
 
   // ============================================
   // FUNCIONES PARA GASTOS VARIABLES
   // ============================================
 
-  async getDailyVariableExpenses(date) {
-  console.log('🔍 Buscando gastos para fecha:', date);
+  // 🔴 FUNCIÓN PARA RESULTADOS EN VIVO: TODOS los gastos del día
+async getDailyVariableExpenses(date) {
+  console.log('🔍 [RESULTADOS EN VIVO] Buscando TODOS los gastos para fecha:', date);
   
   const { data, error } = await supabaseAdmin
     .from('bills')
     .select('*')
     .eq('is_recurrent', false)
-    .eq('is_processed_in_closing', false)
-    .is('processed_in_daily_closing_ID', null)
-    .eq('bill_date', date);
+    .eq('bill_date', date); // 👈 SIN filtrar por is_processed_in_closing
   
-  console.log('📊 Resultado de búsqueda:', {
+  console.log('📊 Resultado de búsqueda (TODOS los gastos):', {
     fecha: date,
     encontrados: data?.length || 0,
-    gastos: data?.map(g => ({ id: g.bill_ID, monto: g.amount, moneda: g.currency_used }))
+    gastos: data?.map(g => ({ 
+      id: g.bill_ID, 
+      monto: g.amount, 
+      moneda: g.currency_used,
+      procesado: g.is_processed_in_closing 
+    }))
   });
   
   if (error) throw error;
   return data || [];
 },
 
-// 🔴 NUEVA FUNCIÓN: Todos los gastos del día (para cierres)
-async getDailyVariableExpensesAll(date) {
-  console.log('🔍 [CIERRES] Obteniendo TODOS los gastos variables para el día:', date);
-  
-  const queryDate = date;
-  
-  // Usar los campos correctos - SIN filtrar por procesados
-  const { data, error } = await supabaseAdmin
-    .from('bills')
-    .select(`
-      bill_ID,
-      description,
-      amount,
-      amount_usd,
-      bill_date,
-      category,
-      currency_used,
-      exchange_rate_bill,
-      is_processed_in_closing,
-      processed_in_daily_closing_ID
-    `)
-    .eq('is_recurrent', false)  // Solo gastos variables
-    .eq('bill_date', queryDate);  // TODOS, sin filtrar por procesados
-  
-  if (error) {
-    console.error('❌ Error obteniendo gastos variables:', error);
-    throw error;
-  }
-  
-  console.log(`✅ Encontrados ${data?.length || 0} gastos variables TOTALES`);
-  console.log('📊 Estado de procesamiento:', {
-    procesados_mensual: data?.filter(b => b.is_processed_in_closing).length || 0,
-    con_daily_id: data?.filter(b => b.processed_in_daily_closing_ID).length || 0,
-    no_procesados: data?.filter(b => !b.is_processed_in_closing && !b.processed_in_daily_closing_ID).length || 0
-  });
-  
-  return data || [];
-},
+  // 🔴 FUNCIÓN PARA CIERRES: Solo gastos NO procesados
+  async getDailyVariableExpensesForClosing(date) {
+    console.log('🔍 [CIERRES] Obteniendo gastos variables NO procesados para el día:', date);
+    
+    const { data, error } = await supabaseAdmin
+      .from('bills')
+      .select('*')
+      .eq('is_recurrent', false)
+      .eq('is_processed_in_closing', false)
+      .is('processed_in_daily_closing_ID', null)
+      .eq('bill_date', date);
+    
+    console.log('📊 Resultado para cierre:', {
+      fecha: date,
+      encontrados: data?.length || 0,
+      gastos: data?.map(g => ({ 
+        id: g.bill_ID, 
+        monto: g.amount,
+        moneda: g.currency_used 
+      }))
+    });
+    
+    if (error) throw error;
+    return data || [];
+  },
 
   // Marcar gastos variables como procesados
-async markVariableExpensesAsProcessed(expenseIds, dailyClosingId) {
-  if (!expenseIds || expenseIds.length === 0) return [];
-  
-  console.log('📝 Marcando gastos variables como procesados:', {
-    expenseIds,
-    dailyClosingId
-  });
-  
-  // Usar los campos correctos
-  const { data, error } = await supabaseAdmin
-    .from('bills')
-    .update({ 
-      is_processed_in_closing: true,
-      processed_in_daily_closing_ID: dailyClosingId
-    })
-    .in('bill_ID', expenseIds)
-    .select();
-  
-  if (error) {
-    console.error('❌ Error marcando gastos variables:', error);
-    throw error;
-  }
-  
-  console.log(`✅ ${data?.length || 0} gastos variables marcados como procesados`);
-  return data || [];
-},
+  async markVariableExpensesAsProcessed(expenseIds, dailyClosingId) {
+    if (!expenseIds || expenseIds.length === 0) return [];
+    
+    console.log('📝 Marcando gastos variables como procesados:', {
+      expenseIds,
+      dailyClosingId
+    });
+    
+    const { data, error } = await supabaseAdmin
+      .from('bills')
+      .update({ 
+        is_processed_in_closing: true,
+        processed_in_daily_closing_ID: dailyClosingId
+      })
+      .in('bill_ID', expenseIds)
+      .select();
+    
+    if (error) {
+      console.error('❌ Error marcando gastos variables:', error);
+      throw error;
+    }
+    
+    console.log(`✅ ${data?.length || 0} gastos variables marcados como procesados`);
+    return data || [];
+  },
 
-  // 🔴 FUNCIÓN ORIGINAL CORREGIDA - Para resultados en vivo
+  // ============================================
+  // FUNCIÓN PRINCIPAL PARA RESULTADOS EN VIVO (CORREGIDA)
+  // ============================================
+  // 🔴 FUNCIÓN PRINCIPAL PARA RESULTADOS EN VIVO (CORREGIDA)
 async getDailyFinancialSummary(date, closingType = 'general') {
-  console.log('🔍 [VERSIÓN ORIGINAL - RESULTADOS EN VIVO] Obteniendo resumen diario para:', { date, closingType });
+  console.log('🔍 [RESULTADOS EN VIVO] Obteniendo resumen diario para:', { date, closingType });
   
-  // 1. Obtener procedimientos del día (SEGÚN EL TIPO)
-  const procedures = await this.getDailyProcedures(date, closingType);
+  // 1. Obtener TODOS los procedimientos del día
+  const proceduresGeneral = await this.getDailyProcedures(date, 'general');
+  const proceduresOrtho = await this.getDailyProcedures(date, 'orthodontics');
+  const allProcedures = [...proceduresGeneral, ...proceduresOrtho];
   
-  // 2. Obtener gastos variables NO procesados del día (SIEMPRE LOS MISMOS, SIN IMPORTAR EL TIPO)
+  // 2. Obtener TODOS los gastos del día (CRÍTICO: usar getDailyVariableExpenses, NO la versión para cierres)
   const variableExpenses = await this.getDailyVariableExpenses(date);
   
-  console.log('📊 Procedimientos encontrados:', procedures.length);
-  console.log('💰 Gastos variables NO procesados encontrados:', variableExpenses.length);
+  console.log('📊 Procedimientos encontrados:', {
+    generales: proceduresGeneral.length,
+    ortodoncia: proceduresOrtho.length,
+    total: allProcedures.length
+  });
+  console.log('💰 Gastos encontrados (DEBEN SER 400):', variableExpenses.length);
+  console.log('📦 Detalle de gastos:', variableExpenses);
   
   const settings = await this.getSystemSettings();
   const exchangeRate = settings.exchange_rate || 36.5;
   
-  // Variables para ingresos (SOLO del tipo solicitado)
-  let totalClinicIncomeCordobas = 0;
-  let totalClinicIncomeDollars = 0;
-  let totalDoctorIncomeCordobas = 0;
-  let totalDoctorIncomeDollars = 0;
-  let totalExternalDoctorPaymentsCordobas = 0;
-  let totalExternalDoctorPaymentsDollars = 0;
-  
-  const procedureClosings = [];
-  
-  // Calcular ingresos desde procedimientos (SOLO del tipo solicitado)
-  procedures.forEach(procedure => {
-    const clinicCordobas = parseFloat(procedure.clinic_payment_cordobas) || 0;
-    const clinicDollars = parseFloat(procedure.clinic_payment_dollars) || 0;
-    totalClinicIncomeCordobas += clinicCordobas;
-    totalClinicIncomeDollars += clinicDollars;
-    
-    const doctorCordobas = parseFloat(procedure.doctor_payment_cordobas) || 0;
-    const doctorDollars = parseFloat(procedure.doctor_payment_dollars) || 0;
-    totalDoctorIncomeCordobas += doctorCordobas;
-    totalDoctorIncomeDollars += doctorDollars;
-    
-    if (procedure.external_doctor_payment && procedure.external_doctor_payment > 0) {
-      const externalPaymentCordobas = parseFloat(procedure.external_doctor_payment) || 0;
-      const procExchangeRate = parseFloat(procedure.exchange_rate_used) || exchangeRate;
-      const externalPaymentDollars = externalPaymentCordobas / procExchangeRate;
-      
-      totalExternalDoctorPaymentsCordobas += externalPaymentCordobas;
-      totalExternalDoctorPaymentsDollars += externalPaymentDollars;
-    }
-    
-    procedureClosings.push({
-      procedure_id: procedure.procedure_ID,
-      clinic_income_portion: clinicCordobas,
-      doctor_income_portion: doctorCordobas,
-      external_doctor_payment: parseFloat(procedure.external_doctor_payment) || 0
-    });
+  // Calcular ingresos totales de la clínica
+  let totalClinicIncome = 0;
+  allProcedures.forEach(procedure => {
+    totalClinicIncome += parseFloat(procedure.clinic_payment_cordobas) || 0;
   });
   
-  // CALCULAR GASTOS DESDE BILLS (SIEMPRE LOS MISMOS, SIN IMPORTAR EL TIPO)
-  let totalVariableExpensesCordobas = 0;
-  let totalVariableExpensesDollars = 0;
+  // Calcular gastos totales
+  let totalExpenses = 0;
   const expenseDetails = [];
   const expenseIds = [];
   
   variableExpenses.forEach(expense => {
-    let amountCordobas = 0;
-    let amountDollars = 0;
-    
+    let amount = 0;
     if (expense.currency_used === 'USD') {
       const usdAmount = parseFloat(expense.amount_usd) || 0;
-      const expenseExchangeRate = parseFloat(expense.exchange_rate_bill) || exchangeRate;
-      amountCordobas = usdAmount * expenseExchangeRate;
-      amountDollars = usdAmount;
+      const rate = parseFloat(expense.exchange_rate_bill) || exchangeRate;
+      amount = usdAmount * rate;
     } else {
-      amountCordobas = parseFloat(expense.amount) || 0;
-      amountDollars = amountCordobas / exchangeRate;
+      amount = parseFloat(expense.amount) || 0;
     }
     
-    totalVariableExpensesCordobas += amountCordobas;
-    totalVariableExpensesDollars += amountDollars;
-    
+    totalExpenses += amount;
     expenseIds.push(expense.bill_ID);
     
     expenseDetails.push({
       bill_id: expense.bill_ID,
       description: expense.description,
-      amount: amountCordobas,
-      amount_usd: amountDollars,
-      category: expense.category,
-      exchange_rate: expense.exchange_rate_bill || exchangeRate
+      amount: amount,
+      category: expense.category
     });
   });
   
-  // Calcular totales
-  let totalIncome = 0;
-  let netProfit = 0;
+  // Calcular utilidad neta
+  const netProfit = totalClinicIncome - totalExpenses;
   
-  if (closingType === 'orthodontics') {
-    totalIncome = totalClinicIncomeCordobas + totalDoctorIncomeCordobas;
-    netProfit = totalClinicIncomeCordobas - totalVariableExpensesCordobas;
-  } else {
-    totalIncome = totalClinicIncomeCordobas;
-    netProfit = totalClinicIncomeCordobas - totalVariableExpensesCordobas;
-  }
-  
-  console.log('💰 CÁLCULO DE GASTOS (CORREGIDO):', {
+  console.log('💰💰💰 RESUMEN FINAL:', {
+    ingresos_totales: totalClinicIncome,
+    gastos_totales: totalExpenses,
+    utilidad_neta: netProfit,
     cantidad_gastos: variableExpenses.length,
-    total_gastos_cordobas: totalVariableExpensesCordobas,
-    tipo_cierre: closingType,
-    nota: "Los gastos son los mismos para cualquier tipo de cierre"
+    expenseIds: expenseIds
   });
   
   const result = {
-    procedures,
-    procedureClosings,
+    procedures: allProcedures,
+    procedures_general: proceduresGeneral,
+    procedures_ortho: proceduresOrtho,
     variableExpenses: expenseDetails,
-    total_income: totalIncome,
-    total_income_usd: totalIncome / exchangeRate,
-    total_clinic_income: totalClinicIncomeCordobas,
-    total_clinic_income_usd: totalClinicIncomeDollars,
-    total_doctor_income: totalDoctorIncomeCordobas,
-    total_doctor_income_usd: totalDoctorIncomeDollars,
-    total_external_doctor_payments: totalExternalDoctorPaymentsCordobas,
-    total_external_doctor_payments_usd: totalExternalDoctorPaymentsDollars,
-    total_variable_expenses: totalVariableExpensesCordobas,
-    total_variable_expenses_usd: totalVariableExpensesDollars,
+    total_income: totalClinicIncome,
+    total_clinic_income: totalClinicIncome,
+    total_variable_expenses: totalExpenses, // 👈 ESTO DEBE SER 400
     net_profit: netProfit,
-    net_profit_usd: netProfit / exchangeRate,
     exchange_rate: exchangeRate,
     fecha_nicaragua: date,
-    cantidad_procedimientos: procedures.length,
+    cantidad_procedimientos: allProcedures.length,
     cantidad_gastos_variables: variableExpenses.length,
     expense_ids: expenseIds
   };
   
-  console.log(`📋 [RESUMEN FINAL - ${closingType}]:`, {
-    ingresos: result.total_income,
-    gastos: result.total_variable_expenses,
-    utilidad: result.net_profit
-  });
-  
   return result;
 },
 
-  // 🔴 NUEVA FUNCIÓN: Para cierres (usa TODOS los gastos)
+  // ============================================
+  // FUNCIÓN PARA CIERRES (solo gastos NO procesados)
+  // ============================================
   async getDailyClosingSummary(date, closingType = 'general') {
     console.log('🔍 [VERSIÓN PARA CIERRES] Obteniendo resumen diario para cierre:', { date, closingType });
     
     const procedures = await this.getDailyProcedures(date, closingType);
-    const variableExpenses = await this.getDailyVariableExpensesAll(date);
+    const variableExpenses = await this.getDailyVariableExpensesForClosing(date);
     
     console.log('📊 Procedimientos encontrados:', procedures.length);
-    console.log('💰 Gastos variables TOTALES encontrados:', variableExpenses.length);
+    console.log('💰 Gastos variables NO procesados encontrados:', variableExpenses.length);
     
     const settings = await this.getSystemSettings();
     const exchangeRate = settings.exchange_rate || 36.5;
@@ -495,13 +422,11 @@ async getDailyFinancialSummary(date, closingType = 'general') {
       expense_ids: expenseIds
     };
     
-    console.log('📋 [CIERRES] Resumen diario con TODOS los gastos:', {
+    console.log('📋 [CIERRES] Resumen diario con gastos NO procesados:', {
       total_clinic_income: result.total_clinic_income,
       total_variable_expenses: result.total_variable_expenses,
       net_profit: result.net_profit,
-      cantidad_gastos: result.cantidad_gastos_variables,
-      gastos_procesados: variableExpenses.filter(e => e.is_processed_in_daily_closing).length,
-      gastos_no_procesados: variableExpenses.filter(e => !e.is_processed_in_daily_closing).length
+      cantidad_gastos: result.cantidad_gastos_variables
     });
     
     return result;

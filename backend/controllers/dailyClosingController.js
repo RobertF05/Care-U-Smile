@@ -240,11 +240,10 @@ const dailyClosingController = {
   },
 
   // En dailyClosingController.js - getDailySummary
+// Obtener resumen financiero del día (VERSIÓN CORREGIDA - SIN divisiones)
 getDailySummary: async (req, res) => {
   try {
-    const { date, closing_type = 'general' } = req.query;
-    
-    console.log('📥 Recibida solicitud de resumen diario:', { date, closing_type });
+    const { date } = req.query; // 👈 Solo necesitamos la fecha
     
     if (!date) {
       return res.status(400).json({ 
@@ -253,18 +252,21 @@ getDailySummary: async (req, res) => {
       });
     }
     
-    const summary = await DailyClosing.getDailyFinancialSummary(date, closing_type);
+    console.log('📥 Obteniendo resumen diario para fecha:', date);
     
-    console.log('📤 Enviando resumen:', {
-      fecha: date,
-      ingresos: summary.total_income,
-      gastos: summary.total_variable_expenses,
-      utilidad: summary.net_profit
-    });
+    // Llamar a la función sin tipo (o con 'general' como default)
+    const summary = await DailyClosing.getDailyFinancialSummary(date, 'general');
+    
+    // Verificar si existe algún cierre (para referencia)
+    const existsGeneral = await DailyClosing.exists(date, 'general');
+    const existsOrtho = await DailyClosing.exists(date, 'orthodontics');
     
     res.json({ 
       success: true, 
-      data: summary
+      data: {
+        ...summary,
+        closing_exists: existsGeneral || existsOrtho
+      }
     });
   } catch (error) {
     console.error('❌ Error en getDailySummary:', error);

@@ -252,7 +252,7 @@ const LiveResultsPage = () => {
       const dailyOrthoRes = await getDailySummary(todayStr, 'orthodontics');
       const dailyOrtho = dailyOrthoRes.success ? dailyOrthoRes.data : null;
 
-      // Calcular ingresos totales
+      // Calcular ingresos totales (cada tipo aporta sus propios ingresos)
       let dailyIncomeFromProcedures = 0;
       let incomeGeneral = 0;
       let incomeOrtho = 0;
@@ -267,25 +267,22 @@ const LiveResultsPage = () => {
         dailyIncomeFromProcedures += incomeOrtho;
       }
 
-      // Calcular gastos totales (solo de bills, vía el backend)
-      let dailyExpensesFromSummary = 0;
+      // ===== CORRECCIÓN CRÍTICA: GASTOS =====
+      // Los gastos son los mismos para ambos tipos, así que NO debemos sumarlos
+      // Solo usamos el primero que encuentre con datos
+      let totalDailyExpenses = 0;
       let expensesGeneral = 0;
       let expensesOrtho = 0;
 
       if (dailyGeneral && dailyGeneral.total_variable_expenses) {
         expensesGeneral = dailyGeneral.total_variable_expenses;
-        dailyExpensesFromSummary += expensesGeneral;
-      }
-
-      if (dailyOrtho && dailyOrtho.total_variable_expenses) {
+        totalDailyExpenses = expensesGeneral; // Usamos el de general
+      } else if (dailyOrtho && dailyOrtho.total_variable_expenses) {
         expensesOrtho = dailyOrtho.total_variable_expenses;
-        dailyExpensesFromSummary += expensesOrtho;
+        totalDailyExpenses = expensesOrtho; // Usamos el de ortodoncia
       }
 
-      // Total gastos del día (NO duplicar)
-      const totalDailyExpenses = dailyExpensesFromSummary;
-
-      console.log('💰💰💰 DESGLOSE DETALLADO:', {
+      console.log('💰💰💰 DESGLOSE DETALLADO (CORREGIDO):', {
         ingresos: {
           general: incomeGeneral,
           ortodoncia: incomeOrtho,
@@ -294,8 +291,8 @@ const LiveResultsPage = () => {
         gastos: {
           general: expensesGeneral,
           ortodoncia: expensesOrtho,
-          total: totalDailyExpenses,
-          desdeBills: dailyExpensesTotal
+          desdeBills: dailyExpensesTotal,
+          total_USADO: totalDailyExpenses // Este es el valor correcto
         },
         utilidad_neta: dailyIncomeFromProcedures - totalDailyExpenses
       });

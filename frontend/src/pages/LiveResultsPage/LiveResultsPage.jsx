@@ -1,4 +1,4 @@
-// LiveResultsPage.jsx (COMPLETO CON CORRECCIONES)
+// LiveResultsPage.jsx (COMPLETO - Solo actualización manual)
 import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -191,23 +191,8 @@ const LiveResultsPage = () => {
     };
   }, []);
 
-  // Función para calcular total de gastos en córdobas
-  const calculateTotalExpenses = (expenses, exchangeRate) => {
-    if (!expenses || expenses.length === 0) return 0;
-    
-    return expenses.reduce((sum, expense) => {
-      if (expense.currency_used === 'USD') {
-        const usdAmount = parseFloat(expense.amount_usd) || 0;
-        const rate = parseFloat(expense.exchange_rate_bill) || exchangeRate;
-        return sum + (usdAmount * rate);
-      } else {
-        return sum + (parseFloat(expense.amount) || 0);
-      }
-    }, 0);
-  };
-
   // ============================================
-  // FUNCIÓN PRINCIPAL PARA CARGAR DATOS (CORREGIDA)
+  // FUNCIÓN PRINCIPAL PARA CARGAR DATOS
   // ============================================
   const fetchLiveData = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
@@ -221,58 +206,60 @@ const LiveResultsPage = () => {
       console.log('🔍 Cargando datos en vivo para fecha:', todayStr);
 
       // ============================================
-      // 1. CARGAR GASTOS VARIABLES DEL DÍA (para detalles)
+      // 1. CARGAR GASTOS VARIABLES DEL DÍA DIRECTAMENTE
       // ============================================
       let dailyExpenses = [];
       let dailyExpensesTotal = 0;
       
       try {
-        const dailyExpensesRes = await apiFetch(`/bills?startDate=${todayStr}&endDate=${todayStr}&type=VARIABLE&limit=100`);
+        // Consulta directa a bills para gastos variables del día
+        const dailyExpensesRes = await apiFetch(`/bills?startDate=${todayStr}&endDate=${todayStr}&type=VARIABLE&limit=1000`);
         if (dailyExpensesRes.success) {
           dailyExpenses = dailyExpensesRes.data || [];
-          dailyExpensesTotal = calculateTotalExpenses(dailyExpenses, exchangeRate);
+          
+          // Calcular total en córdobas
+          dailyExpensesTotal = dailyExpenses.reduce((sum, expense) => {
+            if (expense.currency_used === 'USD') {
+              const usdAmount = parseFloat(expense.amount_usd) || 0;
+              const rate = parseFloat(expense.exchange_rate_bill) || exchangeRate;
+              return sum + (usdAmount * rate);
+            } else {
+              return sum + (parseFloat(expense.amount) || 0);
+            }
+          }, 0);
         }
       } catch (expErr) {
         console.warn('No se pudieron cargar gastos diarios:', expErr);
       }
 
       // ============================================
-      // 2. CARGAR DATOS DEL DÍA
+      // 2. CARGAR DATOS DE PROCEDIMIENTOS DEL DÍA
       // ============================================
-      const dailyGeneralRes = await getDailySummary(todayStr, 'general');
-      const dailyGeneral = dailyGeneralRes.success ? dailyGeneralRes.data : null;
-      
-      const dailyOrthoRes = await getDailySummary(todayStr, 'orthodontics');
-      const dailyOrtho = dailyOrthoRes.success ? dailyOrthoRes.data : null;
+      // Usar el endpoint que obtiene TODOS los procedimientos del día
+      const dailySummaryRes = await getDailySummary(todayStr);
+      const dailySummary = dailySummaryRes.success ? dailySummaryRes.data : null;
 
       let dailyIncomeFromProcedures = 0;
       
-      if (dailyGeneral && dailyGeneral.total_income) {
-        dailyIncomeFromProcedures = dailyGeneral.total_income;
-      } else if (dailyOrtho && dailyOrtho.total_income) {
-        dailyIncomeFromProcedures = dailyOrtho.total_income;
+      if (dailySummary && dailySummary.total_clinic_income) {
+        dailyIncomeFromProcedures = dailySummary.total_clinic_income;
       }
 
-      let totalDailyExpenses = 0;
-      
-      if (dailyGeneral && dailyGeneral.total_variable_expenses) {
-        totalDailyExpenses = dailyGeneral.total_variable_expenses;
-      } else if (dailyOrtho && dailyOrtho.total_variable_expenses) {
-        totalDailyExpenses = dailyOrtho.total_variable_expenses;
-      }
-
-      // Si no hay gastos desde el backend, usar los calculados de bills
-      if (totalDailyExpenses === 0 && dailyExpensesTotal > 0) {
-        totalDailyExpenses = dailyExpensesTotal;
-      }
+      console.log('💰💰💰 DESGLOSE DETALLADO:', {
+        fecha: todayStr,
+        ingresos: dailyIncomeFromProcedures,
+        gastos: dailyExpensesTotal,
+        utilidad_neta: dailyIncomeFromProcedures - dailyExpensesTotal,
+        cantidad_gastos: dailyExpenses.length
+      });
 
       setDailyData({
         date: todayStr,
         total_income: dailyIncomeFromProcedures,
-        total_expenses: totalDailyExpenses,
-        net_profit: dailyIncomeFromProcedures - totalDailyExpenses,
+        total_expenses: dailyExpensesTotal,
+        net_profit: dailyIncomeFromProcedures - dailyExpensesTotal,
         expenses: dailyExpenses,
-        hasData: dailyIncomeFromProcedures > 0 || totalDailyExpenses > 0
+        hasData: dailyIncomeFromProcedures > 0 || dailyExpensesTotal > 0
       });
 
       // ============================================
@@ -309,50 +296,12 @@ const LiveResultsPage = () => {
     }
   }, [getDailySummary, getFinancialSummary, apiFetch, getCurrentMonthDates, systemSettings]);
 
-  // ============================================
-  // EFECTOS PARA ACTUALIZACIÓN AUTOMÁTICA
-  // ============================================
-  
-  // Efecto principal: carga datos al montar y cuando el usuario cambia
+  // 🔴 SOLO SE EJECUTA UNA VEZ AL MONTAR EL COMPONENTE
   useEffect(() => {
     if (user) {
       fetchLiveData(true);
     }
-  }, [user, fetchLiveData]); // Incluimos fetchLiveData en dependencias
-
-  // 🔴 CORRECCIÓN: Efecto para recargar al cambiar el día
-  useEffect(() => {
-    if (!user) return;
-
-    // Función para verificar si cambió el día y recargar
-    const checkAndRefresh = () => {
-      const todayStr = getCurrentNicaraguaDate();
-      if (dailyData.date && dailyData.date !== todayStr) {
-        console.log('📅 Día cambiado, recargando datos...');
-        fetchLiveData(false); // Recargar sin mostrar loading
-      }
-    };
-
-    // Verificar cada minuto si cambió el día
-    const intervalId = setInterval(checkAndRefresh, 60000); // 60 segundos
-
-    // También verificar cuando la ventana recibe foco (el usuario vuelve a la pestaña)
-    const handleFocus = () => {
-      const todayStr = getCurrentNicaraguaDate();
-      if (dailyData.date && dailyData.date !== todayStr) {
-        console.log('📅 Día cambiado (focus), recargando datos...');
-        fetchLiveData(false);
-      }
-    };
-
-    window.addEventListener('focus', handleFocus);
-
-    // Limpiar al desmontar
-    return () => {
-      clearInterval(intervalId);
-      window.removeEventListener('focus', handleFocus);
-    };
-  }, [user, dailyData.date, fetchLiveData, getCurrentNicaraguaDate]);
+  }, [user]); // 👈 SOLO depende de user, NO de fetchLiveData
 
   const handleManualRefresh = () => {
     fetchLiveData(true);
@@ -469,6 +418,7 @@ const LiveResultsPage = () => {
             <div>📊 Ingresos: C${dailyData.total_income.toFixed(2)}</div>
             <div>📊 Gastos: C${dailyData.total_expenses.toFixed(2)}</div>
             <div>📊 Utilidad: C${dailyData.net_profit.toFixed(2)}</div>
+            <div>📋 Gastos contados: {dailyData.expenses.length}</div>
           </div>
           
           {dailyData.total_income === 0 && dailyData.total_expenses > 0 && (
@@ -543,7 +493,7 @@ const LiveResultsPage = () => {
         <div className="section-header">
           <h3>
             <FontAwesomeIcon icon={faCalendarAlt} />
-            Resultados del Mes ({monthlyData.startDate ? formatDateForDisplay(monthlyData.startDate).split('de')[1]?.trim() || '' : ''})
+            Resultados del Mes 
           </h3>
         </div>
 
@@ -604,8 +554,8 @@ const LiveResultsPage = () => {
             <strong>📊 Resumen:</strong> Los ingresos son la suma de procedimientos generales y ortodoncia. 
             Los gastos son los registrados en la tabla bills. La utilidad neta es la diferencia.
           </p>
-          <p className="auto-update-note">
-            <FontAwesomeIcon icon={faClock} /> Los datos se actualizan automáticamente cuando cambia el día.
+          <p className="manual-update-note">
+            <FontAwesomeIcon icon={faSyncAlt} /> Los datos se actualizan manualmente con el botón "Actualizar ahora".
           </p>
         </div>
       </div>

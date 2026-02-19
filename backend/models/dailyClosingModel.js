@@ -25,13 +25,11 @@ const DailyClosing = {
     }
     
     if (filters.startDate) {
-      const start = adjustDateForQuery(filters.startDate);
-      query = query.gte('closing_date', start);
+      query = query.gte('closing_date', filters.startDate);
     }
     
     if (filters.endDate) {
-      const end = adjustDateForQuery(filters.endDate);
-      query = query.lte('closing_date', end);
+      query = query.lte('closing_date', filters.endDate);
     }
     
     query = query.range(from, to);
@@ -92,130 +90,39 @@ const DailyClosing = {
   },
 
   // ============================================
-  // FUNCIONES PARA PROCEDIMIENTOS
-  // ============================================
-
-  // 🔴 CORREGIDO: Obtener procedimientos del día por fecha (sin tipo)
-  async getDailyProcedures(date) {
-    console.log('🔍 getDailyProcedures - Buscando TODOS los procedimientos para fecha:', date);
-    
-    // La fecha que recibimos es YYYY-MM-DD en hora Nicaragua
-    // Necesitamos buscar procedimientos cuya fecha en BD (UTC) corresponda a ese día en Nicaragua
-    
-    const { data, error } = await supabaseAdmin
-      .from('procedures')
-      .select(`
-        *,
-        patients (first_name, first_last_name)
-      `)
-      .eq('procedure_date::date', date); // 👈 COMPARACIÓN DIRECTA POR FECHA
-    
-    if (error) {
-      console.error('❌ Error obteniendo procedimientos:', error);
-      throw error;
-    }
-    
-    console.log(`✅ Encontrados ${data.length} procedimientos totales para el día ${date}`);
-    
-    return data || [];
-  },
-
-  // ============================================
-  // FUNCIONES PARA GASTOS VARIABLES
-  // ============================================
-
-  // 🔴 FUNCIÓN PARA RESULTADOS EN VIVO: TODOS los gastos del día (SIN filtrar por procesados)
-  async getDailyVariableExpenses(date) {
-    console.log('🔍 [RESULTADOS EN VIVO] Buscando TODOS los gastos para fecha:', date);
-    
-    const { data, error } = await supabaseAdmin
-      .from('bills')
-      .select('*')
-      .eq('is_recurrent', false)
-      .eq('bill_date', date); // 👈 SIN filtrar por is_processed_in_closing
-    
-    console.log('📊 Resultado de búsqueda (TODOS los gastos):', {
-      fecha: date,
-      encontrados: data?.length || 0,
-      gastos: data?.map(g => ({ 
-        id: g.bill_ID, 
-        monto: g.amount, 
-        moneda: g.currency_used,
-        procesado: g.is_processed_in_closing 
-      }))
-    });
-    
-    if (error) throw error;
-    return data || [];
-  },
-
-  // 🔴 FUNCIÓN PARA CIERRES: Solo gastos NO procesados
-  async getDailyVariableExpensesForClosing(date) {
-    console.log('🔍 [CIERRES] Obteniendo gastos variables NO procesados para el día:', date);
-    
-    const { data, error } = await supabaseAdmin
-      .from('bills')
-      .select('*')
-      .eq('is_recurrent', false)
-      .eq('is_processed_in_closing', false)
-      .is('processed_in_daily_closing_ID', null)
-      .eq('bill_date', date);
-    
-    console.log('📊 Resultado para cierre:', {
-      fecha: date,
-      encontrados: data?.length || 0,
-      gastos: data?.map(g => ({ 
-        id: g.bill_ID, 
-        monto: g.amount,
-        moneda: g.currency_used 
-      }))
-    });
-    
-    if (error) throw error;
-    return data || [];
-  },
-
-  // Marcar gastos variables como procesados
-  async markVariableExpensesAsProcessed(expenseIds, dailyClosingId) {
-    if (!expenseIds || expenseIds.length === 0) return [];
-    
-    console.log('📝 Marcando gastos variables como procesados:', {
-      expenseIds,
-      dailyClosingId
-    });
-    
-    const { data, error } = await supabaseAdmin
-      .from('bills')
-      .update({ 
-        is_processed_in_closing: true,
-        processed_in_daily_closing_ID: dailyClosingId
-      })
-      .in('bill_ID', expenseIds)
-      .select();
-    
-    if (error) {
-      console.error('❌ Error marcando gastos variables:', error);
-      throw error;
-    }
-    
-    console.log(`✅ ${data?.length || 0} gastos variables marcados como procesados`);
-    return data || [];
-  },
-
-  // ============================================
-  // FUNCIÓN PRINCIPAL PARA RESULTADOS EN VIVO (CORREGIDA)
+  // FUNCIÓN ESTABLE PARA RESULTADOS EN VIVO
   // ============================================
   async getDailyFinancialSummary(date) {
     console.log('🔍 [RESULTADOS EN VIVO] Obteniendo resumen diario para fecha:', date);
     
     // 1. Obtener TODOS los procedimientos del día (sin filtrar por tipo)
-    const allProcedures = await this.getDailyProcedures(date);
+    const { data: procedures, error: procError } = await supabaseAdmin
+      .from('procedures')
+      .select(`
+        *,
+        patients (first_name, first_last_name)
+      `)
+      .eq('procedure_date::date', date);
     
-    // 2. Obtener TODOS los gastos del día
-    const variableExpenses = await this.getDailyVariableExpenses(date);
+    if (procError) {
+      console.error('❌ Error obteniendo procedimientos:', procError);
+      throw procError;
+    }
     
-    console.log('📊 Procedimientos encontrados:', allProcedures.length);
-    console.log('💰 Gastos encontrados:', variableExpenses.length);
+    // 2. Obtener TODOS los gastos variables del día (sin filtrar por procesados)
+    const { data: expenses, error: expError } = await supabaseAdmin
+      .from('bills')
+      .select('*')
+      .eq('is_recurrent', false)
+      .eq('bill_date', date);
+    
+    if (expError) {
+      console.error('❌ Error obteniendo gastos:', expError);
+      throw expError;
+    }
+    
+    console.log('📊 Procedimientos encontrados:', procedures?.length || 0);
+    console.log('💰 Gastos encontrados:', expenses?.length || 0);
     
     const settings = await this.getSystemSettings();
     const exchangeRate = settings.exchange_rate || 36.5;
@@ -226,7 +133,7 @@ const DailyClosing = {
     let totalOrthoClinicIncome = 0;
     let totalOrthoDoctorIncome = 0;
     
-    allProcedures.forEach(procedure => {
+    (procedures || []).forEach(procedure => {
       const clinicPayment = parseFloat(procedure.clinic_payment_cordobas) || 0;
       totalClinicIncome += clinicPayment;
       
@@ -243,7 +150,7 @@ const DailyClosing = {
     const expenseDetails = [];
     const expenseIds = [];
     
-    variableExpenses.forEach(expense => {
+    (expenses || []).forEach(expense => {
       let amount = 0;
       if (expense.currency_used === 'USD') {
         const usdAmount = parseFloat(expense.amount_usd) || 0;
@@ -264,7 +171,8 @@ const DailyClosing = {
         amount_usd_original: expense.amount_usd,
         currency_used: expense.currency_used,
         category: expense.category,
-        exchange_rate_used: expense.exchange_rate_bill || exchangeRate
+        exchange_rate_used: expense.exchange_rate_bill || exchangeRate,
+        is_processed_in_closing: expense.is_processed_in_closing || false
       });
     });
     
@@ -278,12 +186,11 @@ const DailyClosing = {
       ortodoncia_doctora: totalOrthoDoctorIncome,
       gastos_totales: totalExpenses,
       utilidad_neta: netProfit,
-      cantidad_gastos: variableExpenses.length,
-      expenseIds: expenseIds
+      cantidad_gastos: expenses?.length || 0
     });
     
     const result = {
-      procedures: allProcedures,
+      procedures: procedures || [],
       total_income: totalClinicIncome,
       total_general_income: totalGeneralIncome,
       total_ortho_clinic_income: totalOrthoClinicIncome,
@@ -293,8 +200,8 @@ const DailyClosing = {
       net_profit: netProfit,
       exchange_rate: exchangeRate,
       fecha_nicaragua: date,
-      cantidad_procedimientos: allProcedures.length,
-      cantidad_gastos_variables: variableExpenses.length,
+      cantidad_procedimientos: procedures?.length || 0,
+      cantidad_gastos_variables: expenses?.length || 0,
       expense_ids: expenseIds,
       expense_details: expenseDetails
     };
@@ -309,7 +216,7 @@ const DailyClosing = {
     console.log('🔍 [VERSIÓN PARA CIERRES] Obteniendo resumen diario para cierre:', { date, closingType });
     
     // Para cierres, necesitamos filtrar por tipo
-    let query = supabaseAdmin
+    const { data: procedures, error: procError } = await supabaseAdmin
       .from('procedures')
       .select(`
         *,
@@ -318,17 +225,27 @@ const DailyClosing = {
       .eq('procedure_date::date', date)
       .eq('is_orthodontics', closingType === 'orthodontics');
     
-    const { data: procedures, error: procError } = await query;
-    
     if (procError) {
       console.error('❌ Error obteniendo procedimientos para cierre:', procError);
       throw procError;
     }
     
-    const variableExpenses = await this.getDailyVariableExpensesForClosing(date);
+    // Para cierres, SOLO gastos NO procesados
+    const { data: expenses, error: expError } = await supabaseAdmin
+      .from('bills')
+      .select('*')
+      .eq('is_recurrent', false)
+      .eq('is_processed_in_closing', false)
+      .is('processed_in_daily_closing_ID', null)
+      .eq('bill_date', date);
     
-    console.log('📊 Procedimientos encontrados para cierre:', procedures.length);
-    console.log('💰 Gastos variables NO procesados encontrados:', variableExpenses.length);
+    if (expError) {
+      console.error('❌ Error obteniendo gastos para cierre:', expError);
+      throw expError;
+    }
+    
+    console.log('📊 Procedimientos encontrados para cierre:', procedures?.length || 0);
+    console.log('💰 Gastos variables NO procesados encontrados:', expenses?.length || 0);
     
     const settings = await this.getSystemSettings();
     const exchangeRate = settings.exchange_rate || 36.5;
@@ -342,7 +259,7 @@ const DailyClosing = {
     
     const procedureClosings = [];
     
-    procedures.forEach(procedure => {
+    (procedures || []).forEach(procedure => {
       const clinicCordobas = parseFloat(procedure.clinic_payment_cordobas) || 0;
       const clinicDollars = parseFloat(procedure.clinic_payment_dollars) || 0;
       totalClinicIncomeCordobas += clinicCordobas;
@@ -375,7 +292,7 @@ const DailyClosing = {
     const expenseDetails = [];
     const expenseIds = [];
     
-    variableExpenses.forEach(expense => {
+    (expenses || []).forEach(expense => {
       let amountCordobas = 0;
       let amountDollars = 0;
       
@@ -416,7 +333,7 @@ const DailyClosing = {
     }
     
     const result = {
-      procedures,
+      procedures: procedures || [],
       procedureClosings,
       variableExpenses: expenseDetails,
       total_income: totalIncome,
@@ -433,8 +350,8 @@ const DailyClosing = {
       net_profit_usd: netProfit / exchangeRate,
       exchange_rate: exchangeRate,
       fecha_nicaragua: date,
-      cantidad_procedimientos: procedures.length,
-      cantidad_gastos_variables: variableExpenses.length,
+      cantidad_procedimientos: procedures?.length || 0,
+      cantidad_gastos_variables: expenses?.length || 0,
       expense_ids: expenseIds
     };
     
@@ -452,18 +369,8 @@ const DailyClosing = {
   async create(closingData) {
     console.log('🔍 create - Datos recibidos:', closingData);
     
-    let closingDate;
-    if (closingData.closing_date && closingData.closing_date.trim() !== '') {
-      closingDate = closingData.closing_date; // Ya viene en formato YYYY-MM-DD
-    } else if (closingData.date && closingData.date.trim() !== '') {
-      closingDate = closingData.date;
-    } else {
-      const today = new Date();
-      closingDate = today.toISOString().split('T')[0];
-    }
-    
     const closingWithFormattedDate = {
-      closing_date: closingDate,
+      closing_date: closingData.closing_date,
       closing_type: closingData.closing_type,
       total_income: closingData.total_income || 0,
       total_clinic_income: closingData.total_clinic_income || 0,
@@ -567,6 +474,33 @@ const DailyClosing = {
     return !!data;
   },
 
+  // Marcar gastos variables como procesados
+  async markVariableExpensesAsProcessed(expenseIds, dailyClosingId) {
+    if (!expenseIds || expenseIds.length === 0) return [];
+    
+    console.log('📝 Marcando gastos variables como procesados:', {
+      expenseIds,
+      dailyClosingId
+    });
+    
+    const { data, error } = await supabaseAdmin
+      .from('bills')
+      .update({ 
+        is_processed_in_closing: true,
+        processed_in_daily_closing_ID: dailyClosingId
+      })
+      .in('bill_ID', expenseIds)
+      .select();
+    
+    if (error) {
+      console.error('❌ Error marcando gastos variables:', error);
+      throw error;
+    }
+    
+    console.log(`✅ ${data?.length || 0} gastos variables marcados como procesados`);
+    return data || [];
+  },
+
   // Obtener configuración del sistema
   async getSystemSettings() {
     const { data, error } = await supabaseAdmin
@@ -595,16 +529,12 @@ const DailyClosing = {
       return [];
     }
     
-    console.log('🔍 createProcedureRelations - Datos recibidos:', procedureClosings);
-    
     const validProcedureClosings = procedureClosings.map(pc => {
       if (!pc.procedure_id) {
-        console.error('❌ Falta procedure_id en:', pc);
         throw new Error('procedure_id es requerido');
       }
       
       if (!pc.daily_closing_id) {
-        console.error('❌ Falta daily_closing_id en:', pc);
         throw new Error('daily_closing_id es requerido');
       }
       
@@ -617,98 +547,19 @@ const DailyClosing = {
       };
     });
     
-    console.log('📤 Insertando en procedure_daily_closings:', validProcedureClosings);
-    
     try {
       const { data, error } = await supabaseAdmin
         .from('procedure_daily_closings')
         .insert(validProcedureClosings)
         .select();
       
-      if (error) {
-        console.error('❌ Error Supabase al insertar relaciones:', error);
-        throw error;
-      }
+      if (error) throw error;
       
-      console.log('✅ Relaciones creadas exitosamente:', data.length, 'registros');
       return data;
     } catch (error) {
-      console.error('❌ Error completo en createProcedureRelations:', error);
+      console.error('❌ Error en createProcedureRelations:', error);
       throw error;
     }
-  },
-
-  // Obtener estadísticas por rango de fechas
-  async getStatsByDateRange(startDate, endDate, closingType = 'general') {
-    const { data, error } = await supabaseAdmin
-      .from('daily_closings')
-      .select('*')
-      .eq('closing_type', closingType)
-      .gte('closing_date', startDate)
-      .lte('closing_date', endDate)
-      .order('closing_date', { ascending: true });
-    
-    if (error) throw error;
-    
-    const settings = await this.getSystemSettings();
-    const exchangeRate = settings?.exchange_rate || 36.5;
-    
-    const stats = {
-      total_closings: data.length,
-      total_income: 0,
-      total_income_usd: 0,
-      total_clinic_income: 0,
-      total_clinic_income_usd: 0,
-      total_doctor_income: 0,
-      total_doctor_income_usd: 0,
-      total_variable_expenses: 0,
-      total_variable_expenses_usd: 0,
-      total_net_profit: 0,
-      total_net_profit_usd: 0,
-      average_daily_profit: 0
-    };
-    
-    if (data.length > 0) {
-      data.forEach(closing => {
-        stats.total_income += closing.total_income || 0;
-        stats.total_clinic_income += closing.total_clinic_income || 0;
-        stats.total_doctor_income += closing.total_doctor_income || 0;
-        stats.total_variable_expenses += closing.total_variable_expenses || 0;
-        stats.total_net_profit += closing.net_profit || 0;
-      });
-      
-      stats.total_income_usd = stats.total_income / exchangeRate;
-      stats.total_clinic_income_usd = stats.total_clinic_income / exchangeRate;
-      stats.total_doctor_income_usd = stats.total_doctor_income / exchangeRate;
-      stats.total_variable_expenses_usd = stats.total_variable_expenses / exchangeRate;
-      stats.total_net_profit_usd = stats.total_net_profit / exchangeRate;
-      stats.average_daily_profit = stats.total_net_profit / data.length;
-    }
-    
-    return {
-      data: data.map(closing => ({
-        ...closing,
-        closing_date_display: formatNicaraguaDate(closing.closing_date),
-        total_income_usd: (closing.total_income || 0) / exchangeRate,
-        total_clinic_income_usd: (closing.total_clinic_income || 0) / exchangeRate,
-        total_doctor_income_usd: (closing.total_doctor_income || 0) / exchangeRate,
-        total_variable_expenses_usd: (closing.total_variable_expenses || 0) / exchangeRate,
-        net_profit_usd: (closing.net_profit || 0) / exchangeRate
-      })),
-      stats
-    };
-  },
-
-  // Obtener gastos del día (solo para referencia)
-  async getDailyBills(date) {
-    const { data, error } = await supabaseAdmin
-      .from('bills')
-      .select('*')
-      .eq('bill_date', date)
-      .eq('is_processed_in_closing', false);
-    
-    if (error) throw error;
-    return data || [];
   }
 };
 

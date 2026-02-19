@@ -104,7 +104,7 @@ const LiveResultsPage = () => {
   
   // Estados para datos diarios
   const [dailyData, setDailyData] = useState({
-    date: new Date().toISOString().split('T')[0],
+    date: '',
     total_income: 0,
     total_expenses: 0,
     net_profit: 0,
@@ -131,6 +131,65 @@ const LiveResultsPage = () => {
     expenses: false
   });
 
+  // ============================================
+  // FUNCIONES AUXILIARES DE FECHA
+  // ============================================
+  
+  // Función para obtener la fecha actual en Nicaragua (YYYY-MM-DD)
+  const getCurrentNicaraguaDate = () => {
+    const now = new Date();
+    // Ajustar a zona horaria de Nicaragua (GMT-6)
+    const nicaraguaOffset = -6 * 60; // -6 horas en minutos
+    const localOffset = now.getTimezoneOffset(); // offset local en minutos
+    const totalOffset = nicaraguaOffset - localOffset;
+    
+    const nicaraguaTime = new Date(now.getTime() + (totalOffset * 60 * 1000));
+    
+    const year = nicaraguaTime.getFullYear();
+    const month = String(nicaraguaTime.getMonth() + 1).padStart(2, '0');
+    const day = String(nicaraguaTime.getDate()).padStart(2, '0');
+    
+    console.log('📅 Fecha Nicaragua calculada:', {
+      utc: now.toISOString(),
+      nicaragua: `${year}-${month}-${day}`,
+      hora_nicaragua: nicaraguaTime.getHours()
+    });
+    
+    return `${year}-${month}-${day}`;
+  };
+
+  // Obtener fechas del mes actual en Nicaragua
+  const getCurrentMonthDates = useCallback(() => {
+    const now = new Date();
+    
+    // Ajustar a zona horaria de Nicaragua (GMT-6)
+    const nicaraguaOffset = -6 * 60;
+    const localOffset = now.getTimezoneOffset();
+    const totalOffset = nicaraguaOffset - localOffset;
+    const nicaraguaTime = new Date(now.getTime() + (totalOffset * 60 * 1000));
+    
+    const year = nicaraguaTime.getFullYear();
+    const month = nicaraguaTime.getMonth();
+    
+    // Primer día del mes actual en Nicaragua
+    const firstDay = new Date(year, month, 1);
+    // Último día del mes actual en Nicaragua
+    const lastDay = new Date(year, month + 1, 0);
+    
+    // Formatear a YYYY-MM-DD
+    const formatDate = (date) => {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    };
+    
+    const firstDayStr = formatDate(firstDay);
+    const lastDayStr = formatDate(lastDay);
+    
+    return { start: firstDayStr, end: lastDayStr };
+  }, []);
+
   // Función para calcular total de gastos en córdobas
   const calculateTotalExpenses = (expenses, exchangeRate) => {
     if (!expenses || expenses.length === 0) return 0;
@@ -146,41 +205,23 @@ const LiveResultsPage = () => {
     }, 0);
   };
 
-  // Obtener fechas CORRECTAS del mes actual (primer y último día)
-  const getCurrentMonthDates = useCallback(() => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    
-    // Primer día del mes actual
-    const firstDay = new Date(year, month, 1);
-    // Último día del mes actual
-    const lastDay = new Date(year, month + 1, 0);
-    
-    const firstDayStr = firstDay.toISOString().split('T')[0];
-    const lastDayStr = lastDay.toISOString().split('T')[0];
-    
-    console.log('📅 Fechas del mes calculadas:', { 
-      mes: month + 1,
-      año: year,
-      inicio: firstDayStr, 
-      fin: lastDayStr 
-    });
-    
-    return { start: firstDayStr, end: lastDayStr };
-  }, []);
-
-  // Función para cargar datos (solo manualmente o al entrar)
+  // ============================================
+  // FUNCIÓN PRINCIPAL PARA CARGAR DATOS
+  // ============================================
   const fetchLiveData = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
     setError(null);
     
     try {
-      const todayStr = new Date().toISOString().split('T')[0];
+      // Usar fecha de Nicaragua
+      const todayStr = getCurrentNicaraguaDate();
       const monthDates = getCurrentMonthDates();
       const exchangeRate = systemSettings?.exchange_rate || 36.5;
 
-      console.log('🔍 Cargando datos en vivo...', { hoy: todayStr, mes: monthDates });
+      console.log('🔍 Cargando datos en vivo...', { 
+        hoy_nicaragua: todayStr, 
+        mes_nicaragua: monthDates 
+      });
 
       // ============================================
       // 1. CARGAR GASTOS VARIABLES DEL DÍA (para detalles)
@@ -211,19 +252,52 @@ const LiveResultsPage = () => {
       const dailyOrthoRes = await getDailySummary(todayStr, 'orthodontics');
       const dailyOrtho = dailyOrthoRes.success ? dailyOrthoRes.data : null;
 
-      // Ingresos de procedimientos (solo ganancia de la clínica)
-      const dailyIncomeFromProcedures = (dailyGeneral?.total_clinic_income || 0) + (dailyOrtho?.total_clinic_income || 0);
-      
-      // Gastos de procedimientos (si los reporta getDailySummary)
-      const dailyExpensesFromProcedures = (dailyGeneral?.total_variable_expenses || 0) + (dailyOrtho?.total_variable_expenses || 0);
-      
-      // TOTAL GASTOS DEL DÍA = Gastos de procedimientos + Gastos de tabla bills
-      const totalDailyExpenses = dailyExpensesFromProcedures + dailyExpensesTotal;
-      
-      console.log('💰 Desglose gastos del día:', {
-        desdeProcedimientos: dailyExpensesFromProcedures,
-        desdeBills: dailyExpensesTotal,
-        total: totalDailyExpenses
+      // Calcular ingresos totales
+      let dailyIncomeFromProcedures = 0;
+      let incomeGeneral = 0;
+      let incomeOrtho = 0;
+
+      if (dailyGeneral && dailyGeneral.total_clinic_income) {
+        incomeGeneral = dailyGeneral.total_clinic_income;
+        dailyIncomeFromProcedures += incomeGeneral;
+      }
+
+      if (dailyOrtho && dailyOrtho.total_clinic_income) {
+        incomeOrtho = dailyOrtho.total_clinic_income;
+        dailyIncomeFromProcedures += incomeOrtho;
+      }
+
+      // Calcular gastos totales (solo de bills, vía el backend)
+      let dailyExpensesFromSummary = 0;
+      let expensesGeneral = 0;
+      let expensesOrtho = 0;
+
+      if (dailyGeneral && dailyGeneral.total_variable_expenses) {
+        expensesGeneral = dailyGeneral.total_variable_expenses;
+        dailyExpensesFromSummary += expensesGeneral;
+      }
+
+      if (dailyOrtho && dailyOrtho.total_variable_expenses) {
+        expensesOrtho = dailyOrtho.total_variable_expenses;
+        dailyExpensesFromSummary += expensesOrtho;
+      }
+
+      // Total gastos del día (NO duplicar)
+      const totalDailyExpenses = dailyExpensesFromSummary;
+
+      console.log('💰💰💰 DESGLOSE DETALLADO:', {
+        ingresos: {
+          general: incomeGeneral,
+          ortodoncia: incomeOrtho,
+          total: dailyIncomeFromProcedures
+        },
+        gastos: {
+          general: expensesGeneral,
+          ortodoncia: expensesOrtho,
+          total: totalDailyExpenses,
+          desdeBills: dailyExpensesTotal
+        },
+        utilidad_neta: dailyIncomeFromProcedures - totalDailyExpenses
       });
       
       setDailyData({
@@ -248,14 +322,6 @@ const LiveResultsPage = () => {
         const monthlyFixedExpenses = monthly.total_fixed_expenses || 0;
         const monthlyVariableExpenses = monthly.total_variable_expenses || 0;
         const monthlyTotalExpenses = monthlyFixedExpenses + monthlyVariableExpenses;
-        
-        console.log('💰 Datos mensuales recibidos:', {
-          ingresos: monthlyTotalIncome,
-          fijos: monthlyFixedExpenses,
-          variables: monthlyVariableExpenses,
-          total_gastos: monthlyTotalExpenses,
-          utilidad: monthlyTotalIncome - monthlyTotalExpenses
-        });
         
         setMonthlyData({
           startDate: monthDates.start,
@@ -285,14 +351,6 @@ const LiveResultsPage = () => {
         const monthlyVariableExpenses = monthlyGeneral?.total_variable_expenses || monthlyOrtho?.total_variable_expenses || 0;
         const monthlyTotalExpenses = monthlyFixedExpenses + monthlyVariableExpenses;
         
-        console.log('💰 Datos mensuales por separado:', {
-          ingresos: monthlyTotalIncome,
-          fijos: monthlyFixedExpenses,
-          variables: monthlyVariableExpenses,
-          total_gastos: monthlyTotalExpenses,
-          utilidad: monthlyTotalIncome - monthlyTotalExpenses
-        });
-        
         setMonthlyData({
           startDate: monthDates.start,
           endDate: monthDates.end,
@@ -315,12 +373,12 @@ const LiveResultsPage = () => {
     }
   }, [getDailySummary, getFinancialSummary, apiFetch, getCurrentMonthDates, systemSettings]);
 
-  // Solo se ejecuta al montar el componente (cuando el usuario entra a la página)
+  // Solo se ejecuta al montar el componente
   useEffect(() => {
     if (user) {
       fetchLiveData(true);
     }
-  }, [user]); // Solo depende de user
+  }, [user]);
 
   // Función para manejar actualización manual
   const handleManualRefresh = () => {
@@ -347,13 +405,6 @@ const LiveResultsPage = () => {
       ...prev,
       expenses: !prev.expenses
     }));
-  };
-
-  // Función para determinar color de utilidad
-  const getProfitColor = (profit) => {
-    if (profit > 0) return '#4CAF50';
-    if (profit < 0) return '#F44336';
-    return '#FF9800';
   };
 
   if (loading && !dailyData.hasData && !monthlyData.hasData) {
@@ -408,11 +459,11 @@ const LiveResultsPage = () => {
         <div className="section-header">
           <h3>
             <FontAwesomeIcon icon={faCalendarDay} />
-            Resultados del Día ({new Date(dailyData.date).toLocaleDateString('es-NI', { 
+            Resultados del Día ({dailyData.date ? new Date(dailyData.date + 'T12:00:00').toLocaleDateString('es-NI', { 
               day: 'numeric', 
               month: 'long', 
               year: 'numeric' 
-            })})
+            }) : 'Cargando...'})
           </h3>
           {dailyData.expenses.length > 0 && (
             <div className="section-badge">
@@ -437,6 +488,24 @@ const LiveResultsPage = () => {
           <div className="profit-value-large">
             <DualCurrency amountNIO={dailyData.net_profit} />
           </div>
+          
+          {/* Depurador visual - puedes eliminarlo después */}
+          <div style={{
+            background: '#f0f0f0',
+            padding: '10px',
+            borderRadius: '5px',
+            marginTop: '10px',
+            fontSize: '12px',
+            fontFamily: 'monospace',
+            textAlign: 'left'
+          }}>
+            <div>📊 DEPURACIÓN:</div>
+            <div>Ingresos: C${dailyData.total_income.toFixed(2)}</div>
+            <div>Gastos: C${dailyData.total_expenses.toFixed(2)}</div>
+            <div>Utilidad: C${dailyData.net_profit.toFixed(2)}</div>
+            <div>Fecha: {dailyData.date}</div>
+          </div>
+          
           {dailyData.total_income > 0 && (
             <div className="profit-margin">
               Margen: {((dailyData.net_profit / dailyData.total_income) * 100).toFixed(2)}%
@@ -477,7 +546,7 @@ const LiveResultsPage = () => {
                   <DualCurrency amountNIO={dailyData.total_expenses} />
                 </div>
                 <div className="detail-description">
-                  Gastos del día (procedimientos + facturas)
+                  Gastos del día (solo de tabla bills)
                 </div>
               </div>
             </div>
@@ -519,7 +588,7 @@ const LiveResultsPage = () => {
             Resultados del Mes 
             {monthlyData.startDate && monthlyData.endDate && (
               <span className="date-range">
-                ({new Date(monthlyData.startDate).toLocaleDateString('es-NI', { day: 'numeric', month: 'long' })} - {new Date(monthlyData.endDate).toLocaleDateString('es-NI')})
+                ({new Date(monthlyData.startDate + 'T12:00:00').toLocaleDateString('es-NI', { day: 'numeric', month: 'long' })} - {new Date(monthlyData.endDate + 'T12:00:00').toLocaleDateString('es-NI')})
               </span>
             )}
           </h3>
@@ -621,7 +690,7 @@ const LiveResultsPage = () => {
           </p>
           <ul>
             <li><strong>Ingresos Totales:</strong> Solo la ganancia de la clínica (NO incluye pago a doctora de ortodoncia ni a doctores externos)</li>
-            <li><strong>Gastos Variables:</strong> Gastos ocasionales registrados en el sistema</li>
+            <li><strong>Gastos Variables:</strong> Gastos ocasionales registrados en la tabla bills</li>
             <li><strong>Gastos Fijos:</strong> Solo aplican en resultados mensuales</li>
             <li><strong>Utilidad Neta:</strong> Ingresos - Gastos (lo que realmente gana la clínica)</li>
           </ul>

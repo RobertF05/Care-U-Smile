@@ -94,90 +94,78 @@ const DailyClosing = {
   // FUNCIONES PARA PROCEDIMIENTOS
   // ============================================
 
-  // Obtener procedimientos del día
-  async getDailyProcedures(date, closingType = 'general') {
-    console.log('🔍 getDailyProcedures - Iniciando búsqueda:', {
-      fechaRecibida: date,
-      tipo: closingType
-    });
+  // Obtener procedimientos del día (VERSIÓN CORREGIDA)
+async getDailyProcedures(date, closingType = 'general') {
+  console.log('🔍 getDailyProcedures - Iniciando búsqueda:', {
+    fechaRecibida: date,
+    tipo: closingType
+  });
 
-    const startDate = new Date(date + 'T00:00:00-06:00');
-    const endDate = new Date(date + 'T23:59:59.999-06:00');
-    
-    const startUTC = startDate.toISOString();
-    const endUTC = endDate.toISOString();
-    
-    console.log('🔍 Rango de tiempo calculado:', {
-      fechaNicaragua: date,
-      inicioUTC: startUTC,
-      finUTC: endUTC,
-      tipo: closingType
-    });
-    
-    let query = supabaseAdmin
-      .from('procedures')
-      .select(`
-        *,
-        patients (first_name, first_last_name)
-      `)
-      .eq('is_orthodontics', closingType === 'orthodontics')
-      .gte('procedure_date', startUTC)
-      .lte('procedure_date', endUTC);
-    
-    const { data, error } = await query;
-    
-    if (error) {
-      console.error('❌ Error obteniendo procedimientos:', error);
-      throw error;
-    }
-    
-    console.log(`✅ Encontrados ${data.length} procedimientos para el día ${date}`);
-    
-    const formattedData = data.map(procedure => ({
-      ...procedure,
-      procedure_date_display: formatNicaraguaDateTime(procedure.procedure_date),
-      procedure_date_utc: procedure.procedure_date
-    }));
-    
-    return formattedData;
-  },
+  // IMPORTANTE: La fecha en la BD está en timestamp sin zona horaria
+  // Pero se guardó en hora de Nicaragua. Para buscarla correctamente:
+  
+  // 1. La fecha que recibimos es YYYY-MM-DD en hora Nicaragua
+  // 2. En la BD, procedure_date está guardada como timestamp sin zona
+  // 3. Pero representa la hora de Nicaragua
+  
+  // En lugar de convertir a UTC, buscamos directamente por rango de fechas
+  // usando la fecha que ya tenemos en formato Nicaragua
+  
+  const startOfDay = `${date} 00:00:00`;
+  const endOfDay = `${date} 23:59:59`;
+  
+  console.log('🔍 Rango de tiempo calculado:', {
+    fechaNicaragua: date,
+    inicio: startOfDay,
+    fin: endOfDay
+  });
+  
+  // Usar la fecha directamente sin conversión UTC
+  let query = supabaseAdmin
+    .from('procedures')
+    .select(`
+      *,
+      patients (first_name, first_last_name)
+    `)
+    .eq('is_orthodontics', closingType === 'orthodontics')
+    .gte('procedure_date', startOfDay)
+    .lte('procedure_date', endOfDay);
+  
+  const { data, error } = await query;
+  
+  if (error) {
+    console.error('❌ Error obteniendo procedimientos:', error);
+    throw error;
+  }
+  
+  console.log(`✅ Encontrados ${data.length} procedimientos para el día ${date}`);
+  
+  // Ya no necesitamos formatear la fecha UTC porque no hicimos conversión
+  return data || [];
+},
 
   // ============================================
   // FUNCIONES PARA GASTOS VARIABLES
   // ============================================
 
-  // 🔴 FUNCIÓN ORIGINAL: Gastos NO procesados (para resultados en vivo)
-async getDailyVariableExpenses(date) {
-  console.log('🔍 [ORIGINAL] Obteniendo gastos variables NO procesados para el día:', date);
+  async getDailyVariableExpenses(date) {
+  console.log('🔍 Buscando gastos para fecha:', date);
   
-  const queryDate = date;
-  
-  // Usar los campos correctos de la base de datos
   const { data, error } = await supabaseAdmin
     .from('bills')
-    .select(`
-      bill_ID,
-      description,
-      amount,
-      amount_usd,
-      bill_date,
-      category,
-      currency_used,
-      exchange_rate_bill,
-      is_processed_in_closing,
-      processed_in_daily_closing_ID
-    `)
+    .select('*')
     .eq('is_recurrent', false)
-    .eq('is_processed_in_closing', false)  // ← CAMPO CORRECTO
-    .is('processed_in_daily_closing_ID', null)  // ← También verificar que no tenga daily ID
-    .eq('bill_date', queryDate);
+    .eq('is_processed_in_closing', false)
+    .is('processed_in_daily_closing_ID', null)
+    .eq('bill_date', date);
   
-  if (error) {
-    console.error('❌ Error obteniendo gastos variables:', error);
-    throw error;
-  }
+  console.log('📊 Resultado de búsqueda:', {
+    fecha: date,
+    encontrados: data?.length || 0,
+    gastos: data?.map(g => ({ id: g.bill_ID, monto: g.amount, moneda: g.currency_used }))
+  });
   
-  console.log(`✅ Encontrados ${data?.length || 0} gastos variables NO procesados`);
+  if (error) throw error;
   return data || [];
 },
 
@@ -248,137 +236,146 @@ async markVariableExpensesAsProcessed(expenseIds, dailyClosingId) {
   return data || [];
 },
 
-  // ============================================
-  // FUNCIONES DE RESUMEN FINANCIERO
-  // ============================================
-
-  // 🔴 FUNCIÓN ORIGINAL: Para resultados en vivo (usa gastos NO procesados)
-  async getDailyFinancialSummary(date, closingType = 'general') {
-    console.log('🔍 [VERSIÓN ORIGINAL - RESULTADOS EN VIVO] Obteniendo resumen diario para:', { date, closingType });
+  // 🔴 FUNCIÓN ORIGINAL CORREGIDA - Para resultados en vivo
+async getDailyFinancialSummary(date, closingType = 'general') {
+  console.log('🔍 [VERSIÓN ORIGINAL - RESULTADOS EN VIVO] Obteniendo resumen diario para:', { date, closingType });
+  
+  // 1. Obtener procedimientos del día (SEGÚN EL TIPO)
+  const procedures = await this.getDailyProcedures(date, closingType);
+  
+  // 2. Obtener gastos variables NO procesados del día (SIEMPRE LOS MISMOS, SIN IMPORTAR EL TIPO)
+  const variableExpenses = await this.getDailyVariableExpenses(date);
+  
+  console.log('📊 Procedimientos encontrados:', procedures.length);
+  console.log('💰 Gastos variables NO procesados encontrados:', variableExpenses.length);
+  
+  const settings = await this.getSystemSettings();
+  const exchangeRate = settings.exchange_rate || 36.5;
+  
+  // Variables para ingresos (SOLO del tipo solicitado)
+  let totalClinicIncomeCordobas = 0;
+  let totalClinicIncomeDollars = 0;
+  let totalDoctorIncomeCordobas = 0;
+  let totalDoctorIncomeDollars = 0;
+  let totalExternalDoctorPaymentsCordobas = 0;
+  let totalExternalDoctorPaymentsDollars = 0;
+  
+  const procedureClosings = [];
+  
+  // Calcular ingresos desde procedimientos (SOLO del tipo solicitado)
+  procedures.forEach(procedure => {
+    const clinicCordobas = parseFloat(procedure.clinic_payment_cordobas) || 0;
+    const clinicDollars = parseFloat(procedure.clinic_payment_dollars) || 0;
+    totalClinicIncomeCordobas += clinicCordobas;
+    totalClinicIncomeDollars += clinicDollars;
     
-    const procedures = await this.getDailyProcedures(date, closingType);
-    const variableExpenses = await this.getDailyVariableExpenses(date);
+    const doctorCordobas = parseFloat(procedure.doctor_payment_cordobas) || 0;
+    const doctorDollars = parseFloat(procedure.doctor_payment_dollars) || 0;
+    totalDoctorIncomeCordobas += doctorCordobas;
+    totalDoctorIncomeDollars += doctorDollars;
     
-    console.log('📊 Procedimientos encontrados:', procedures.length);
-    console.log('💰 Gastos variables NO procesados encontrados:', variableExpenses.length);
-    
-    const settings = await this.getSystemSettings();
-    const exchangeRate = settings.exchange_rate || 36.5;
-    
-    let totalClinicIncomeCordobas = 0;
-    let totalClinicIncomeDollars = 0;
-    let totalDoctorIncomeCordobas = 0;
-    let totalDoctorIncomeDollars = 0;
-    let totalExternalDoctorPaymentsCordobas = 0;
-    let totalExternalDoctorPaymentsDollars = 0;
-    
-    const procedureClosings = [];
-    
-    procedures.forEach(procedure => {
-      const clinicCordobas = parseFloat(procedure.clinic_payment_cordobas) || 0;
-      const clinicDollars = parseFloat(procedure.clinic_payment_dollars) || 0;
-      totalClinicIncomeCordobas += clinicCordobas;
-      totalClinicIncomeDollars += clinicDollars;
+    if (procedure.external_doctor_payment && procedure.external_doctor_payment > 0) {
+      const externalPaymentCordobas = parseFloat(procedure.external_doctor_payment) || 0;
+      const procExchangeRate = parseFloat(procedure.exchange_rate_used) || exchangeRate;
+      const externalPaymentDollars = externalPaymentCordobas / procExchangeRate;
       
-      const doctorCordobas = parseFloat(procedure.doctor_payment_cordobas) || 0;
-      const doctorDollars = parseFloat(procedure.doctor_payment_dollars) || 0;
-      totalDoctorIncomeCordobas += doctorCordobas;
-      totalDoctorIncomeDollars += doctorDollars;
-      
-      if (procedure.external_doctor_payment && procedure.external_doctor_payment > 0) {
-        const externalPaymentCordobas = parseFloat(procedure.external_doctor_payment) || 0;
-        const procExchangeRate = parseFloat(procedure.exchange_rate_used) || exchangeRate;
-        const externalPaymentDollars = externalPaymentCordobas / procExchangeRate;
-        
-        totalExternalDoctorPaymentsCordobas += externalPaymentCordobas;
-        totalExternalDoctorPaymentsDollars += externalPaymentDollars;
-      }
-      
-      procedureClosings.push({
-        procedure_id: procedure.procedure_ID,
-        clinic_income_portion: clinicCordobas,
-        doctor_income_portion: doctorCordobas,
-        external_doctor_payment: parseFloat(procedure.external_doctor_payment) || 0
-      });
-    });
-    
-    let totalVariableExpensesCordobas = 0;
-    let totalVariableExpensesDollars = 0;
-    const expenseDetails = [];
-    const expenseIds = [];
-    
-    variableExpenses.forEach(expense => {
-      let amountCordobas = 0;
-      let amountDollars = 0;
-      
-      if (expense.currency_used === 'USD') {
-        const usdAmount = parseFloat(expense.amount_usd) || 0;
-        const expenseExchangeRate = parseFloat(expense.exchange_rate_bill) || exchangeRate;
-        amountCordobas = usdAmount * expenseExchangeRate;
-        amountDollars = usdAmount;
-      } else {
-        amountCordobas = parseFloat(expense.amount) || 0;
-        amountDollars = amountCordobas / exchangeRate;
-      }
-      
-      totalVariableExpensesCordobas += amountCordobas;
-      totalVariableExpensesDollars += amountDollars;
-      
-      expenseIds.push(expense.bill_ID);
-      
-      expenseDetails.push({
-        bill_id: expense.bill_ID,
-        description: expense.description,
-        amount: amountCordobas,
-        amount_usd: amountDollars,
-        category: expense.category,
-        exchange_rate: expense.exchange_rate_bill || exchangeRate
-      });
-    });
-    
-    let totalIncome = 0;
-    let netProfit = 0;
-    
-    if (closingType === 'orthodontics') {
-      totalIncome = totalClinicIncomeCordobas + totalDoctorIncomeCordobas;
-      netProfit = totalClinicIncomeCordobas - totalVariableExpensesCordobas;
-    } else {
-      totalIncome = totalClinicIncomeCordobas;
-      netProfit = totalClinicIncomeCordobas - totalVariableExpensesCordobas;
+      totalExternalDoctorPaymentsCordobas += externalPaymentCordobas;
+      totalExternalDoctorPaymentsDollars += externalPaymentDollars;
     }
     
-    const result = {
-      procedures,
-      procedureClosings,
-      variableExpenses: expenseDetails,
-      total_income: totalIncome,
-      total_income_usd: totalIncome / exchangeRate,
-      total_clinic_income: totalClinicIncomeCordobas,
-      total_clinic_income_usd: totalClinicIncomeDollars,
-      total_doctor_income: totalDoctorIncomeCordobas,
-      total_doctor_income_usd: totalDoctorIncomeDollars,
-      total_external_doctor_payments: totalExternalDoctorPaymentsCordobas,
-      total_external_doctor_payments_usd: totalExternalDoctorPaymentsDollars,
-      total_variable_expenses: totalVariableExpensesCordobas,
-      total_variable_expenses_usd: totalVariableExpensesDollars,
-      net_profit: netProfit,
-      net_profit_usd: netProfit / exchangeRate,
-      exchange_rate: exchangeRate,
-      fecha_nicaragua: date,
-      cantidad_procedimientos: procedures.length,
-      cantidad_gastos_variables: variableExpenses.length,
-      expense_ids: expenseIds
-    };
-    
-    console.log('📋 [ORIGINAL] Resumen diario:', {
-      total_clinic_income: result.total_clinic_income,
-      total_variable_expenses: result.total_variable_expenses,
-      net_profit: result.net_profit,
-      cantidad_gastos: result.cantidad_gastos_variables
+    procedureClosings.push({
+      procedure_id: procedure.procedure_ID,
+      clinic_income_portion: clinicCordobas,
+      doctor_income_portion: doctorCordobas,
+      external_doctor_payment: parseFloat(procedure.external_doctor_payment) || 0
     });
+  });
+  
+  // CALCULAR GASTOS DESDE BILLS (SIEMPRE LOS MISMOS, SIN IMPORTAR EL TIPO)
+  let totalVariableExpensesCordobas = 0;
+  let totalVariableExpensesDollars = 0;
+  const expenseDetails = [];
+  const expenseIds = [];
+  
+  variableExpenses.forEach(expense => {
+    let amountCordobas = 0;
+    let amountDollars = 0;
     
-    return result;
-  },
+    if (expense.currency_used === 'USD') {
+      const usdAmount = parseFloat(expense.amount_usd) || 0;
+      const expenseExchangeRate = parseFloat(expense.exchange_rate_bill) || exchangeRate;
+      amountCordobas = usdAmount * expenseExchangeRate;
+      amountDollars = usdAmount;
+    } else {
+      amountCordobas = parseFloat(expense.amount) || 0;
+      amountDollars = amountCordobas / exchangeRate;
+    }
+    
+    totalVariableExpensesCordobas += amountCordobas;
+    totalVariableExpensesDollars += amountDollars;
+    
+    expenseIds.push(expense.bill_ID);
+    
+    expenseDetails.push({
+      bill_id: expense.bill_ID,
+      description: expense.description,
+      amount: amountCordobas,
+      amount_usd: amountDollars,
+      category: expense.category,
+      exchange_rate: expense.exchange_rate_bill || exchangeRate
+    });
+  });
+  
+  // Calcular totales
+  let totalIncome = 0;
+  let netProfit = 0;
+  
+  if (closingType === 'orthodontics') {
+    totalIncome = totalClinicIncomeCordobas + totalDoctorIncomeCordobas;
+    netProfit = totalClinicIncomeCordobas - totalVariableExpensesCordobas;
+  } else {
+    totalIncome = totalClinicIncomeCordobas;
+    netProfit = totalClinicIncomeCordobas - totalVariableExpensesCordobas;
+  }
+  
+  console.log('💰 CÁLCULO DE GASTOS (CORREGIDO):', {
+    cantidad_gastos: variableExpenses.length,
+    total_gastos_cordobas: totalVariableExpensesCordobas,
+    tipo_cierre: closingType,
+    nota: "Los gastos son los mismos para cualquier tipo de cierre"
+  });
+  
+  const result = {
+    procedures,
+    procedureClosings,
+    variableExpenses: expenseDetails,
+    total_income: totalIncome,
+    total_income_usd: totalIncome / exchangeRate,
+    total_clinic_income: totalClinicIncomeCordobas,
+    total_clinic_income_usd: totalClinicIncomeDollars,
+    total_doctor_income: totalDoctorIncomeCordobas,
+    total_doctor_income_usd: totalDoctorIncomeDollars,
+    total_external_doctor_payments: totalExternalDoctorPaymentsCordobas,
+    total_external_doctor_payments_usd: totalExternalDoctorPaymentsDollars,
+    total_variable_expenses: totalVariableExpensesCordobas,
+    total_variable_expenses_usd: totalVariableExpensesDollars,
+    net_profit: netProfit,
+    net_profit_usd: netProfit / exchangeRate,
+    exchange_rate: exchangeRate,
+    fecha_nicaragua: date,
+    cantidad_procedimientos: procedures.length,
+    cantidad_gastos_variables: variableExpenses.length,
+    expense_ids: expenseIds
+  };
+  
+  console.log(`📋 [RESUMEN FINAL - ${closingType}]:`, {
+    ingresos: result.total_income,
+    gastos: result.total_variable_expenses,
+    utilidad: result.net_profit
+  });
+  
+  return result;
+},
 
   // 🔴 NUEVA FUNCIÓN: Para cierres (usa TODOS los gastos)
   async getDailyClosingSummary(date, closingType = 'general') {

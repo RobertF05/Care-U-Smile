@@ -239,46 +239,41 @@ const dailyClosingController = {
     }
   },
 
-  // Obtener resumen financiero del día (VERSIÓN ORIGINAL para resultados en vivo)
-  getDailySummary: async (req, res) => {
-    try {
-      const { date, closing_type = 'general' } = req.query;
-      
-      if (!date) {
-        return res.status(400).json({ 
-          success: false, 
-          error: 'La fecha es requerida' 
-        });
-      }
-      
-      const validTypes = ['general', 'orthodontics'];
-      if (!validTypes.includes(closing_type)) {
-        return res.status(400).json({ 
-          success: false, 
-          error: `Tipo de cierre inválido. Use: ${validTypes.join(', ')}` 
-        });
-      }
-      
-      // 🔴 USAR LA FUNCIÓN ORIGINAL para resultados en vivo
-      const summary = await DailyClosing.getDailyFinancialSummary(date, closing_type);
-      
-      const exists = await DailyClosing.exists(date, closing_type);
-      
-      res.json({ 
-        success: true, 
-        data: {
-          ...summary,
-          closing_exists: exists
-        }
-      });
-    } catch (error) {
-      console.error('Error al obtener resumen diario:', error);
-      res.status(500).json({ 
+  // En dailyClosingController.js - getDailySummary
+getDailySummary: async (req, res) => {
+  try {
+    const { date, closing_type = 'general' } = req.query;
+    
+    console.log('📥 Recibida solicitud de resumen diario:', { date, closing_type });
+    
+    if (!date) {
+      return res.status(400).json({ 
         success: false, 
-        error: 'Error al obtener resumen diario' 
+        error: 'La fecha es requerida' 
       });
     }
-  },
+    
+    const summary = await DailyClosing.getDailyFinancialSummary(date, closing_type);
+    
+    console.log('📤 Enviando resumen:', {
+      fecha: date,
+      ingresos: summary.total_income,
+      gastos: summary.total_variable_expenses,
+      utilidad: summary.net_profit
+    });
+    
+    res.json({ 
+      success: true, 
+      data: summary
+    });
+  } catch (error) {
+    console.error('❌ Error en getDailySummary:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+},
 
   // Obtener estadísticas por rango de fechas
   getStatsByDateRange: async (req, res) => {

@@ -1,4 +1,3 @@
-// frontend/src/pages/MonthlyClosingsPage/MonthlyClosingsPage.jsx
 import React, { useState, useEffect, useMemo, useContext } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
@@ -217,14 +216,13 @@ const MonthlyClosingsPage = () => {
     }).format(amount || 0);
   };
 
+  // ✅ FUNCIÓN CORREGIDA - Formato de fecha (igual que en BillsPage)
   const formatDate = (dateString) => {
     if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('es-NI', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
+    // Tomar solo la parte YYYY-MM-DD
+    const datePart = dateString.split('T')[0];
+    const [year, month, day] = datePart.split('-');
+    return `${day}/${month}/${year}`;
   };
 
   // Funciones para expandir/contraer
@@ -235,11 +233,10 @@ const MonthlyClosingsPage = () => {
     }));
   };
 
-  // Función para obtener detalles de gastos variables de un cierre diario - MODIFICADO: alert -> addNotification
+  // Función para obtener detalles de gastos variables de un cierre diario
   const fetchVariableExpensesDetails = async (closing) => {
     try {
       if (closing.type !== 'daily') {
-        // 🔴 CAMBIO: alert -> addNotification
         addNotification('Esta opción solo está disponible para cierres diarios', 'warning', 5000);
         return;
       }
@@ -262,12 +259,11 @@ const MonthlyClosingsPage = () => {
       }
     } catch (error) {
       console.error('Error obteniendo detalles de gastos variables:', error);
-      // 🔴 CAMBIO: alert -> addNotification
       addNotification(`❌ Error: ${error.message}`, 'error', 5000);
     }
   };
 
-  // Función para obtener detalles de doctores externos - MODIFICADO: alert -> addNotification
+  // Función para obtener detalles de doctores externos
   const fetchExternalDoctorDetails = async (closing) => {
     try {
       let startDate, endDate;
@@ -300,12 +296,11 @@ const MonthlyClosingsPage = () => {
       }
     } catch (error) {
       console.error('Error obteniendo detalles de doctores externos:', error);
-      // 🔴 CAMBIO: alert -> addNotification
       addNotification(`❌ Error: ${error.message}`, 'error', 5000);
     }
   };
 
-  // Eliminar cierre - MODIFICADO: alert -> addNotification
+  // Eliminar cierre
   const handleDeleteClosing = async () => {
     if (!closingToDelete) return;
     
@@ -339,7 +334,6 @@ const MonthlyClosingsPage = () => {
       });
       
       if (response.success) {
-        // 🔴 CAMBIO: alert -> addNotification
         addNotification('✅ Cierre eliminado exitosamente', 'success', 5000);
         
         if (closingToDelete.type === 'monthly') {
@@ -353,7 +347,6 @@ const MonthlyClosingsPage = () => {
       
     } catch (error) {
       console.error('Error eliminando cierre:', error);
-      // 🔴 CAMBIO: alert -> addNotification
       addNotification(`❌ Error al eliminar cierre: ${error.message}`, 'error', 5000);
     } finally {
       setDeleting(false);
@@ -362,70 +355,69 @@ const MonthlyClosingsPage = () => {
     }
   };
 
-  // Combinar y filtrar todos los cierres
-const allClosings = useMemo(() => {
-  const monthly = monthlyClosings.map(closing => {
-    const clinicIncome = (closing.total_general_income || 0) + (closing.total_clinical_orthodontic_income || 0);
-    const totalExpenses = (closing.total_fixed_expenses || 0) + (closing.total_variable_expenses || 0);
-    const netProfit = clinicIncome - totalExpenses;
-    const externalDoctorPayments = closing.total_external_doctor_payments || 0;
-    
-    return {
+  // ✅ SECCIÓN CORREGIDA - Combinar y filtrar todos los cierres
+  const allClosings = useMemo(() => {
+    const monthly = monthlyClosings.map(closing => {
+      const clinicIncome = (closing.total_general_income || 0) + (closing.total_clinical_orthodontic_income || 0);
+      const totalExpenses = (closing.total_fixed_expenses || 0) + (closing.total_variable_expenses || 0);
+      const netProfit = clinicIncome - totalExpenses;
+      const externalDoctorPayments = closing.total_external_doctor_payments || 0;
+      
+      return {
+        ...closing,
+        id: closing.closing_ID || closing.id,
+        closing_id: closing.closing_ID,
+        type: 'monthly',
+        sub_type: closing.closing_type || 'all',
+        display_date: `Cierre de ${closing.month} ${closing.year}`,
+        date_exact: formatDate(closing.closing_date),
+        date_sort: `${closing.year}-${getMonthNumber(closing.month).padStart(2, '0')}-01`,
+        total_clinic_income: clinicIncome,
+        total_expenses: totalExpenses,
+        total_clinic_income_usd: clinicIncome / exchangeRate,
+        total_expenses_usd: totalExpenses / exchangeRate,
+        net_profit: netProfit,
+        net_profit_usd: netProfit / exchangeRate,
+        total_external_doctor_payments: externalDoctorPayments,
+        total_external_doctor_payments_usd: externalDoctorPayments / exchangeRate,
+        total_general_income: closing.total_general_income || 0,
+        total_clinical_orthodontic_income: closing.total_clinical_orthodontic_income || 0,
+        total_orthodontic_doctor_income: closing.total_orthodontic_doctor_income || 0,
+        total_fixed_expenses: closing.total_fixed_expenses || 0,
+        total_variable_expenses: closing.total_variable_expenses || 0,
+        has_expenses: (closing.total_variable_expenses || 0) > 0
+      };
+    });
+
+    // ✅ Cierres Diarios CORREGIDOS - Usando formatDate para todas las fechas
+    const daily = dailyClosings.map(closing => ({
       ...closing,
-      id: closing.closing_ID || closing.id,
-      closing_id: closing.closing_ID,
-      type: 'monthly',
-      sub_type: closing.closing_type || 'all',
-      display_date: `Cierre de ${closing.month} ${closing.year}`,
-      date_exact: closing.closing_date_display || formatDate(closing.closing_date),
-      date_sort: `${closing.year}-${getMonthNumber(closing.month).padStart(2, '0')}-01`,
-      total_clinic_income: clinicIncome,
-      total_expenses: totalExpenses,
-      total_clinic_income_usd: clinicIncome / exchangeRate,
-      total_expenses_usd: totalExpenses / exchangeRate,
-      net_profit: netProfit,
-      net_profit_usd: netProfit / exchangeRate,
-      total_external_doctor_payments: externalDoctorPayments,
-      total_external_doctor_payments_usd: externalDoctorPayments / exchangeRate,
-      total_general_income: closing.total_general_income || 0,
-      total_clinical_orthodontic_income: closing.total_clinical_orthodontic_income || 0,
-      total_orthodontic_doctor_income: closing.total_orthodontic_doctor_income || 0,
-      total_fixed_expenses: closing.total_fixed_expenses || 0,
+      id: closing.daily_closing_id || closing.id,
+      closing_id: closing.daily_closing_id,
+      type: 'daily',
+      sub_type: closing.closing_type || 'general',
+      display_date: `Cierre Diario - ${formatDate(closing.closing_date)}`,
+      date_exact: formatDate(closing.closing_date),
+      date_sort: closing.closing_date,
+      total_clinic_income: closing.total_clinic_income || 0,
+      total_clinic_income_usd: (closing.total_clinic_income || 0) / exchangeRate,
       total_variable_expenses: closing.total_variable_expenses || 0,
+      total_variable_expenses_usd: (closing.total_variable_expenses || 0) / exchangeRate,
+      total_expenses: closing.total_variable_expenses || 0,
+      total_expenses_usd: (closing.total_variable_expenses || 0) / exchangeRate,
+      net_profit: closing.net_profit || closing.total_clinic_income || 0,
+      net_profit_usd: (closing.net_profit || closing.total_clinic_income || 0) / exchangeRate,
+      total_income: closing.total_income || 0,
+      total_income_usd: (closing.total_income || 0) / exchangeRate,
+      total_doctor_income: closing.total_doctor_income || 0,
+      total_doctor_income_usd: (closing.total_doctor_income || 0) / exchangeRate,
+      total_external_doctor_payments: closing.total_external_doctor_payments || 0,
+      total_external_doctor_payments_usd: (closing.total_external_doctor_payments || 0) / exchangeRate,
       has_expenses: (closing.total_variable_expenses || 0) > 0
-    };
-  });
+    }));
 
-  // ✅ SECCIÓN CORREGIDA - Cierres Diarios
-  const daily = dailyClosings.map(closing => ({
-    ...closing,
-    id: closing.daily_closing_id || closing.id,
-    closing_id: closing.daily_closing_id,
-    type: 'daily',
-    sub_type: closing.closing_type || 'general',
-    // ✅ CORREGIDO: Usar closing_date_formatted que ya viene del backend con la fecha correcta de Nicaragua
-    display_date: `Cierre Diario - ${closing.closing_date_formatted || closing.closing_date}`,
-    date_exact: closing.closing_date_formatted || closing.closing_date,
-    date_sort: closing.closing_date,
-    total_clinic_income: closing.total_clinic_income || 0,
-    total_clinic_income_usd: (closing.total_clinic_income || 0) / exchangeRate,
-    total_variable_expenses: closing.total_variable_expenses || 0,
-    total_variable_expenses_usd: (closing.total_variable_expenses || 0) / exchangeRate,
-    total_expenses: closing.total_variable_expenses || 0,
-    total_expenses_usd: (closing.total_variable_expenses || 0) / exchangeRate,
-    net_profit: closing.net_profit || closing.total_clinic_income || 0,
-    net_profit_usd: (closing.net_profit || closing.total_clinic_income || 0) / exchangeRate,
-    total_income: closing.total_income || 0,
-    total_income_usd: (closing.total_income || 0) / exchangeRate,
-    total_doctor_income: closing.total_doctor_income || 0,
-    total_doctor_income_usd: (closing.total_doctor_income || 0) / exchangeRate,
-    total_external_doctor_payments: closing.total_external_doctor_payments || 0,
-    total_external_doctor_payments_usd: (closing.total_external_doctor_payments || 0) / exchangeRate,
-    has_expenses: (closing.total_variable_expenses || 0) > 0
-  }));
-
-  return [...monthly, ...daily];
-}, [monthlyClosings, dailyClosings, exchangeRate]);
+    return [...monthly, ...daily];
+  }, [monthlyClosings, dailyClosings, exchangeRate]);
 
   // Filtrar cierres combinados
   const filteredClosings = useMemo(() => {
@@ -493,7 +485,7 @@ const allClosings = useMemo(() => {
     }
   };
 
-  // Crear cierre mensual - MODIFICADO: alert -> addNotification
+  // Crear cierre mensual
   const handleCreateClosing = async (e) => {
     e.preventDefault();
     setCreating(true);
@@ -502,7 +494,6 @@ const allClosings = useMemo(() => {
       const exists = await checkMonthlyClosingExists(newClosing.month, newClosing.year, newClosing.closing_type);
       
       if (exists) {
-        // 🔴 CAMBIO: alert -> addNotification
         addNotification(`⚠️ Ya existe un cierre ${getClosingTypeLabel(newClosing.closing_type)} para ${newClosing.month} ${newClosing.year}`, 'warning', 5000);
         setCreating(false);
         return;
@@ -577,7 +568,6 @@ const allClosings = useMemo(() => {
           }
         }
         
-        // 🔴 CAMBIO: alert -> addNotification
         addNotification(message, 'success', 10000);
         
         setShowCreateModal(false);
@@ -597,14 +587,13 @@ const allClosings = useMemo(() => {
       
     } catch (error) {
       console.error('❌ Error detallado al crear cierre:', error);
-      // 🔴 CAMBIO: alert -> addNotification
       addNotification(`❌ Error: ${error.message}`, 'error', 5000);
     } finally {
       setCreating(false);
     }
   };
 
-  // Obtener resumen diario previo - MODIFICADO: alert -> addNotification
+  // Obtener resumen diario previo
   const handleGetDailySummary = async () => {
     try {
       setCreatingDaily(true);
@@ -614,12 +603,10 @@ const allClosings = useMemo(() => {
         setDailySummary(summaryResponse.data);
         
         if (summaryResponse.data.cantidad_gastos_variables > 0 && summaryResponse.data.cantidad_procedimientos === 0) {
-          // 🔴 CAMBIO: alert -> addNotification
           addNotification(`⚠️ Se encontraron ${summaryResponse.data.cantidad_gastos_variables} gastos variables por ${formatCurrencySimple(summaryResponse.data.total_variable_expenses)} pero no hay procedimientos. El cierre registrará solo los gastos.`, 'warning', 7000);
         }
         
         if (summaryResponse.data.closing_exists) {
-          // 🔴 CAMBIO: alert -> addNotification
           addNotification(`⚠️ Ya existe un cierre ${newDailyClosing.closing_type === 'orthodontics' ? 'de ortodoncia' : 'general'} para esta fecha`, 'warning', 5000);
         }
       } else {
@@ -627,14 +614,13 @@ const allClosings = useMemo(() => {
       }
     } catch (error) {
       console.error('Error al obtener resumen:', error);
-      // 🔴 CAMBIO: alert -> addNotification
       addNotification(`❌ Error: ${error.message}`, 'error', 5000);
     } finally {
       setCreatingDaily(false);
     }
   };
 
-  // Crear cierre diario - MODIFICADO: alert dentro de confirm se mantiene, pero alert de éxito se reemplaza
+  // Crear cierre diario
   const handleCreateDailyClosing = async (e) => {
     e.preventDefault();
     setCreatingDaily(true);
@@ -643,7 +629,6 @@ const allClosings = useMemo(() => {
       const existsResponse = await checkDailyClosingExists(newDailyClosing.date, newDailyClosing.closing_type);
       
       if (existsResponse.data.exists) {
-        // 🔴 CAMBIO: alert -> addNotification
         addNotification(`⚠️ Ya existe un cierre ${newDailyClosing.closing_type === 'orthodontics' ? 'de ortodoncia' : 'general'} para esta fecha`, 'warning', 5000);
         setCreatingDaily(false);
         return;
@@ -726,7 +711,6 @@ const allClosings = useMemo(() => {
           }
         }
         
-        // 🔴 CAMBIO: alert -> addNotification
         addNotification(message, 'success', 10000);
         
         setShowCreateDailyModal(false);
@@ -744,7 +728,6 @@ const allClosings = useMemo(() => {
       
     } catch (error) {
       console.error('Error al crear cierre diario:', error);
-      // 🔴 CAMBIO: alert -> addNotification
       addNotification(`❌ Error: ${error.message}`, 'error', 5000);
     } finally {
       setCreatingDaily(false);
@@ -1074,7 +1057,7 @@ const allClosings = useMemo(() => {
                       ) : (
                         <div className="closing-date">
                           <FontAwesomeIcon icon={faCalendarDay} />
-                          <span>Fecha exacta: {closing.date_exact}</span>
+                          <span>Fecha exacta: {formatDate(closing.closing_date)}</span>
                           {closing.sub_type === 'orthodontics' && (
                             <span className="ortho-tag">
                               <FontAwesomeIcon icon={faTooth} />

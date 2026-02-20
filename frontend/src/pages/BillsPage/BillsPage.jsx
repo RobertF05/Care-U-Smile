@@ -148,14 +148,14 @@ const BillsPage = () => {
   };
 
   const formatDate = (dateString) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('es-ES', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
-  };
+  if (!dateString) return '';
+
+  // Tomar solo la parte YYYY-MM-DD
+  const datePart = dateString.split('T')[0];
+  const [year, month, day] = datePart.split('-');
+
+  return `${day}/${month}/${year}`;
+};
 
   // Función para manejar cambios en moneda
   const handleCurrencyChange = (field, value, isNewBill = true) => {

@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 
 const authController = {
 
-  // 🔐 Login con JWT
+  // 🔐 LOGIN
   login: async (req, res) => {
     try {
       const { email, password } = req.body;
@@ -24,7 +24,6 @@ const authController = {
         });
       }
 
-      // 🎟 Generar token
       const token = jwt.sign(
         {
           id: user.user_ID,
@@ -37,11 +36,7 @@ const authController = {
 
       res.json({
         success: true,
-        message: 'Login exitoso',
-        data: {
-          user,
-          token
-        }
+        data: { user, token }
       });
 
     } catch (error) {
@@ -53,7 +48,48 @@ const authController = {
     }
   },
 
-  // 🔐 Verificar sesión usando JWT
+  // 🔐 REGISTER
+  register: async (req, res) => {
+    try {
+      const { email, password, name, user_type = 'USER' } = req.body;
+
+      if (!email || !password || !name) {
+        return res.status(400).json({
+          success: false,
+          error: 'Email, contraseña y nombre son requeridos'
+        });
+      }
+
+      const existingUser = await User.findByEmail(email);
+      if (existingUser) {
+        return res.status(400).json({
+          success: false,
+          error: 'El usuario ya existe'
+        });
+      }
+
+      const newUser = await User.create({
+        email,
+        password,
+        name,
+        user_type
+      });
+
+      res.status(201).json({
+        success: true,
+        data: { user: newUser }
+      });
+
+    } catch (error) {
+      console.error('Error en registro:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Error en el servidor'
+      });
+    }
+  },
+
+  // 🔐 CHECK SESSION
   checkSession: async (req, res) => {
     try {
       const userId = req.userId;

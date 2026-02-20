@@ -363,67 +363,69 @@ const MonthlyClosingsPage = () => {
   };
 
   // Combinar y filtrar todos los cierres
-  const allClosings = useMemo(() => {
-    const monthly = monthlyClosings.map(closing => {
-      const clinicIncome = (closing.total_general_income || 0) + (closing.total_clinical_orthodontic_income || 0);
-      const totalExpenses = (closing.total_fixed_expenses || 0) + (closing.total_variable_expenses || 0);
-      const netProfit = clinicIncome - totalExpenses;
-      const externalDoctorPayments = closing.total_external_doctor_payments || 0;
-      
-      return {
-        ...closing,
-        id: closing.closing_ID || closing.id,
-        closing_id: closing.closing_ID,
-        type: 'monthly',
-        sub_type: closing.closing_type || 'all',
-        display_date: `Cierre de ${closing.month} ${closing.year}`,
-        date_exact: closing.closing_date_display || formatDate(closing.closing_date),
-        date_sort: `${closing.year}-${getMonthNumber(closing.month).padStart(2, '0')}-01`,
-        total_clinic_income: clinicIncome,
-        total_expenses: totalExpenses,
-        total_clinic_income_usd: clinicIncome / exchangeRate,
-        total_expenses_usd: totalExpenses / exchangeRate,
-        net_profit: netProfit,
-        net_profit_usd: netProfit / exchangeRate,
-        total_external_doctor_payments: externalDoctorPayments,
-        total_external_doctor_payments_usd: externalDoctorPayments / exchangeRate,
-        total_general_income: closing.total_general_income || 0,
-        total_clinical_orthodontic_income: closing.total_clinical_orthodontic_income || 0,
-        total_orthodontic_doctor_income: closing.total_orthodontic_doctor_income || 0,
-        total_fixed_expenses: closing.total_fixed_expenses || 0,
-        total_variable_expenses: closing.total_variable_expenses || 0,
-        has_expenses: (closing.total_variable_expenses || 0) > 0
-      };
-    });
-
-    const daily = dailyClosings.map(closing => ({
+const allClosings = useMemo(() => {
+  const monthly = monthlyClosings.map(closing => {
+    const clinicIncome = (closing.total_general_income || 0) + (closing.total_clinical_orthodontic_income || 0);
+    const totalExpenses = (closing.total_fixed_expenses || 0) + (closing.total_variable_expenses || 0);
+    const netProfit = clinicIncome - totalExpenses;
+    const externalDoctorPayments = closing.total_external_doctor_payments || 0;
+    
+    return {
       ...closing,
-      id: closing.daily_closing_id || closing.id,
-      closing_id: closing.daily_closing_id,
-      type: 'daily',
-      sub_type: closing.closing_type || 'general',
-      display_date: `Cierre Diario - ${closing.closing_date_formatted || formatDate(closing.closing_date)}`,
-      date_exact: closing.closing_date_formatted || formatDate(closing.closing_date),
-      date_sort: closing.closing_date,
-      total_clinic_income: closing.total_clinic_income || 0,
-      total_clinic_income_usd: (closing.total_clinic_income || 0) / exchangeRate,
+      id: closing.closing_ID || closing.id,
+      closing_id: closing.closing_ID,
+      type: 'monthly',
+      sub_type: closing.closing_type || 'all',
+      display_date: `Cierre de ${closing.month} ${closing.year}`,
+      date_exact: closing.closing_date_display || formatDate(closing.closing_date),
+      date_sort: `${closing.year}-${getMonthNumber(closing.month).padStart(2, '0')}-01`,
+      total_clinic_income: clinicIncome,
+      total_expenses: totalExpenses,
+      total_clinic_income_usd: clinicIncome / exchangeRate,
+      total_expenses_usd: totalExpenses / exchangeRate,
+      net_profit: netProfit,
+      net_profit_usd: netProfit / exchangeRate,
+      total_external_doctor_payments: externalDoctorPayments,
+      total_external_doctor_payments_usd: externalDoctorPayments / exchangeRate,
+      total_general_income: closing.total_general_income || 0,
+      total_clinical_orthodontic_income: closing.total_clinical_orthodontic_income || 0,
+      total_orthodontic_doctor_income: closing.total_orthodontic_doctor_income || 0,
+      total_fixed_expenses: closing.total_fixed_expenses || 0,
       total_variable_expenses: closing.total_variable_expenses || 0,
-      total_variable_expenses_usd: (closing.total_variable_expenses || 0) / exchangeRate,
-      total_expenses: closing.total_variable_expenses || 0,
-      total_expenses_usd: (closing.total_variable_expenses || 0) / exchangeRate,
-      net_profit: closing.net_profit || closing.total_clinic_income || 0,
-      net_profit_usd: (closing.net_profit || closing.total_clinic_income || 0) / exchangeRate,
-      total_income: closing.total_income || 0,
-      total_income_usd: (closing.total_income || 0) / exchangeRate,
-      total_doctor_income: closing.total_doctor_income || 0,
-      total_doctor_income_usd: (closing.total_doctor_income || 0) / exchangeRate,
-      total_external_doctor_payments: closing.total_external_doctor_payments || 0,
-      total_external_doctor_payments_usd: (closing.total_external_doctor_payments || 0) / exchangeRate,
       has_expenses: (closing.total_variable_expenses || 0) > 0
-    }));
+    };
+  });
 
-    return [...monthly, ...daily];
-  }, [monthlyClosings, dailyClosings, exchangeRate]);
+  // ✅ SECCIÓN CORREGIDA - Cierres Diarios
+  const daily = dailyClosings.map(closing => ({
+    ...closing,
+    id: closing.daily_closing_id || closing.id,
+    closing_id: closing.daily_closing_id,
+    type: 'daily',
+    sub_type: closing.closing_type || 'general',
+    // ✅ CORREGIDO: Usar closing_date_formatted que ya viene del backend con la fecha correcta de Nicaragua
+    display_date: `Cierre Diario - ${closing.closing_date_formatted || closing.closing_date}`,
+    date_exact: closing.closing_date_formatted || closing.closing_date,
+    date_sort: closing.closing_date,
+    total_clinic_income: closing.total_clinic_income || 0,
+    total_clinic_income_usd: (closing.total_clinic_income || 0) / exchangeRate,
+    total_variable_expenses: closing.total_variable_expenses || 0,
+    total_variable_expenses_usd: (closing.total_variable_expenses || 0) / exchangeRate,
+    total_expenses: closing.total_variable_expenses || 0,
+    total_expenses_usd: (closing.total_variable_expenses || 0) / exchangeRate,
+    net_profit: closing.net_profit || closing.total_clinic_income || 0,
+    net_profit_usd: (closing.net_profit || closing.total_clinic_income || 0) / exchangeRate,
+    total_income: closing.total_income || 0,
+    total_income_usd: (closing.total_income || 0) / exchangeRate,
+    total_doctor_income: closing.total_doctor_income || 0,
+    total_doctor_income_usd: (closing.total_doctor_income || 0) / exchangeRate,
+    total_external_doctor_payments: closing.total_external_doctor_payments || 0,
+    total_external_doctor_payments_usd: (closing.total_external_doctor_payments || 0) / exchangeRate,
+    has_expenses: (closing.total_variable_expenses || 0) > 0
+  }));
+
+  return [...monthly, ...daily];
+}, [monthlyClosings, dailyClosings, exchangeRate]);
 
   // Filtrar cierres combinados
   const filteredClosings = useMemo(() => {

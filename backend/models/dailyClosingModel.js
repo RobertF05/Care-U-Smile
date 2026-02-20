@@ -240,18 +240,16 @@ async getDailyFinancialSummary(date) {
 },
 
   // ============================================
-// FUNCIÓN PARA CIERRES (CORREGIDA)
+// FUNCIÓN PARA CIERRES (ACTUALIZADA)
 // ============================================
 async getDailyClosingSummary(date, closingType = 'general') {
   console.log('🔍 [VERSIÓN PARA CIERRES] Obteniendo resumen diario para cierre:', { date, closingType });
   
-  // 🔥 CONSTRUIR RANGO CORRECTO DE FECHA (igual que en getDailyFinancialSummary)
   const start = `${date}T00:00:00`;
   const end = `${date}T23:59:59`;
   
   console.log('🕒 Rango usado para procedimientos:', { start, end });
   
-  // 1️⃣ Obtener procedimientos del día (usando rango de timestamp, NO ::date)
   const { data: procedures, error: procError } = await supabaseAdmin
     .from('procedures')
     .select(`
@@ -267,13 +265,11 @@ async getDailyClosingSummary(date, closingType = 'general') {
     throw procError;
   }
   
-  // Para cierres, SOLO gastos NO procesados
+  // 🔥 Ahora toma TODOS los gastos del día
   const { data: expenses, error: expError } = await supabaseAdmin
     .from('bills')
     .select('*')
     .eq('is_recurrent', false)
-    .eq('is_processed_in_closing', false)
-    .is('processed_in_daily_closing_ID', null)
     .eq('bill_date', date);
   
   if (expError) {
@@ -282,7 +278,7 @@ async getDailyClosingSummary(date, closingType = 'general') {
   }
   
   console.log('📊 Procedimientos encontrados para cierre:', procedures?.length || 0);
-  console.log('💰 Gastos variables NO procesados encontrados:', expenses?.length || 0);
+  console.log('💰 Gastos variables encontrados:', expenses?.length || 0);
   
   const settings = await this.getSystemSettings();
   const exchangeRate = settings.exchange_rate || 36.5;
@@ -392,7 +388,7 @@ async getDailyClosingSummary(date, closingType = 'general') {
     expense_ids: expenseIds
   };
   
-  console.log('📋 [CIERRES] Resumen diario con gastos NO procesados:', {
+  console.log('📋 [CIERRES] Resumen diario (todos los gastos del día):', {
     total_clinic_income: result.total_clinic_income,
     total_variable_expenses: result.total_variable_expenses,
     net_profit: result.net_profit,
@@ -404,67 +400,60 @@ async getDailyClosingSummary(date, closingType = 'general') {
 },
 
   // Crear cierre diario
-  async create(closingData) {
-    console.log('🔍 create - Datos recibidos:', closingData);
-    
-    const closingWithFormattedDate = {
-      closing_date: closingData.closing_date,
-      closing_type: closingData.closing_type,
-      total_income: closingData.total_income || 0,
-      total_clinic_income: closingData.total_clinic_income || 0,
-      total_doctor_income: closingData.total_doctor_income || 0,
-      total_external_doctor_payments: closingData.total_external_doctor_payments || 0,
-      total_variable_expenses: closingData.total_variable_expenses || 0,
-      net_profit: closingData.net_profit || 0,
-      comentary: closingData.comentary || '',
-      is_processed: false,
-      created_at: new Date().toISOString()
-    };
-    
-    console.log('📤 Insertando en daily_closings:', closingWithFormattedDate);
-    
-    const { data, error } = await supabaseAdmin
-      .from('daily_closings')
-      .insert([closingWithFormattedDate])
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('❌ Error Supabase al crear cierre:', error);
-      throw error;
-    }
-    
-    console.log('✅ Cierre creado en BD, ID:', data.daily_closing_id);
-    
-    const closingId = data.daily_closing_id || data.id || data.daily_closing_ID;
-    
-    if (closingData.expense_ids && closingData.expense_ids.length > 0) {
-      try {
-        await this.markVariableExpensesAsProcessed(closingData.expense_ids, closingId);
-        console.log(`✅ ${closingData.expense_ids.length} gastos variables marcados como procesados`);
-      } catch (markError) {
-        console.warn('⚠️ No se pudieron marcar algunos gastos:', markError.message);
-      }
-    }
-    
-    const settings = await this.getSystemSettings();
-    const exchangeRate = settings?.exchange_rate || 36.5;
-    
-    const result = {
-      ...data,
-      daily_closing_id: closingId,
-      closing_date_display: formatNicaraguaDate(data.closing_date),
-      created_at_display: formatNicaraguaDateTime(data.created_at),
-      total_income_usd: (data.total_income || 0) / exchangeRate,
-      total_clinic_income_usd: (data.total_clinic_income || 0) / exchangeRate,
-      total_doctor_income_usd: (data.total_doctor_income || 0) / exchangeRate,
-      total_variable_expenses_usd: (data.total_variable_expenses || 0) / exchangeRate,
-      net_profit_usd: (data.net_profit || 0) / exchangeRate,
-      expenses_processed: closingData.expense_ids?.length || 0
-    };
-    
-    return result;
-  },
+async create(closingData) {
+  console.log('🔍 create - Datos recibidos:', closingData);
+  
+  const closingWithFormattedDate = {
+    closing_date: closingData.closing_date,
+    closing_type: closingData.closing_type,
+    total_income: closingData.total_income || 0,
+    total_clinic_income: closingData.total_clinic_income || 0,
+    total_doctor_income: closingData.total_doctor_income || 0,
+    total_external_doctor_payments: closingData.total_external_doctor_payments || 0,
+    total_variable_expenses: closingData.total_variable_expenses || 0,
+    net_profit: closingData.net_profit || 0,
+    comentary: closingData.comentary || '',
+    is_processed: false,
+    created_at: new Date().toISOString()
+  };
+  
+  console.log('📤 Insertando en daily_closings:', closingWithFormattedDate);
+  
+  const { data, error } = await supabaseAdmin
+    .from('daily_closings')
+    .insert([closingWithFormattedDate])
+    .select()
+    .single();
+  
+  if (error) {
+    console.error('❌ Error Supabase al crear cierre:', error);
+    throw error;
+  }
+  
+  console.log('✅ Cierre creado en BD, ID:', data.daily_closing_id);
+  
+  const closingId = data.daily_closing_id || data.id || data.daily_closing_ID;
+  
+  // 🔥 YA NO se marcan gastos como procesados automáticamente
+  
+  const settings = await this.getSystemSettings();
+  const exchangeRate = settings?.exchange_rate || 36.5;
+  
+  const result = {
+    ...data,
+    daily_closing_id: closingId,
+    closing_date_display: formatNicaraguaDate(data.closing_date),
+    created_at_display: formatNicaraguaDateTime(data.created_at),
+    total_income_usd: (data.total_income || 0) / exchangeRate,
+    total_clinic_income_usd: (data.total_clinic_income || 0) / exchangeRate,
+    total_doctor_income_usd: (data.total_doctor_income || 0) / exchangeRate,
+    total_variable_expenses_usd: (data.total_variable_expenses || 0) / exchangeRate,
+    net_profit_usd: (data.net_profit || 0) / exchangeRate,
+    expenses_processed: closingData.expense_ids?.length || 0
+  };
+  
+  return result;
+},
 
   // Actualizar cierre diario
   async update(id, closingData) {

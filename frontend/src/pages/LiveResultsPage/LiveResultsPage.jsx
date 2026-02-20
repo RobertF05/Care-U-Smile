@@ -405,22 +405,6 @@ const LiveResultsPage = () => {
             <DualCurrency amountNIO={dailyData.net_profit} />
           </div>
           
-          {/* Depurador visual temporal */}
-          <div style={{
-            background: '#f0f0f0',
-            padding: '10px',
-            borderRadius: '5px',
-            marginTop: '10px',
-            fontSize: '12px',
-            fontFamily: 'monospace',
-            textAlign: 'left'
-          }}>
-            <div>📊 Ingresos: C${dailyData.total_income.toFixed(2)}</div>
-            <div>📊 Gastos: C${dailyData.total_expenses.toFixed(2)}</div>
-            <div>📊 Utilidad: C${dailyData.net_profit.toFixed(2)}</div>
-            <div>📋 Gastos contados: {dailyData.expenses.length}</div>
-          </div>
-          
           {dailyData.total_income === 0 && dailyData.total_expenses > 0 && (
             <div className="profit-margin warning">
               Solo hay gastos registrados (sin ingresos)
@@ -454,7 +438,7 @@ const LiveResultsPage = () => {
                   <DualCurrency amountNIO={dailyData.total_expenses} />
                 </div>
                 <div className="detail-description">
-                  Gastos del día (tabla bills)
+                  Gastos del día
                 </div>
               </div>
             </div>
@@ -552,10 +536,10 @@ const LiveResultsPage = () => {
         <div className="info-content">
           <p>
             <strong>📊 Resumen:</strong> Los ingresos son la suma de procedimientos generales y ortodoncia. 
-            Los gastos son los registrados en la tabla bills. La utilidad neta es la diferencia.
+            Los gastos son todos los gastos registrados en la sección de gastos. La utilidad neta es la diferencia.
           </p>
           <p className="manual-update-note">
-            <FontAwesomeIcon icon={faSyncAlt} /> Los datos se actualizan manualmente con el botón "Actualizar ahora".
+            <FontAwesomeIcon icon={faSyncAlt} /> Los datos se pueden actualizar manualmente con el botón "Actualizar ahora".
           </p>
         </div>
       </div>

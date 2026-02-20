@@ -240,160 +240,168 @@ async getDailyFinancialSummary(date) {
 },
 
   // ============================================
-  // FUNCIÓN PARA CIERRES (solo gastos NO procesados)
-  // ============================================
-  async getDailyClosingSummary(date, closingType = 'general') {
-    console.log('🔍 [VERSIÓN PARA CIERRES] Obteniendo resumen diario para cierre:', { date, closingType });
+// FUNCIÓN PARA CIERRES (CORREGIDA)
+// ============================================
+async getDailyClosingSummary(date, closingType = 'general') {
+  console.log('🔍 [VERSIÓN PARA CIERRES] Obteniendo resumen diario para cierre:', { date, closingType });
+  
+  // 🔥 CONSTRUIR RANGO CORRECTO DE FECHA (igual que en getDailyFinancialSummary)
+  const start = `${date}T00:00:00`;
+  const end = `${date}T23:59:59`;
+  
+  console.log('🕒 Rango usado para procedimientos:', { start, end });
+  
+  // 1️⃣ Obtener procedimientos del día (usando rango de timestamp, NO ::date)
+  const { data: procedures, error: procError } = await supabaseAdmin
+    .from('procedures')
+    .select(`
+      *,
+      patients (first_name, first_last_name)
+    `)
+    .gte('procedure_date', start)
+    .lte('procedure_date', end)
+    .eq('is_orthodontics', closingType === 'orthodontics');
+  
+  if (procError) {
+    console.error('❌ Error obteniendo procedimientos para cierre:', procError);
+    throw procError;
+  }
+  
+  // Para cierres, SOLO gastos NO procesados
+  const { data: expenses, error: expError } = await supabaseAdmin
+    .from('bills')
+    .select('*')
+    .eq('is_recurrent', false)
+    .eq('is_processed_in_closing', false)
+    .is('processed_in_daily_closing_ID', null)
+    .eq('bill_date', date);
+  
+  if (expError) {
+    console.error('❌ Error obteniendo gastos para cierre:', expError);
+    throw expError;
+  }
+  
+  console.log('📊 Procedimientos encontrados para cierre:', procedures?.length || 0);
+  console.log('💰 Gastos variables NO procesados encontrados:', expenses?.length || 0);
+  
+  const settings = await this.getSystemSettings();
+  const exchangeRate = settings.exchange_rate || 36.5;
+  
+  let totalClinicIncomeCordobas = 0;
+  let totalClinicIncomeDollars = 0;
+  let totalDoctorIncomeCordobas = 0;
+  let totalDoctorIncomeDollars = 0;
+  let totalExternalDoctorPaymentsCordobas = 0;
+  let totalExternalDoctorPaymentsDollars = 0;
+  
+  const procedureClosings = [];
+  
+  (procedures || []).forEach(procedure => {
+    const clinicCordobas = parseFloat(procedure.clinic_payment_cordobas) || 0;
+    const clinicDollars = parseFloat(procedure.clinic_payment_dollars) || 0;
+    totalClinicIncomeCordobas += clinicCordobas;
+    totalClinicIncomeDollars += clinicDollars;
     
-    // Para cierres, necesitamos filtrar por tipo
-    const { data: procedures, error: procError } = await supabaseAdmin
-      .from('procedures')
-      .select(`
-        *,
-        patients (first_name, first_last_name)
-      `)
-      .eq('procedure_date::date', date)
-      .eq('is_orthodontics', closingType === 'orthodontics');
+    const doctorCordobas = parseFloat(procedure.doctor_payment_cordobas) || 0;
+    const doctorDollars = parseFloat(procedure.doctor_payment_dollars) || 0;
+    totalDoctorIncomeCordobas += doctorCordobas;
+    totalDoctorIncomeDollars += doctorDollars;
     
-    if (procError) {
-      console.error('❌ Error obteniendo procedimientos para cierre:', procError);
-      throw procError;
+    if (procedure.external_doctor_payment && procedure.external_doctor_payment > 0) {
+      const externalPaymentCordobas = parseFloat(procedure.external_doctor_payment) || 0;
+      const procExchangeRate = parseFloat(procedure.exchange_rate_used) || exchangeRate;
+      const externalPaymentDollars = externalPaymentCordobas / procExchangeRate;
+      
+      totalExternalDoctorPaymentsCordobas += externalPaymentCordobas;
+      totalExternalDoctorPaymentsDollars += externalPaymentDollars;
     }
     
-    // Para cierres, SOLO gastos NO procesados
-    const { data: expenses, error: expError } = await supabaseAdmin
-      .from('bills')
-      .select('*')
-      .eq('is_recurrent', false)
-      .eq('is_processed_in_closing', false)
-      .is('processed_in_daily_closing_ID', null)
-      .eq('bill_date', date);
-    
-    if (expError) {
-      console.error('❌ Error obteniendo gastos para cierre:', expError);
-      throw expError;
-    }
-    
-    console.log('📊 Procedimientos encontrados para cierre:', procedures?.length || 0);
-    console.log('💰 Gastos variables NO procesados encontrados:', expenses?.length || 0);
-    
-    const settings = await this.getSystemSettings();
-    const exchangeRate = settings.exchange_rate || 36.5;
-    
-    let totalClinicIncomeCordobas = 0;
-    let totalClinicIncomeDollars = 0;
-    let totalDoctorIncomeCordobas = 0;
-    let totalDoctorIncomeDollars = 0;
-    let totalExternalDoctorPaymentsCordobas = 0;
-    let totalExternalDoctorPaymentsDollars = 0;
-    
-    const procedureClosings = [];
-    
-    (procedures || []).forEach(procedure => {
-      const clinicCordobas = parseFloat(procedure.clinic_payment_cordobas) || 0;
-      const clinicDollars = parseFloat(procedure.clinic_payment_dollars) || 0;
-      totalClinicIncomeCordobas += clinicCordobas;
-      totalClinicIncomeDollars += clinicDollars;
-      
-      const doctorCordobas = parseFloat(procedure.doctor_payment_cordobas) || 0;
-      const doctorDollars = parseFloat(procedure.doctor_payment_dollars) || 0;
-      totalDoctorIncomeCordobas += doctorCordobas;
-      totalDoctorIncomeDollars += doctorDollars;
-      
-      if (procedure.external_doctor_payment && procedure.external_doctor_payment > 0) {
-        const externalPaymentCordobas = parseFloat(procedure.external_doctor_payment) || 0;
-        const procExchangeRate = parseFloat(procedure.exchange_rate_used) || exchangeRate;
-        const externalPaymentDollars = externalPaymentCordobas / procExchangeRate;
-        
-        totalExternalDoctorPaymentsCordobas += externalPaymentCordobas;
-        totalExternalDoctorPaymentsDollars += externalPaymentDollars;
-      }
-      
-      procedureClosings.push({
-        procedure_id: procedure.procedure_ID,
-        clinic_income_portion: clinicCordobas,
-        doctor_income_portion: doctorCordobas,
-        external_doctor_payment: parseFloat(procedure.external_doctor_payment) || 0
-      });
+    procedureClosings.push({
+      procedure_id: procedure.procedure_ID,
+      clinic_income_portion: clinicCordobas,
+      doctor_income_portion: doctorCordobas,
+      external_doctor_payment: parseFloat(procedure.external_doctor_payment) || 0
     });
+  });
+  
+  let totalVariableExpensesCordobas = 0;
+  let totalVariableExpensesDollars = 0;
+  const expenseDetails = [];
+  const expenseIds = [];
+  
+  (expenses || []).forEach(expense => {
+    let amountCordobas = 0;
+    let amountDollars = 0;
     
-    let totalVariableExpensesCordobas = 0;
-    let totalVariableExpensesDollars = 0;
-    const expenseDetails = [];
-    const expenseIds = [];
-    
-    (expenses || []).forEach(expense => {
-      let amountCordobas = 0;
-      let amountDollars = 0;
-      
-      if (expense.currency_used === 'USD') {
-        const usdAmount = parseFloat(expense.amount_usd) || 0;
-        const expenseExchangeRate = parseFloat(expense.exchange_rate_bill) || exchangeRate;
-        amountCordobas = usdAmount * expenseExchangeRate;
-        amountDollars = usdAmount;
-      } else {
-        amountCordobas = parseFloat(expense.amount) || 0;
-        amountDollars = amountCordobas / exchangeRate;
-      }
-      
-      totalVariableExpensesCordobas += amountCordobas;
-      totalVariableExpensesDollars += amountDollars;
-      
-      expenseIds.push(expense.bill_ID);
-      
-      expenseDetails.push({
-        bill_id: expense.bill_ID,
-        description: expense.description,
-        amount: amountCordobas,
-        amount_usd: amountDollars,
-        category: expense.category,
-        exchange_rate: expense.exchange_rate_bill || exchangeRate
-      });
-    });
-    
-    let totalIncome = 0;
-    let netProfit = 0;
-    
-    if (closingType === 'orthodontics') {
-      totalIncome = totalClinicIncomeCordobas + totalDoctorIncomeCordobas;
-      netProfit = totalClinicIncomeCordobas - totalVariableExpensesCordobas;
+    if (expense.currency_used === 'USD') {
+      const usdAmount = parseFloat(expense.amount_usd) || 0;
+      const expenseExchangeRate = parseFloat(expense.exchange_rate_bill) || exchangeRate;
+      amountCordobas = usdAmount * expenseExchangeRate;
+      amountDollars = usdAmount;
     } else {
-      totalIncome = totalClinicIncomeCordobas;
-      netProfit = totalClinicIncomeCordobas - totalVariableExpensesCordobas;
+      amountCordobas = parseFloat(expense.amount) || 0;
+      amountDollars = amountCordobas / exchangeRate;
     }
     
-    const result = {
-      procedures: procedures || [],
-      procedureClosings,
-      variableExpenses: expenseDetails,
-      total_income: totalIncome,
-      total_income_usd: totalIncome / exchangeRate,
-      total_clinic_income: totalClinicIncomeCordobas,
-      total_clinic_income_usd: totalClinicIncomeDollars,
-      total_doctor_income: totalDoctorIncomeCordobas,
-      total_doctor_income_usd: totalDoctorIncomeDollars,
-      total_external_doctor_payments: totalExternalDoctorPaymentsCordobas,
-      total_external_doctor_payments_usd: totalExternalDoctorPaymentsDollars,
-      total_variable_expenses: totalVariableExpensesCordobas,
-      total_variable_expenses_usd: totalVariableExpensesDollars,
-      net_profit: netProfit,
-      net_profit_usd: netProfit / exchangeRate,
-      exchange_rate: exchangeRate,
-      fecha_nicaragua: date,
-      cantidad_procedimientos: procedures?.length || 0,
-      cantidad_gastos_variables: expenses?.length || 0,
-      expense_ids: expenseIds
-    };
+    totalVariableExpensesCordobas += amountCordobas;
+    totalVariableExpensesDollars += amountDollars;
     
-    console.log('📋 [CIERRES] Resumen diario con gastos NO procesados:', {
-      total_clinic_income: result.total_clinic_income,
-      total_variable_expenses: result.total_variable_expenses,
-      net_profit: result.net_profit,
-      cantidad_gastos: result.cantidad_gastos_variables
+    expenseIds.push(expense.bill_ID);
+    
+    expenseDetails.push({
+      bill_id: expense.bill_ID,
+      description: expense.description,
+      amount: amountCordobas,
+      amount_usd: amountDollars,
+      category: expense.category,
+      exchange_rate: expense.exchange_rate_bill || exchangeRate
     });
-    
-    return result;
-  },
+  });
+  
+  let totalIncome = 0;
+  let netProfit = 0;
+  
+  if (closingType === 'orthodontics') {
+    totalIncome = totalClinicIncomeCordobas + totalDoctorIncomeCordobas;
+    netProfit = totalClinicIncomeCordobas - totalVariableExpensesCordobas;
+  } else {
+    totalIncome = totalClinicIncomeCordobas;
+    netProfit = totalClinicIncomeCordobas - totalVariableExpensesCordobas;
+  }
+  
+  const result = {
+    procedures: procedures || [],
+    procedureClosings,
+    variableExpenses: expenseDetails,
+    total_income: totalIncome,
+    total_income_usd: totalIncome / exchangeRate,
+    total_clinic_income: totalClinicIncomeCordobas,
+    total_clinic_income_usd: totalClinicIncomeDollars,
+    total_doctor_income: totalDoctorIncomeCordobas,
+    total_doctor_income_usd: totalDoctorIncomeDollars,
+    total_external_doctor_payments: totalExternalDoctorPaymentsCordobas,
+    total_external_doctor_payments_usd: totalExternalDoctorPaymentsDollars,
+    total_variable_expenses: totalVariableExpensesCordobas,
+    total_variable_expenses_usd: totalVariableExpensesDollars,
+    net_profit: netProfit,
+    net_profit_usd: netProfit / exchangeRate,
+    exchange_rate: exchangeRate,
+    fecha_nicaragua: date,
+    cantidad_procedimientos: procedures?.length || 0,
+    cantidad_gastos_variables: expenses?.length || 0,
+    expense_ids: expenseIds
+  };
+  
+  console.log('📋 [CIERRES] Resumen diario con gastos NO procesados:', {
+    total_clinic_income: result.total_clinic_income,
+    total_variable_expenses: result.total_variable_expenses,
+    net_profit: result.net_profit,
+    cantidad_procedimientos: result.cantidad_procedimientos,
+    cantidad_gastos: result.cantidad_gastos_variables
+  });
+  
+  return result;
+},
 
   // Crear cierre diario
   async create(closingData) {

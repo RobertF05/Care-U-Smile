@@ -26,7 +26,8 @@ const app = express();
 const allowedOrigins = [
   'http://localhost:5173',           // Desarrollo Vite
   'http://localhost:3000',            // Desarrollo alternativo
-  'https://care-u-smile.onrender.com', // Producción frontend (si aplica)
+  'https://care-u-smile.onrender.com',
+  'https://care-u-smile.vercel.app', // Producción frontend (si aplica)
   process.env.CORS_ORIGIN             // Del archivo .env: http://localhost:5173
 ].filter(Boolean); // Elimina valores undefined
 

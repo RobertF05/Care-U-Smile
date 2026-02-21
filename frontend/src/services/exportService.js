@@ -1,23 +1,68 @@
 const API_URL = import.meta.env.VITE_API_URL || '';
 
+// Función para formatear fecha DD/MM/YYYY
+const formatDateForFilename = (dateString) => {
+  if (!dateString) return '';
+  // Si viene como YYYY-MM-DD
+  const parts = dateString.split('T')[0].split('-');
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+  return dateString;
+};
+
+// Función para obtener el nombre del archivo según el tipo de cierre
+const getFileName = (type, closingData) => {
+  const fecha = new Date();
+  const timestamp = fecha.toISOString().split('T')[0];
+  
+  if (type === 'daily') {
+    // Formato: Cierre DD/MM/2026 (General) - YYYY-MM-DD
+    const fechaFormateada = formatDateForFilename(closingData.closing_date);
+    const tipoTexto = closingData.closing_type === 'orthodontics' ? 'Ortodoncia' : 'General';
+    return `Cierre ${fechaFormateada} (${tipoTexto}) - ${timestamp}`;
+  } 
+  else if (type === 'monthly') {
+    // Formato: Cierre MM/YYYY (General/Ortodoncia/Completo) - YYYY-MM-DD
+    const monthNumber = getMonthNumber(closingData.month);
+    const tipoTexto = 
+      closingData.closing_type === 'orthodontics' ? 'Ortodoncia' : 
+      closingData.closing_type === 'general' ? 'General' : 
+      'Completo';
+    return `Cierre ${monthNumber}/${closingData.year} (${tipoTexto}) - ${timestamp}`;
+  }
+  
+  return `export_${type}_${timestamp}`;
+};
+
+// Helper para obtener número de mes
+const getMonthNumber = (monthName) => {
+  const months = {
+    'ENERO': '01', 'FEBRERO': '02', 'MARZO': '03', 'ABRIL': '04',
+    'MAYO': '05', 'JUNIO': '06', 'JULIO': '07', 'AGOSTO': '08',
+    'SEPTIEMBRE': '09', 'OCTUBRE': '10', 'NOVIEMBRE': '11', 'DICIEMBRE': '12'
+  };
+  return months[monthName?.toUpperCase()] || '01';
+};
+
 export const exportService = {
   // Exportar a PDF
-  async exportToPDF(type, id) {
+  async exportToPDF(closing) {
     try {
+      const { type, closing_id, ...closingData } = closing;
+      
       let endpoint;
       if (type === 'monthly') {
-        endpoint = `/api/export/pdf/monthly/${id}`;
+        endpoint = `/api/export/pdf/monthly/${closing_id}`;
       } else {
-        endpoint = `/api/export/pdf/daily/${id}`;
+        endpoint = `/api/export/pdf/daily/${closing_id}`;
       }
       
       const url = `${API_URL}${endpoint}`;
       console.log('📤 Exportando PDF desde:', url);
       
-      // Obtener token
       const token = localStorage.getItem('token');
       
-      // Hacer fetch para verificar que el endpoint existe
       const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -28,13 +73,12 @@ export const exportService = {
       
       if (!response.ok) {
         if (response.status === 404) {
-          throw new Error(`Endpoint no encontrado: ${endpoint}. Verifica que la ruta existe en el backend.`);
+          throw new Error(`Endpoint no encontrado: ${endpoint}`);
         }
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Error ${response.status}: ${response.statusText}`);
+        throw new Error(errorData.error || `Error ${response.status}`);
       }
       
-      // Verificar el tipo de contenido
       const contentType = response.headers.get('content-type');
       if (!contentType || !contentType.includes('application/pdf')) {
         const text = await response.text();
@@ -42,27 +86,21 @@ export const exportService = {
         throw new Error('El servidor no devolvió un PDF válido');
       }
       
-      // Obtener el blob y descargar
       const blob = await response.blob();
       const blobUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = blobUrl;
       
-      // Obtener nombre del archivo
-      const contentDisposition = response.headers.get('Content-Disposition');
-      let filename = `cierre_${type}_${id}.pdf`;
-      if (contentDisposition) {
-        const match = contentDisposition.match(/filename="?(.+)"?/);
-        if (match) filename = match[1];
-      }
+      // Generar nombre personalizado
+      const fileName = `${getFileName(type, closingData)}.pdf`;
+      link.setAttribute('download', fileName);
       
-      link.setAttribute('download', filename);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(blobUrl);
       
-      return { success: true };
+      return { success: true, fileName };
       
     } catch (error) {
       console.error('Error en exportación PDF:', error);
@@ -71,13 +109,15 @@ export const exportService = {
   },
   
   // Exportar a Excel Detallado
-  async exportToExcelDetailed(type, id) {
+  async exportToExcelDetailed(closing) {
     try {
+      const { type, closing_id, ...closingData } = closing;
+      
       let endpoint;
       if (type === 'monthly') {
-        endpoint = `/api/export/excel/detailed/monthly/${id}`;
+        endpoint = `/api/export/excel/detailed/monthly/${closing_id}`;
       } else {
-        endpoint = `/api/export/excel/detailed/daily/${id}`;
+        endpoint = `/api/export/excel/detailed/daily/${closing_id}`;
       }
       
       const url = `${API_URL}${endpoint}`;
@@ -95,7 +135,7 @@ export const exportService = {
       
       if (!response.ok) {
         if (response.status === 404) {
-          throw new Error(`Endpoint no encontrado: ${endpoint}. Verifica que la ruta existe en el backend.`);
+          throw new Error(`Endpoint no encontrado: ${endpoint}`);
         }
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.error || `Error ${response.status}`);
@@ -106,20 +146,16 @@ export const exportService = {
       const link = document.createElement('a');
       link.href = blobUrl;
       
-      const contentDisposition = response.headers.get('Content-Disposition');
-      let filename = `cierre_${type}_${id}.xlsx`;
-      if (contentDisposition) {
-        const match = contentDisposition.match(/filename="?(.+)"?/);
-        if (match) filename = match[1];
-      }
+      // Generar nombre personalizado
+      const fileName = `${getFileName(type, closingData)}.xlsx`;
+      link.setAttribute('download', fileName);
       
-      link.setAttribute('download', filename);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(blobUrl);
       
-      return { success: true };
+      return { success: true, fileName };
       
     } catch (error) {
       console.error('Error en exportación Excel:', error);

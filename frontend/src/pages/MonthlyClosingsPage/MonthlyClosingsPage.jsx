@@ -805,12 +805,25 @@ const MonthlyClosingsPage = () => {
     return labels[type] || '';
   };
 
-  // Funciones de exportación actualizadas
+  // En MonthlyClosingsPage.jsx - Funciones de exportación actualizadas
+
 const handleExportPDF = async (closing) => {
   try {
     addNotification('📄 Generando PDF...', 'info', 3000);
-    await exportService.exportToPDF(closing.type, closing.closing_id);
-    addNotification('✅ PDF exportado exitosamente', 'success', 3000);
+    
+    // Pasar el objeto closing completo
+    const result = await exportService.exportToPDF({
+      type: closing.type,
+      closing_id: closing.closing_id || closing.id,
+      closing_date: closing.closing_date,
+      month: closing.month,
+      year: closing.year,
+      closing_type: closing.sub_type || closing.closing_type
+    });
+    
+    if (result.success) {
+      addNotification(`✅ PDF exportado: ${result.fileName}`, 'success', 5000);
+    }
   } catch (error) {
     console.error('Error al exportar PDF:', error);
     addNotification(`❌ Error: ${error.message}`, 'error', 8000);
@@ -820,8 +833,20 @@ const handleExportPDF = async (closing) => {
 const handleExportExcelDetailed = async (closing) => {
   try {
     addNotification('📊 Generando Excel detallado...', 'info', 3000);
-    await exportService.exportToExcelDetailed(closing.type, closing.closing_id);
-    addNotification('✅ Excel exportado exitosamente', 'success', 3000);
+    
+    // Pasar el objeto closing completo
+    const result = await exportService.exportToExcelDetailed({
+      type: closing.type,
+      closing_id: closing.closing_id || closing.id,
+      closing_date: closing.closing_date,
+      month: closing.month,
+      year: closing.year,
+      closing_type: closing.sub_type || closing.closing_type
+    });
+    
+    if (result.success) {
+      addNotification(`✅ Excel exportado: ${result.fileName}`, 'success', 5000);
+    }
   } catch (error) {
     console.error('Error al exportar Excel:', error);
     addNotification(`❌ Error: ${error.message}`, 'error', 8000);

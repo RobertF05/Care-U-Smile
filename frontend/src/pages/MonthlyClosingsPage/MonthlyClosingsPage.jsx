@@ -1177,26 +1177,6 @@ const handleExportExcelDetailed = async (closing) => {
                       <span className="btn-tooltip">Excel Detallado</span>
                     </button>
                     
-                    {closing.type === 'daily' && closing.has_expenses && (
-                      <button 
-                        className="action-btn expenses"
-                        onClick={() => fetchVariableExpensesDetails(closing)}
-                        title="Ver detalles de gastos variables"
-                      >
-                        <FontAwesomeIcon icon={faReceipt} />
-                      </button>
-                    )}
-                    
-                    {closing.total_external_doctor_payments > 0 && (
-                      <button 
-                        className="action-btn external"
-                        onClick={() => fetchExternalDoctorDetails(closing)}
-                        title="Ver detalles de doctores externos"
-                      >
-                        <FontAwesomeIcon icon={faStethoscope} />
-                      </button>
-                    )}
-                    
                     <button 
                       className="action-btn delete"
                       onClick={(e) => handleDeleteClick(closing, e)}
@@ -1481,13 +1461,6 @@ const handleExportExcelDetailed = async (closing) => {
                               <span className="summary-value expense">{formatCurrency(closing.total_variable_expenses, 'NIO', true)}</span>
                               <div className="summary-description">
                                 <small>Gastos ocasionales registrados en esta fecha</small>
-                                <button 
-                                  className="details-btn small"
-                                  onClick={() => fetchVariableExpensesDetails(closing)}
-                                >
-                                  <FontAwesomeIcon icon={faEye} />
-                                  Ver detalles
-                                </button>
                               </div>
                             </div>
                           )}
@@ -1608,31 +1581,6 @@ const handleExportExcelDetailed = async (closing) => {
                         <FontAwesomeIcon icon={faListAlt} />
                         Excel Detallado
                       </button>
-                      <button 
-                        className="secondary-btn small"
-                        onClick={() => handleExportExcelGeneral(closing.type === 'monthly' ? 'monthly' : 'daily')}
-                      >
-                        <FontAwesomeIcon icon={faFileExcel} />
-                        Excel General
-                      </button>
-                      {closing.type === 'daily' && closing.has_expenses && (
-                        <button 
-                          className="secondary-btn small expense"
-                          onClick={() => fetchVariableExpensesDetails(closing)}
-                        >
-                          <FontAwesomeIcon icon={faReceipt} />
-                          Ver Gastos
-                        </button>
-                      )}
-                      {closing.total_external_doctor_payments > 0 && (
-                        <button 
-                          className="secondary-btn small external"
-                          onClick={() => fetchExternalDoctorDetails(closing)}
-                        >
-                          <FontAwesomeIcon icon={faUserDoctor} />
-                          Ver Doctores Externos
-                        </button>
-                      )}
                     </div>
                   </div>
                 </div>

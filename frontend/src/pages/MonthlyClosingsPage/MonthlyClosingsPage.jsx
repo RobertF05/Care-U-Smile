@@ -45,6 +45,7 @@ import {
 import { AppContext } from '../../context/AppContext';
 import { AuthContext } from '../../context/AuthContext';
 import { useNotification } from '../../context/NotificationContext';
+import { exportService } from '../../services/exportService';
 import './MonthlyClosingsPage.css';
 
 // Meses en español
@@ -804,41 +805,28 @@ const MonthlyClosingsPage = () => {
     return labels[type] || '';
   };
 
-  // Exportar a PDF
-  const handleExportPDF = async (closing) => {
-    try {
-      let endpoint;
-      if (closing.type === 'monthly') {
-        endpoint = `/export/pdf/monthly/${closing.closing_id}`;
-      } else {
-        endpoint = `/export/pdf/daily/${closing.closing_id}`;
-      }
-      
-      window.open(`/api${endpoint}`, '_blank');
-      
-    } catch (error) {
-      console.error('Error al exportar PDF:', error);
-      addNotification('Error al exportar a PDF', 'error', 5000);
-    }
-  };
+  // Funciones de exportación actualizadas
+const handleExportPDF = async (closing) => {
+  try {
+    addNotification('📄 Generando PDF...', 'info', 3000);
+    await exportService.exportToPDF(closing.type, closing.closing_id);
+    addNotification('✅ PDF exportado exitosamente', 'success', 3000);
+  } catch (error) {
+    console.error('Error al exportar PDF:', error);
+    addNotification(`❌ Error: ${error.message}`, 'error', 8000);
+  }
+};
 
-  // Exportar a Excel DETALLADO
-  const handleExportExcelDetailed = async (closing) => {
-    try {
-      let endpoint;
-      if (closing.type === 'monthly') {
-        endpoint = `/export/excel/detailed/monthly/${closing.closing_id}?type=${closing.sub_type}`;
-      } else {
-        endpoint = `/export/excel/detailed/daily/${closing.closing_id}?type=${closing.sub_type}`;
-      }
-      
-      window.open(`/api${endpoint}`, '_blank');
-      
-    } catch (error) {
-      console.error('Error al exportar Excel detallado:', error);
-      addNotification('Error al exportar a Excel detallado', 'error', 5000);
-    }
-  };
+const handleExportExcelDetailed = async (closing) => {
+  try {
+    addNotification('📊 Generando Excel detallado...', 'info', 3000);
+    await exportService.exportToExcelDetailed(closing.type, closing.closing_id);
+    addNotification('✅ Excel exportado exitosamente', 'success', 3000);
+  } catch (error) {
+    console.error('Error al exportar Excel:', error);
+    addNotification(`❌ Error: ${error.message}`, 'error', 8000);
+  }
+};
 
   // Exportar a Excel GENERAL
   const handleExportExcelGeneral = async (type, filters = {}) => {

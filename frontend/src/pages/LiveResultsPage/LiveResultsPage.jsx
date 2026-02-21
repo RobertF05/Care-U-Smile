@@ -135,21 +135,19 @@ const LiveResultsPage = () => {
   // FUNCIONES AUXILIARES DE FECHA
   // ============================================
   
-  // Función para obtener la fecha actual en Nicaragua (YYYY-MM-DD)
   const getCurrentNicaraguaDate = () => {
-    const now = new Date();
-    const nicaraguaOffset = -6 * 60;
-    const localOffset = now.getTimezoneOffset();
-    const totalOffset = nicaraguaOffset - localOffset;
-    
-    const nicaraguaTime = new Date(now.getTime() + (totalOffset * 60 * 1000));
-    
-    const year = nicaraguaTime.getFullYear();
-    const month = String(nicaraguaTime.getMonth() + 1).padStart(2, '0');
-    const day = String(nicaraguaTime.getDate()).padStart(2, '0');
-    
-    return `${year}-${month}-${day}`;
-  };
+  const now = new Date();
+
+  const nicaraguaDate = new Date(
+    now.toLocaleString("en-US", { timeZone: "America/Managua" })
+  );
+
+  const year = nicaraguaDate.getFullYear();
+  const month = String(nicaraguaDate.getMonth() + 1).padStart(2, "0");
+  const day = String(nicaraguaDate.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+};
 
   // Formatear fecha para mostrar en español
   const formatDateForDisplay = (dateStr) => {

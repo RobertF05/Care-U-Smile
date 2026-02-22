@@ -67,10 +67,7 @@ export default function PatientsPage() {
   const [closeConfirm, setCloseConfirm] = useState(null);
 
   // CONSTANTE PARA EL LINK DE GOOGLE DRIVE
-  // ===================================================
-  // TODO: Reemplazar con el enlace real de Google Drive
-  // ===================================================
-  const GOOGLE_DRIVE_CLINICAL_FILES_URL = ""; // Agrega aquí el link de Google Drive
+  const GOOGLE_DRIVE_CLINICAL_FILES_URL = "https://drive.google.com/drive/folders/117Rl71hPw8zPmIQVmlvdE74Js7AEzUte";
 
   // Cargar pacientes al montar el componente
   useEffect(() => {

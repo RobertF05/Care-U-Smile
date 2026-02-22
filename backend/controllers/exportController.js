@@ -115,7 +115,6 @@ const exportController = {
       }
     });
 
-    // Separar gastos
     let totalFixed = 0;
     let totalVariable = 0;
 
@@ -125,7 +124,7 @@ const exportController = {
     bills?.forEach(bill => {
       const amount = parseFloat(bill.amount) || 0;
 
-      if (bill.is_recurrent === true) {
+      if (bill.is_recurrent) {
         totalFixed += amount;
         fixedExpenses.push({ ...bill, amount });
       } else {
@@ -140,7 +139,10 @@ const exportController = {
 
     // ================== CREAR PDF ==================
 
-    const doc = new PDFDocument({ margin: 50, bufferPages: true });
+    const doc = new PDFDocument({
+      margin: 50,
+      bufferPages: true
+    });
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader(
@@ -163,16 +165,15 @@ const exportController = {
 
     doc.moveDown(2);
 
-    // Títulos
-    doc.fontSize(20)
+    // Título
+    doc.fontSize(18)
       .font('Helvetica-Bold')
-      .fillColor('#2196F3')
+      .fillColor('#000')
       .text('CARE U SMILE', { align: 'center' });
 
     doc.moveDown(0.5);
 
-    doc.fontSize(14)
-      .fillColor('#000')
+    doc.fontSize(13)
       .text(`REPORTE DE CIERRE MENSUAL - ${closing.month} ${closing.year}`, { align: 'center' });
 
     doc.moveDown(0.5);
@@ -187,7 +188,7 @@ const exportController = {
       doc.fontSize(14)
         .font('Helvetica-Bold')
         .fillColor('#000')
-        .text(text, 50);
+        .text(text, 50, doc.y, { align: 'left' });
       doc.moveDown();
     };
 
@@ -198,7 +199,7 @@ const exportController = {
         .fontSize(9)
         .fillColor(color);
 
-      doc.text(desc, 50, y, { width: 270 });
+      doc.text(desc, 50, y, { width: 260 });
       doc.text(cord, 330, y, { width: 90, align: 'right' });
       doc.text(usd, 430, y, { width: 90, align: 'right' });
 
@@ -301,8 +302,6 @@ const exportController = {
         formatCurrency(totalVariable / exchangeRate, 'USD'),
         true
       );
-
-      doc.moveDown();
     }
 
     doc.moveDown(2);
@@ -333,11 +332,13 @@ const exportController = {
       netProfit >= 0 ? '#2E7D32' : '#C62828'
     );
 
-    // ================== PAGINACIÓN ==================
+    // ================== PAGINACIÓN CORRECTA ==================
 
     const range = doc.bufferedPageRange();
+
     for (let i = 0; i < range.count; i++) {
       doc.switchToPage(i);
+
       doc.fontSize(8)
         .fillColor('#666')
         .text(

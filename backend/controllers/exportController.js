@@ -332,22 +332,28 @@ const exportController = {
       netProfit >= 0 ? '#2E7D32' : '#C62828'
     );
 
-    // ================== PAGINACIÓN CORRECTA ==================
+    // ================== PAGINACIÓN CORREGIDA ==================
 
-    const range = doc.bufferedPageRange();
+const range = doc.bufferedPageRange();
 
-    for (let i = 0; i < range.count; i++) {
-      doc.switchToPage(i);
+for (let i = 0; i < range.count; i++) {
+  doc.switchToPage(i);
 
-      doc.fontSize(8)
-        .fillColor('#666')
-        .text(
-          `Página ${i + 1} de ${range.count}`,
-          0,
-          doc.page.height - 40,
-          { align: 'center' }
-        );
+  doc.font('Helvetica')
+     .fontSize(8)
+     .fillColor('#666');
+
+  doc.text(
+    `Página ${i + 1} de ${range.count}`,
+    0,
+    doc.page.height - 30,
+    {
+      width: doc.page.width,
+      align: 'center',
+      lineBreak: false
     }
+  );
+}
 
     doc.end();
 

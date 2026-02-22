@@ -621,99 +621,169 @@ exportDailyToExcelDetailed: async (req, res) => {
     }
   },
 
-  // Exportar cierre diario a PDF
-  exportDailyPDF: async (req, res) => {
-    try {
-      const { closingId } = req.params;
-      
-      if (!closingId) {
-        return res.status(400).json({ 
-          success: false, 
-          error: 'ID de cierre requerido' 
-        });
-      }
-      
-      const { data: closing, error: closingError } = await supabaseAdmin
-        .from('daily_closings')
-        .select('*')
-        .eq('daily_closing_id', closingId)
-        .single();
-      
-      if (closingError) throw closingError;
-      
-      const doc = new PDFDocument({ margin: 50, size: 'A4' });
-      
-      res.setHeader('Content-Type', 'application/pdf');
-      const fileName = `Cierre_Diario_${formatNicaraguaDate(closing.closing_date).replace(/\//g, '-')}_${closing.closing_type}_${new Date().toISOString().split('T')[0]}.pdf`;
-      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-      
-      doc.pipe(res);
-      
-      // Logo
-      try {
-        const possiblePaths = [
-          path.join(__dirname, '../../frontend/public/2026web2.png'),
-          path.join(process.cwd(), 'frontend/public/2026web2.png')
-        ];
-        
-        for (const testPath of possiblePaths) {
-          if (fs.existsSync(testPath)) {
-            doc.image(testPath, 50, 45, { width: 80 });
-            break;
-          }
-        }
-      } catch (logoError) {}
-      
-      doc.fontSize(20).font('Helvetica-Bold').fillColor('#2196F3')
-         .text('CARE U SMILE', { align: 'center' });
-      doc.moveDown(0.3);
-      doc.fontSize(16).font('Helvetica-Bold')
-         .text('REPORTE DE CIERRE DIARIO', { align: 'center' });
-      doc.moveDown(0.5);
-      
-      const fechaTitulo = formatNicaraguaDate(closing.closing_date);
-      const tipoTitulo = closing.closing_type === 'orthodontics' ? 'ORTODONCIA' : 'GENERAL';
-      doc.fontSize(14).text(`Fecha: ${fechaTitulo} - ${tipoTitulo}`, { align: 'center' });
-      doc.moveDown(1);
-      
-      doc.fontSize(10).text(`Fecha de generación: ${formatNicaraguaDateTime(new Date().toISOString())}`, { align: 'right' });
-      doc.moveDown(1.5);
-      
-      doc.fontSize(14).font('Helvetica-Bold').fillColor('#4CAF50')
-         .text('RESUMEN DEL DÍA', { underline: true });
-      doc.moveDown(0.5);
-      
-      const exchangeRate = 36.5;
-      doc.fontSize(12).font('Helvetica')
-         .text(`Total Ingresos Clínica: ${formatCurrency(closing.total_clinic_income || 0, 'NIO')} / ${formatCurrency((closing.total_clinic_income || 0) / exchangeRate, 'USD')}`);
-      doc.moveDown(0.3);
-      
-      if (closing.total_variable_expenses > 0) {
-        doc.text(`Gastos Variables: ${formatCurrency(closing.total_variable_expenses || 0, 'NIO')} / ${formatCurrency((closing.total_variable_expenses || 0) / exchangeRate, 'USD')}`);
-        doc.moveDown(0.3);
-      }
-      
-      doc.moveDown(0.5);
-      doc.fontSize(14).font('Helvetica-Bold')
-         .fillColor(closing.net_profit >= 0 ? '#4CAF50' : '#F44336')
-         .text(`UTILIDAD NETA: ${formatCurrency(closing.net_profit || 0, 'NIO')} / ${formatCurrency((closing.net_profit || 0) / exchangeRate, 'USD')}`);
-      
-      if (closing.comentary) {
-        doc.moveDown(1);
-        doc.fontSize(11).font('Helvetica-Oblique').fillColor('#666')
-           .text(`Nota: ${closing.comentary}`);
-      }
-      
-      doc.end();
-      
-    } catch (error) {
-      console.error('Error al exportar PDF diario:', error);
-      res.status(500).json({ 
-        success: false, 
-        error: 'Error al generar PDF diario: ' + error.message 
+  // Exportar cierre diario a PDF (FORMATO IGUAL AL MENSUAL - SIN PAGINACIÓN)
+exportDailyPDF: async (req, res) => {
+  try {
+    const { closingId } = req.params;
+
+    if (!closingId) {
+      return res.status(400).json({
+        success: false,
+        error: 'ID de cierre requerido'
       });
     }
+
+    const { data: closing, error } = await supabaseAdmin
+      .from('daily_closings')
+      .select('*')
+      .eq('daily_closing_id', closingId)
+      .single();
+
+    if (error) throw error;
+    if (!closing) {
+      return res.status(404).json({ error: 'Cierre no encontrado' });
+    }
+
+    const doc = new PDFDocument({ margin: 50 });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    const fileName = `Cierre_Diario_${formatNicaraguaDate(closing.closing_date).replace(/\//g, '-')}_${closing.closing_type}.pdf`;
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+
+    doc.pipe(res);
+
+    // ================== LOGO ==================
+    try {
+      const possiblePaths = [
+        path.join(process.cwd(), 'frontend/public/2026web2.png'),
+        path.join(__dirname, '../../frontend/public/2026web2.png')
+      ];
+
+      for (const testPath of possiblePaths) {
+        if (fs.existsSync(testPath)) {
+          doc.image(testPath, 50, 40, { width: 80 });
+          break;
+        }
+      }
+    } catch (err) {}
+
+    doc.moveDown(2);
+
+    // ================== TÍTULOS ==================
+    doc.fontSize(20)
+      .font('Helvetica-Bold')
+      .fillColor('#2196F3')
+      .text('CARE U SMILE', { align: 'center' });
+
+    doc.moveDown(0.5);
+
+    doc.fontSize(14)
+      .fillColor('#000')
+      .text('REPORTE DE CIERRE DIARIO', { align: 'center' });
+
+    doc.moveDown(0.5);
+
+    doc.fontSize(10)
+      .fillColor('#666')
+      .text(`Generado el: ${formatNicaraguaDateTime(new Date().toISOString())}`, { align: 'center' });
+
+    doc.moveDown(2);
+
+    const drawHeader = (text) => {
+      doc.fontSize(14)
+        .font('Helvetica-Bold')
+        .fillColor('#000')
+        .text(text, 50);
+      doc.moveDown();
+    };
+
+    const drawRow = (desc, cord, usd, bold = false, color = '#000') => {
+      const y = doc.y;
+
+      doc.font(bold ? 'Helvetica-Bold' : 'Helvetica')
+        .fontSize(10)
+        .fillColor(color);
+
+      doc.text(desc, 50, y, { width: 270 });
+      doc.text(cord, 330, y, { width: 90, align: 'right' });
+      doc.text(usd, 430, y, { width: 90, align: 'right' });
+
+      doc.moveDown();
+    };
+
+    const exchangeRate = 36.5;
+
+    const totalIncome = closing.total_clinic_income || 0;
+    const totalExpenses = closing.total_variable_expenses || 0;
+    const netProfit = closing.net_profit || 0;
+
+    // ================== INGRESOS ==================
+    drawHeader('INGRESOS');
+
+    drawRow(
+      'INGRESOS TOTALES CLÍNICA',
+      formatCurrency(totalIncome, 'NIO'),
+      formatCurrency(totalIncome / exchangeRate, 'USD'),
+      true
+    );
+
+    doc.moveDown(2);
+
+    // ================== GASTOS ==================
+    drawHeader('GASTOS VARIABLES');
+
+    drawRow(
+      'TOTAL GASTOS VARIABLES',
+      formatCurrency(totalExpenses, 'NIO'),
+      formatCurrency(totalExpenses / exchangeRate, 'USD'),
+      true
+    );
+
+    doc.moveDown(2);
+
+    // ================== RESULTADO ==================
+    drawHeader('RESULTADO');
+
+    drawRow(
+      'INGRESOS TOTALES',
+      formatCurrency(totalIncome, 'NIO'),
+      formatCurrency(totalIncome / exchangeRate, 'USD'),
+      true
+    );
+
+    drawRow(
+      'GASTOS TOTALES',
+      `-${formatCurrency(totalExpenses, 'NIO')}`,
+      `-${formatCurrency(totalExpenses / exchangeRate, 'USD')}`,
+      true
+    );
+
+    drawRow(
+      'UTILIDAD NETA',
+      formatCurrency(netProfit, 'NIO'),
+      formatCurrency(netProfit / exchangeRate, 'USD'),
+      true,
+      netProfit >= 0 ? '#2E7D32' : '#C62828'
+    );
+
+    if (closing.comentary) {
+      doc.moveDown(2);
+      doc.fontSize(10)
+        .font('Helvetica-Oblique')
+        .fillColor('#666')
+        .text(`Nota: ${closing.comentary}`);
+    }
+
+    doc.end();
+
+  } catch (error) {
+    console.error('Error al exportar PDF diario:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error al generar PDF diario: ' + error.message
+    });
   }
+}
 };
 
 export default exportDailyController;

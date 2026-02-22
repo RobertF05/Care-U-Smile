@@ -52,7 +52,6 @@ const exportController = {
   exportMonthlyPDF: async (req, res) => {
   try {
     const { closingId } = req.params;
-
     if (!closingId) {
       return res.status(400).json({
         success: false,
@@ -60,20 +59,11 @@ const exportController = {
       });
     }
 
-    // =============================
-    // OBTENER DATOS
-    // =============================
-
-    const { data: closing, error: closingError } = await supabaseAdmin
+    const { data: closing } = await supabaseAdmin
       .from('monthly_closings')
       .select('*')
       .eq('closing_ID', closingId)
       .single();
-
-    if (closingError) throw closingError;
-    if (!closing) {
-      return res.status(404).json({ success: false, error: 'Cierre no encontrado' });
-    }
 
     const { data: settings } = await supabaseAdmin
       .from('settings')
@@ -100,12 +90,11 @@ const exportController = {
       .from('bills')
       .select('*')
       .gte('bill_date', periodStartDate)
-      .lte('bill_date', periodEndDate)
-      .order('bill_date', { ascending: true });
+      .lte('bill_date', periodEndDate);
 
-    // =============================
+    // ===============================
     // CALCULOS
-    // =============================
+    // ===============================
 
     let totalGeneralCordobas = 0;
     let totalGeneralDollars = 0;
@@ -128,7 +117,6 @@ const exportController = {
         totalOrthoClinicDollars += clinicUsd;
         totalOrthoDoctorCordobas += doctorCord;
         totalOrthoDoctorDollars += doctorUsd;
-
         orthoProcedures.push({ ...proc, clinicCord, clinicUsd, doctorCord, doctorUsd });
       } else {
         totalGeneralCordobas += clinicCord;
@@ -137,59 +125,92 @@ const exportController = {
       }
     });
 
+    const totalExpensesCordobas =
+      bills?.reduce((sum, b) => sum + (parseFloat(b.amount_cordobas || b.amount) || 0), 0) || 0;
+
     const totalClinicIncomeCordobas =
       totalGeneralCordobas + totalOrthoClinicCordobas;
-    const totalClinicIncomeDollars =
-      totalGeneralDollars + totalOrthoClinicDollars;
 
-    // =============================
+    const netProfitCordobas =
+      totalClinicIncomeCordobas - totalExpensesCordobas;
+
+    // ===============================
     // CREAR PDF
-    // =============================
+    // ===============================
 
-    const doc = new PDFDocument({ margin: 50 });
+    const doc = new PDFDocument({
+      margin: 50,
+      size: 'A4'
+    });
+
     res.setHeader('Content-Type', 'application/pdf');
-    const fileName = `Cierre_${closing.month}_${closing.year}.pdf`;
-    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="Cierre_${closing.month}_${closing.year}.pdf"`
+    );
+
     doc.pipe(res);
 
-    // =============================
-    // HEADER
-    // =============================
+    // ===============================
+    // LOGO
+    // ===============================
 
-    doc.fontSize(20).font('Helvetica-Bold')
+    try {
+      const logoPath = path.join(process.cwd(), 'frontend/public/2026web2.png');
+      if (fs.existsSync(logoPath)) {
+        doc.image(logoPath, 50, 45, { width: 80 });
+      }
+    } catch {}
+
+    // ===============================
+    // HEADER
+    // ===============================
+
+    doc.fontSize(20)
+      .font('Helvetica-Bold')
+      .fillColor('#2196F3')
       .text('CARE U SMILE', { align: 'center' });
 
-    doc.moveDown(0.5);
+    doc.moveDown(0.3);
 
-    doc.fontSize(14).font('Helvetica')
-      .text(`REPORTE DE CIERRE MENSUAL - ${closing.month} ${closing.year}`, { align: 'center' });
+    doc.fontSize(16)
+      .fillColor('#000000')
+      .text('REPORTE DE CIERRE MENSUAL', { align: 'center' });
+
+    doc.moveDown(0.3);
+
+    doc.fontSize(14)
+      .font('Helvetica')
+      .text(`${closing.month} ${closing.year}`, { align: 'center' });
 
     doc.moveDown(1.5);
 
-    // =============================
-    // FUNCION PARA FILAS DE TABLA
-    // =============================
+    // ===============================
+    // FUNCION FILA ALINEADA
+    // ===============================
 
-    const drawRow = (col1, col2, col3) => {
-      const startX = 50;
-      const col1Width = 260;
-      const col2Width = 100;
-      const col3Width = 100;
+    const startX = 50;
+    const col1Width = 250;
+    const col2Width = 100;
+    const col3Width = 100;
 
+    const drawRow = (desc, cord, usd) => {
       const rowY = doc.y;
 
-      const h1 = doc.heightOfString(col1, { width: col1Width });
-      const h2 = doc.heightOfString(col2, { width: col2Width });
-      const h3 = doc.heightOfString(col3, { width: col3Width });
+      const h1 = doc.heightOfString(desc, { width: col1Width - 20 });
+      const h2 = doc.heightOfString(cord, { width: col2Width });
+      const h3 = doc.heightOfString(usd, { width: col3Width });
 
       const rowHeight = Math.max(h1, h2, h3);
 
-      doc.text(col1, startX, rowY, { width: col1Width });
-      doc.text(col2, startX + col1Width + 10, rowY, {
+      doc.fontSize(9).fillColor('#000000').font('Helvetica');
+
+      doc.text(desc, startX + 10, rowY, { width: col1Width - 20 });
+      doc.text(cord, startX + col1Width + 10, rowY, {
         width: col2Width,
         align: 'right'
       });
-      doc.text(col3, startX + col1Width + col2Width + 20, rowY, {
+      doc.text(usd, startX + col1Width + col2Width + 20, rowY, {
         width: col3Width,
         align: 'right'
       });
@@ -197,19 +218,46 @@ const exportController = {
       doc.y = rowY + rowHeight + 5;
     };
 
-    // =============================
+    const drawTableHeader = (color) => {
+      doc.rect(startX, doc.y, col1Width + col2Width + col3Width + 30, 22)
+        .fillColor(color)
+        .fill();
+
+      doc.fontSize(10)
+        .font('Helvetica-Bold')
+        .fillColor('#FFFFFF');
+
+      doc.text('Descripción', startX + 10, doc.y - 14);
+      doc.text('Total Córdobas', startX + col1Width + 10, doc.y - 14, {
+        width: col2Width,
+        align: 'right'
+      });
+      doc.text('Total Dólares', startX + col1Width + col2Width + 20, doc.y - 14, {
+        width: col3Width,
+        align: 'right'
+      });
+
+      doc.moveDown(1.2);
+    };
+
+    // ===============================
     // PROCEDIMIENTOS GENERALES
-    // =============================
+    // ===============================
 
-    doc.fontSize(13).font('Helvetica-Bold')
-      .text('PROCEDIMIENTOS GENERALES');
+    doc.fontSize(14)
+      .font('Helvetica-Bold')
+      .fillColor('#4CAF50')
+      .text('PROCEDIMIENTOS GENERALES', { underline: true });
 
-    doc.moveDown();
+    doc.moveDown(0.5);
+
+    drawTableHeader('#2196F3');
 
     generalProcedures.forEach((proc, index) => {
-      const patient = proc.patients
-        ? `${proc.patients.first_name} ${proc.patients.first_last_name}`
-        : 'Sin paciente';
+      const patient =
+        proc.patients
+          ? `${proc.patients.first_name} ${proc.patients.first_last_name}`
+          : 'Sin paciente';
 
       drawRow(
         `${index + 1}. ${proc.procedure_description} - ${patient}`,
@@ -224,21 +272,33 @@ const exportController = {
       formatCurrency(totalGeneralDollars, 'USD')
     );
 
-    doc.moveDown(1);
+    doc.moveDown(1.5);
 
-    // =============================
+    // ===============================
     // ORTODONCIA
-    // =============================
+    // ===============================
 
-    doc.fontSize(13).font('Helvetica-Bold')
-      .text('ORTODONCIA');
+    doc.fontSize(14)
+      .font('Helvetica-Bold')
+      .fillColor('#9C27B0')
+      .text('ORTODONCIA', { underline: true });
 
-    doc.moveDown();
+    doc.moveDown(0.3);
+
+    doc.fontSize(10)
+      .font('Helvetica')
+      .fillColor('#000000')
+      .text(`Distribución: Clínica (${clinicPercentage}%) - Doctora (${doctorPercentage}%)`);
+
+    doc.moveDown(0.5);
+
+    drawTableHeader('#9C27B0');
 
     orthoProcedures.forEach((proc, index) => {
-      const patient = proc.patients
-        ? `${proc.patients.first_name} ${proc.patients.first_last_name}`
-        : 'Sin paciente';
+      const patient =
+        proc.patients
+          ? `${proc.patients.first_name} ${proc.patients.first_last_name}`
+          : 'Sin paciente';
 
       drawRow(
         `${index + 1}. ${proc.procedure_description} - ${patient}`,
@@ -247,7 +307,7 @@ const exportController = {
       );
 
       drawRow(
-        `   - Doctora (${doctorPercentage}%)`,
+        `   - Doctora`,
         formatCurrency(proc.doctorCord, 'NIO'),
         formatCurrency(proc.doctorUsd, 'USD')
       );
@@ -259,27 +319,35 @@ const exportController = {
       formatCurrency(totalOrthoClinicDollars, 'USD')
     );
 
-    doc.moveDown(1.5);
+    doc.moveDown(2);
 
-    // =============================
+    // ===============================
     // RESULTADO FINAL
-    // =============================
+    // ===============================
 
-    const netProfitCordobas =
-      totalClinicIncomeCordobas;
+    doc.fontSize(16)
+      .font('Helvetica-Bold')
+      .fillColor('#000000')
+      .text('RESULTADO FINAL - CLÍNICA', { align: 'center', underline: true });
 
-    const netProfitDollars =
-      totalClinicIncomeDollars;
-
-    doc.fontSize(14).font('Helvetica-Bold')
-      .text('RESULTADO FINAL - CLÍNICA', { align: 'center' });
-
-    doc.moveDown();
+    doc.moveDown(1);
 
     drawRow(
-      'TOTAL INGRESOS CLÍNICA',
+      'INGRESOS TOTALES CLÍNICA',
+      formatCurrency(totalClinicIncomeCordobas, 'NIO'),
+      formatCurrency(totalClinicIncomeCordobas / exchangeRate, 'USD')
+    );
+
+    drawRow(
+      'GASTOS TOTALES',
+      `-${formatCurrency(totalExpensesCordobas, 'NIO')}`,
+      `-${formatCurrency(totalExpensesCordobas / exchangeRate, 'USD')}`
+    );
+
+    drawRow(
+      'UTILIDAD NETA',
       formatCurrency(netProfitCordobas, 'NIO'),
-      formatCurrency(netProfitDollars, 'USD')
+      formatCurrency(netProfitCordobas / exchangeRate, 'USD')
     );
 
     doc.end();

@@ -1,5 +1,6 @@
 import PDFDocument from 'pdfkit';
 import ExcelJS from 'exceljs';
+import axios from 'axios';
 import { supabaseAdmin } from '../config/supabase.js';
 import { formatNicaraguaDate, formatNicaraguaDateTime } from '../utils/timezoneUtils.js';
 import fs from 'fs';
@@ -59,6 +60,10 @@ const exportController = {
       .eq('closing_ID', closingId)
       .single();
 
+    if (!closing) {
+      return res.status(404).json({ error: 'Cierre no encontrado' });
+    }
+
     const { data: settings } = await supabaseAdmin
       .from('settings')
       .select('exchange_rate')
@@ -85,9 +90,7 @@ const exportController = {
       .lte('bill_date', periodEndDate)
       .order('bill_date', { ascending: true });
 
-    // =========================
-    // CALCULOS
-    // =========================
+    // ===== CALCULOS =====
 
     let totalGeneralCord = 0;
     let totalGeneralUsd = 0;
@@ -112,19 +115,15 @@ const exportController = {
       }
     });
 
-    const fixedBills = bills?.filter(b => b.is_recurrent) || [];
-    const variableBills = bills?.filter(b => !b.is_recurrent) || [];
-
-    const totalFixed = fixedBills.reduce((s, b) => s + (parseFloat(b.amount) || 0), 0);
-    const totalVariable = variableBills.reduce((s, b) => s + (parseFloat(b.amount) || 0), 0);
-    const totalExpenses = totalFixed + totalVariable;
+    const totalExpenses = bills?.reduce(
+      (sum, b) => sum + (parseFloat(b.amount) || 0),
+      0
+    ) || 0;
 
     const totalIncome = totalGeneralCord + totalOrthoCord;
     const netProfit = totalIncome - totalExpenses;
 
-    // =========================
-    // PDF
-    // =========================
+    // ===== CREAR PDF =====
 
     const doc = new PDFDocument({ margin: 50, bufferPages: true });
 
@@ -136,14 +135,23 @@ const exportController = {
 
     doc.pipe(res);
 
-    // ===== LOGO (RUTA CORREGIDA)
-    const logoPath = path.resolve('frontend', 'public', '2026web2.png');
-    if (fs.existsSync(logoPath)) {
-      doc.image(logoPath, 50, 40, { width: 80 });
+    // ===== LOGO DESDE VERCEL =====
+
+    try {
+      const response = await axios.get(
+        'https://care-u-smile.vercel.app/2026web2.png',
+        { responseType: 'arraybuffer' }
+      );
+
+      const logoBuffer = Buffer.from(response.data);
+      doc.image(logoBuffer, 50, 40, { width: 80 });
+    } catch (err) {
+      console.log('Logo no cargado:', err.message);
     }
 
-    // ===== TITULOS
     doc.moveDown(2);
+
+    // ===== TITULOS CENTRADOS =====
 
     doc.fontSize(20)
       .font('Helvetica-Bold')
@@ -154,52 +162,48 @@ const exportController = {
 
     doc.fontSize(14)
       .fillColor('#000')
-      .text(`REPORTE DE CIERRE MENSUAL - ${closing.month} ${closing.year}`, {
+      .text(
+        `REPORTE DE CIERRE MENSUAL - ${closing.month} ${closing.year}`,
+        { align: 'center' }
+      );
+
+    doc.moveDown(0.5);
+
+    doc.fontSize(9)
+      .fillColor('#666')
+      .text(`Generado el: ${new Date().toLocaleDateString()}`, {
         align: 'center'
       });
 
-    // ===== FECHA GENERACION
-    const today = new Date().toLocaleDateString();
-    doc.moveDown(0.5);
-    doc.fontSize(9)
-      .fillColor('#666')
-      .text(`Generado el: ${today}`, { align: 'center' });
-
     doc.moveDown(2);
 
-    const startX = 50;
-    const col1 = 270;
-    const col2 = 90;
-    const col3 = 90;
+    // ===== ENCABEZADO IZQUIERDA FIJO =====
+
+    const drawHeader = (text) => {
+      doc.fontSize(14)
+        .font('Helvetica-Bold')
+        .fillColor('#000')
+        .text(text, 50);
+      doc.moveDown();
+    };
 
     const drawRow = (desc, cord, usd, bold = false, color = '#000') => {
       const y = doc.y;
 
       doc.font(bold ? 'Helvetica-Bold' : 'Helvetica')
-        .fillColor(color)
-        .fontSize(9);
+        .fontSize(9)
+        .fillColor(color);
 
-      const h = Math.max(
-        doc.heightOfString(desc, { width: col1 }),
-        doc.heightOfString(cord, { width: col2 }),
-        doc.heightOfString(usd, { width: col3 })
-      );
+      doc.text(desc, 50, y, { width: 270 });
+      doc.text(cord, 330, y, { width: 90, align: 'right' });
+      doc.text(usd, 430, y, { width: 90, align: 'right' });
 
-      doc.text(desc, startX, y, { width: col1, align: 'left' });
-      doc.text(cord, startX + col1 + 10, y, { width: col2, align: 'right' });
-      doc.text(usd, startX + col1 + col2 + 20, y, { width: col3, align: 'right' });
-
-      doc.y = y + h + 4;
+      doc.moveDown();
     };
 
-    // =====================
-    // PROCEDIMIENTOS GENERALES
-    // =====================
+    // ===== PROCEDIMIENTOS GENERALES =====
 
-    doc.fontSize(14).font('Helvetica-Bold').fillColor('#000')
-      .text('PROCEDIMIENTOS GENERALES', { align: 'left' });
-
-    doc.moveDown();
+    drawHeader('PROCEDIMIENTOS GENERALES');
 
     general.forEach((p, i) => {
       const date = new Date(p.procedure_date).toLocaleDateString();
@@ -223,14 +227,9 @@ const exportController = {
 
     doc.moveDown(2);
 
-    // =====================
-    // ORTODONCIA
-    // =====================
+    // ===== ORTODONCIA =====
 
-    doc.fontSize(14).font('Helvetica-Bold')
-      .text('ORTODONCIA', { align: 'left' });
-
-    doc.moveDown();
+    drawHeader('ORTODONCIA');
 
     ortho.forEach((p, i) => {
       const date = new Date(p.procedure_date).toLocaleDateString();
@@ -254,16 +253,9 @@ const exportController = {
 
     doc.moveDown(2);
 
-    // =====================
-    // GASTOS
-    // =====================
+    // ===== RESULTADO =====
 
-    doc.fontSize(14).font('Helvetica-Bold')
-      .text('GASTOS DEL PERÍODO', { align: 'left' });
-
-    doc.moveDown();
-
-    // (resto igual que antes…)
+    drawHeader('RESULTADO');
 
     drawRow(
       'INGRESOS TOTALES',
@@ -287,17 +279,16 @@ const exportController = {
       netProfit >= 0 ? '#2E7D32' : '#C62828'
     );
 
-    // =========================
-    // NUMERACION PAGINAS
-    // =========================
+    // ===== PAGINACION CORRECTA =====
 
-    const pages = doc.bufferedPageRange();
-    for (let i = 0; i < pages.count; i++) {
+    const range = doc.bufferedPageRange();
+
+    for (let i = 0; i < range.count; i++) {
       doc.switchToPage(i);
       doc.fontSize(8)
         .fillColor('#666')
         .text(
-          `Página ${i + 1} de ${pages.count}`,
+          `Página ${i + 1} de ${range.count}`,
           0,
           doc.page.height - 40,
           { align: 'center' }

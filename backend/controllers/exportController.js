@@ -90,7 +90,7 @@ const exportController = {
       .lte('bill_date', periodEndDate)
       .order('bill_date', { ascending: true });
 
-    // ===== CALCULOS =====
+    // ================== CÁLCULOS ==================
 
     let totalGeneralCord = 0;
     let totalGeneralUsd = 0;
@@ -115,15 +115,30 @@ const exportController = {
       }
     });
 
-    const totalExpenses = bills?.reduce(
-      (sum, b) => sum + (parseFloat(b.amount) || 0),
-      0
-    ) || 0;
+    // Separar gastos
+    let totalFixed = 0;
+    let totalVariable = 0;
 
+    const fixedExpenses = [];
+    const variableExpenses = [];
+
+    bills?.forEach(bill => {
+      const amount = parseFloat(bill.amount) || 0;
+
+      if (bill.is_recurrent === true) {
+        totalFixed += amount;
+        fixedExpenses.push({ ...bill, amount });
+      } else {
+        totalVariable += amount;
+        variableExpenses.push({ ...bill, amount });
+      }
+    });
+
+    const totalExpenses = totalFixed + totalVariable;
     const totalIncome = totalGeneralCord + totalOrthoCord;
     const netProfit = totalIncome - totalExpenses;
 
-    // ===== CREAR PDF =====
+    // ================== CREAR PDF ==================
 
     const doc = new PDFDocument({ margin: 50, bufferPages: true });
 
@@ -135,24 +150,20 @@ const exportController = {
 
     doc.pipe(res);
 
-    // ===== LOGO DESDE VERCEL =====
-
+    // Logo desde Vercel
     try {
       const response = await axios.get(
         'https://care-u-smile.vercel.app/2026web2.png',
         { responseType: 'arraybuffer' }
       );
-
-      const logoBuffer = Buffer.from(response.data);
-      doc.image(logoBuffer, 50, 40, { width: 80 });
+      doc.image(Buffer.from(response.data), 50, 40, { width: 80 });
     } catch (err) {
-      console.log('Logo no cargado:', err.message);
+      console.log('Logo no cargado');
     }
 
     doc.moveDown(2);
 
-    // ===== TITULOS CENTRADOS =====
-
+    // Títulos
     doc.fontSize(20)
       .font('Helvetica-Bold')
       .fillColor('#2196F3')
@@ -162,22 +173,15 @@ const exportController = {
 
     doc.fontSize(14)
       .fillColor('#000')
-      .text(
-        `REPORTE DE CIERRE MENSUAL - ${closing.month} ${closing.year}`,
-        { align: 'center' }
-      );
+      .text(`REPORTE DE CIERRE MENSUAL - ${closing.month} ${closing.year}`, { align: 'center' });
 
     doc.moveDown(0.5);
 
     doc.fontSize(9)
       .fillColor('#666')
-      .text(`Generado el: ${new Date().toLocaleDateString()}`, {
-        align: 'center'
-      });
+      .text(`Generado el: ${new Date().toLocaleDateString()}`, { align: 'center' });
 
     doc.moveDown(2);
-
-    // ===== ENCABEZADO IZQUIERDA FIJO =====
 
     const drawHeader = (text) => {
       doc.fontSize(14)
@@ -201,7 +205,7 @@ const exportController = {
       doc.moveDown();
     };
 
-    // ===== PROCEDIMIENTOS GENERALES =====
+    // ================== PROCEDIMIENTOS ==================
 
     drawHeader('PROCEDIMIENTOS GENERALES');
 
@@ -227,8 +231,6 @@ const exportController = {
 
     doc.moveDown(2);
 
-    // ===== ORTODONCIA =====
-
     drawHeader('ORTODONCIA');
 
     ortho.forEach((p, i) => {
@@ -253,7 +255,59 @@ const exportController = {
 
     doc.moveDown(2);
 
-    // ===== RESULTADO =====
+    // ================== GASTOS ==================
+
+    drawHeader('GASTOS DEL PERÍODO');
+
+    if (fixedExpenses.length > 0) {
+      doc.font('Helvetica-Bold').text('GASTOS FIJOS', 50);
+      doc.moveDown(0.5);
+
+      fixedExpenses.forEach((b, i) => {
+        const date = new Date(b.bill_date).toLocaleDateString();
+        drawRow(
+          `${i + 1}. ${date} - ${b.description || 'Sin descripción'}`,
+          formatCurrency(b.amount, 'NIO'),
+          formatCurrency(b.amount / exchangeRate, 'USD')
+        );
+      });
+
+      drawRow(
+        'SUBTOTAL GASTOS FIJOS',
+        formatCurrency(totalFixed, 'NIO'),
+        formatCurrency(totalFixed / exchangeRate, 'USD'),
+        true
+      );
+
+      doc.moveDown();
+    }
+
+    if (variableExpenses.length > 0) {
+      doc.font('Helvetica-Bold').text('GASTOS VARIABLES', 50);
+      doc.moveDown(0.5);
+
+      variableExpenses.forEach((b, i) => {
+        const date = new Date(b.bill_date).toLocaleDateString();
+        drawRow(
+          `${i + 1}. ${date} - ${b.description || 'Sin descripción'}`,
+          formatCurrency(b.amount, 'NIO'),
+          formatCurrency(b.amount / exchangeRate, 'USD')
+        );
+      });
+
+      drawRow(
+        'SUBTOTAL GASTOS VARIABLES',
+        formatCurrency(totalVariable, 'NIO'),
+        formatCurrency(totalVariable / exchangeRate, 'USD'),
+        true
+      );
+
+      doc.moveDown();
+    }
+
+    doc.moveDown(2);
+
+    // ================== RESULTADO ==================
 
     drawHeader('RESULTADO');
 
@@ -279,10 +333,9 @@ const exportController = {
       netProfit >= 0 ? '#2E7D32' : '#C62828'
     );
 
-    // ===== PAGINACION CORRECTA =====
+    // ================== PAGINACIÓN ==================
 
     const range = doc.bufferedPageRange();
-
     for (let i = 0; i < range.count; i++) {
       doc.switchToPage(i);
       doc.fontSize(8)

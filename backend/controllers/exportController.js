@@ -52,12 +52,6 @@ const exportController = {
   exportMonthlyPDF: async (req, res) => {
   try {
     const { closingId } = req.params;
-    if (!closingId) {
-      return res.status(400).json({
-        success: false,
-        error: 'ID de cierre requerido'
-      });
-    }
 
     const { data: closing } = await supabaseAdmin
       .from('monthly_closings')
@@ -91,226 +85,238 @@ const exportController = {
       .lte('bill_date', periodEndDate)
       .order('bill_date', { ascending: true });
 
-    // ===============================
-    // CALCULOS
-    // ===============================
+    let totalGeneralCord = 0;
+    let totalGeneralUsd = 0;
+    let totalOrthoCord = 0;
+    let totalOrthoUsd = 0;
 
-    let totalGeneralCordobas = 0;
-    let totalGeneralDollars = 0;
-    let totalOrthoClinicCordobas = 0;
-    let totalOrthoClinicDollars = 0;
-
-    const generalProcedures = [];
-    const orthoProcedures = [];
+    const general = [];
+    const ortho = [];
 
     procedures?.forEach(proc => {
-      const clinicCord = parseFloat(proc.clinic_payment_cordobas) || 0;
-      const clinicUsd = parseFloat(proc.clinic_payment_dollars) || 0;
+      const cord = parseFloat(proc.clinic_payment_cordobas) || 0;
+      const usd = parseFloat(proc.clinic_payment_dollars) || 0;
 
       if (proc.is_orthodontics) {
-        totalOrthoClinicCordobas += clinicCord;
-        totalOrthoClinicDollars += clinicUsd;
-        orthoProcedures.push({ ...proc, clinicCord, clinicUsd });
+        totalOrthoCord += cord;
+        totalOrthoUsd += usd;
+        ortho.push({ ...proc, cord, usd });
       } else {
-        totalGeneralCordobas += clinicCord;
-        totalGeneralDollars += clinicUsd;
-        generalProcedures.push({ ...proc, clinicCord, clinicUsd });
+        totalGeneralCord += cord;
+        totalGeneralUsd += usd;
+        general.push({ ...proc, cord, usd });
       }
     });
 
-    const totalExpensesCordobas =
-      bills?.reduce((sum, b) => sum + (parseFloat(b.amount) || 0), 0) || 0;
+    const fixedBills = bills?.filter(b => b.is_recurrent) || [];
+    const variableBills = bills?.filter(b => !b.is_recurrent) || [];
 
-    const totalClinicIncomeCordobas =
-      totalGeneralCordobas + totalOrthoClinicCordobas;
+    const totalFixed = fixedBills.reduce((s, b) => s + (parseFloat(b.amount) || 0), 0);
+    const totalVariable = variableBills.reduce((s, b) => s + (parseFloat(b.amount) || 0), 0);
+    const totalExpenses = totalFixed + totalVariable;
 
-    const netProfitCordobas =
-      totalClinicIncomeCordobas - totalExpensesCordobas;
+    const totalIncome = totalGeneralCord + totalOrthoCord;
+    const netProfit = totalIncome - totalExpenses;
 
-    // ===============================
-    // CREAR PDF
-    // ===============================
-
-    const doc = new PDFDocument({ margin: 50, size: 'A4' });
-
+    const doc = new PDFDocument({ margin: 50 });
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="Cierre_${closing.month}_${closing.year}.pdf"`
-    );
+    res.setHeader('Content-Disposition',
+      `attachment; filename="Cierre_${closing.month}_${closing.year}.pdf"`);
 
     doc.pipe(res);
 
-    // ===============================
-    // HEADER
-    // ===============================
+    // LOGO
+    const logoPath = path.join(process.cwd(), 'frontend/public/2026web2.png');
+    if (fs.existsSync(logoPath)) {
+      doc.image(logoPath, 50, 40, { width: 70 });
+    }
 
-    doc.fontSize(20)
-      .font('Helvetica-Bold')
-      .fillColor('#2196F3')
+    doc.moveDown(2);
+
+    doc.fontSize(20).font('Helvetica-Bold').fillColor('#2196F3')
       .text('CARE U SMILE', { align: 'center' });
 
-    doc.moveDown(0.5);
+    doc.moveDown(0.3);
 
-    doc.fontSize(16)
-      .fillColor('#000000')
-      .text('REPORTE DE CIERRE MENSUAL', { align: 'center' });
+    doc.fontSize(14).fillColor('#000')
+      .text(`REPORTE DE CIERRE MENSUAL - ${closing.month} ${closing.year}`, { align: 'center' });
 
-    doc.moveDown(0.5);
-
-    doc.fontSize(14)
-      .text(`${closing.month} ${closing.year}`, { align: 'center' });
-
-    doc.moveDown(1.5);
-
-    // ===============================
-    // CONFIG TABLA
-    // ===============================
+    doc.moveDown(2);
 
     const startX = 50;
-    const col1Width = 260;
-    const col2Width = 100;
-    const col3Width = 100;
+    const col1 = 270;
+    const col2 = 90;
+    const col3 = 90;
 
-    const drawRow = (desc, cord, usd) => {
-      const rowY = doc.y;
+    const drawRow = (desc, cord, usd, bold = false, color = '#000') => {
+      const y = doc.y;
 
-      const h1 = doc.heightOfString(desc, { width: col1Width });
-      const h2 = doc.heightOfString(cord, { width: col2Width });
-      const h3 = doc.heightOfString(usd, { width: col3Width });
+      doc.font(bold ? 'Helvetica-Bold' : 'Helvetica')
+         .fillColor(color)
+         .fontSize(9);
 
-      const rowHeight = Math.max(h1, h2, h3);
+      const h = Math.max(
+        doc.heightOfString(desc, { width: col1 }),
+        doc.heightOfString(cord, { width: col2 }),
+        doc.heightOfString(usd, { width: col3 })
+      );
 
-      doc.fontSize(9).font('Helvetica').fillColor('#000');
+      doc.text(desc, startX, y, { width: col1 });
+      doc.text(cord, startX + col1 + 10, y, { width: col2, align: 'right' });
+      doc.text(usd, startX + col1 + col2 + 20, y, { width: col3, align: 'right' });
 
-      doc.text(desc, startX, rowY, { width: col1Width });
-      doc.text(cord, startX + col1Width + 10, rowY, {
-        width: col2Width,
-        align: 'right'
-      });
-      doc.text(usd, startX + col1Width + col2Width + 20, rowY, {
-        width: col3Width,
-        align: 'right'
-      });
-
-      doc.y = rowY + rowHeight + 5;
+      doc.y = y + h + 4;
     };
 
-    // ===============================
+    // =====================
     // PROCEDIMIENTOS GENERALES
-    // ===============================
+    // =====================
 
-    doc.fontSize(14).font('Helvetica-Bold').text('PROCEDIMIENTOS GENERALES');
+    doc.fontSize(14).font('Helvetica-Bold').fillColor('#000')
+      .text('PROCEDIMIENTOS GENERALES', { align: 'left' });
+
     doc.moveDown();
 
-    generalProcedures.forEach((proc, index) => {
-      const patient =
-        proc.patients
-          ? `${proc.patients.first_name} ${proc.patients.first_last_name}`
-          : 'Sin paciente';
-
-      const date = new Date(proc.procedure_date).toLocaleDateString();
+    general.forEach((p, i) => {
+      const date = new Date(p.procedure_date).toLocaleDateString();
+      const patient = p.patients
+        ? `${p.patients.first_name} ${p.patients.first_last_name}`
+        : 'Sin paciente';
 
       drawRow(
-        `${index + 1}. ${date} - ${proc.procedure_description} - ${patient}`,
-        formatCurrency(proc.clinicCord, 'NIO'),
-        formatCurrency(proc.clinicUsd, 'USD')
+        `${i + 1}. ${date} - ${p.procedure_description} - ${patient}`,
+        formatCurrency(p.cord, 'NIO'),
+        formatCurrency(p.usd, 'USD')
       );
     });
 
     drawRow(
       'SUBTOTAL GENERALES',
-      formatCurrency(totalGeneralCordobas, 'NIO'),
-      formatCurrency(totalGeneralDollars, 'USD')
+      formatCurrency(totalGeneralCord, 'NIO'),
+      formatCurrency(totalGeneralUsd, 'USD'),
+      true
     );
 
-    doc.moveDown(1.5);
+    doc.moveDown(2);
 
-    // ===============================
-    // ORTODONCIA (SOLO CLINICA)
-    // ===============================
+    // =====================
+    // ORTODONCIA
+    // =====================
 
-    doc.fontSize(14).font('Helvetica-Bold').text('ORTODONCIA');
+    doc.fontSize(14).font('Helvetica-Bold').fillColor('#000')
+      .text('ORTODONCIA', { align: 'left' });
+
     doc.moveDown();
 
-    orthoProcedures.forEach((proc, index) => {
-      const patient =
-        proc.patients
-          ? `${proc.patients.first_name} ${proc.patients.first_last_name}`
-          : 'Sin paciente';
-
-      const date = new Date(proc.procedure_date).toLocaleDateString();
+    ortho.forEach((p, i) => {
+      const date = new Date(p.procedure_date).toLocaleDateString();
+      const patient = p.patients
+        ? `${p.patients.first_name} ${p.patients.first_last_name}`
+        : 'Sin paciente';
 
       drawRow(
-        `${index + 1}. ${date} - ${proc.procedure_description} - ${patient}`,
-        formatCurrency(proc.clinicCord, 'NIO'),
-        formatCurrency(proc.clinicUsd, 'USD')
+        `${i + 1}. ${date} - ${p.procedure_description} - ${patient}`,
+        formatCurrency(p.cord, 'NIO'),
+        formatCurrency(p.usd, 'USD')
       );
     });
 
     drawRow(
       'SUBTOTAL ORTODONCIA',
-      formatCurrency(totalOrthoClinicCordobas, 'NIO'),
-      formatCurrency(totalOrthoClinicDollars, 'USD')
-    );
-
-    doc.moveDown(1.5);
-
-    // ===============================
-    // GASTOS (DESGLOSE COMPLETO)
-    // ===============================
-
-    doc.fontSize(14).font('Helvetica-Bold').text('GASTOS DEL PERÍODO');
-    doc.moveDown();
-
-    bills?.forEach((bill, index) => {
-      const date = new Date(bill.bill_date).toLocaleDateString();
-
-      drawRow(
-        `${index + 1}. ${date} - ${bill.description || 'Sin descripción'} (${bill.category || 'General'})`,
-        `-${formatCurrency(bill.amount || 0, 'NIO')}`,
-        `-${formatCurrency((bill.amount || 0) / exchangeRate, 'USD')}`
-      );
-    });
-
-    drawRow(
-      'TOTAL GASTOS',
-      `-${formatCurrency(totalExpensesCordobas, 'NIO')}`,
-      `-${formatCurrency(totalExpensesCordobas / exchangeRate, 'USD')}`
+      formatCurrency(totalOrthoCord, 'NIO'),
+      formatCurrency(totalOrthoUsd, 'USD'),
+      true
     );
 
     doc.moveDown(2);
 
-    // ===============================
-    // RESULTADO
-    // ===============================
+    // =====================
+    // GASTOS
+    // =====================
 
-    doc.fontSize(16)
-      .font('Helvetica-Bold')
-      .text('RESULTADO', { align: 'center', underline: true });
+    doc.fontSize(14).font('Helvetica-Bold')
+      .text('GASTOS DEL PERÍODO', { align: 'left' });
+
+    doc.moveDown();
+
+    doc.fontSize(12).font('Helvetica-Bold').text('Gastos Fijos');
+    doc.moveDown(0.5);
+
+    fixedBills.forEach((b, i) => {
+      const date = new Date(b.bill_date).toLocaleDateString();
+      drawRow(
+        `${i + 1}. ${date} - ${b.description} (${b.category})`,
+        `-${formatCurrency(b.amount, 'NIO')}`,
+        `-${formatCurrency(b.amount / exchangeRate, 'USD')}`
+      );
+    });
+
+    drawRow(
+      'TOTAL GASTOS FIJOS',
+      `-${formatCurrency(totalFixed, 'NIO')}`,
+      `-${formatCurrency(totalFixed / exchangeRate, 'USD')}`,
+      true
+    );
 
     doc.moveDown(1);
 
+    doc.fontSize(12).font('Helvetica-Bold').text('Gastos Variables');
+    doc.moveDown(0.5);
+
+    variableBills.forEach((b, i) => {
+      const date = new Date(b.bill_date).toLocaleDateString();
+      drawRow(
+        `${i + 1}. ${date} - ${b.description} (${b.category})`,
+        `-${formatCurrency(b.amount, 'NIO')}`,
+        `-${formatCurrency(b.amount / exchangeRate, 'USD')}`
+      );
+    });
+
+    drawRow(
+      'TOTAL GASTOS VARIABLES',
+      `-${formatCurrency(totalVariable, 'NIO')}`,
+      `-${formatCurrency(totalVariable / exchangeRate, 'USD')}`,
+      true
+    );
+
+    doc.moveDown(2);
+
+    // =====================
+    // RESULTADO
+    // =====================
+
+    doc.fontSize(14).font('Helvetica-Bold')
+      .text('RESULTADO', { align: 'left' });
+
+    doc.moveDown();
+
     drawRow(
       'INGRESOS TOTALES',
-      formatCurrency(totalClinicIncomeCordobas, 'NIO'),
-      formatCurrency(totalClinicIncomeCordobas / exchangeRate, 'USD')
+      formatCurrency(totalIncome, 'NIO'),
+      formatCurrency(totalIncome / exchangeRate, 'USD'),
+      true
+    );
+
+    drawRow(
+      'GASTOS TOTALES',
+      `-${formatCurrency(totalExpenses, 'NIO')}`,
+      `-${formatCurrency(totalExpenses / exchangeRate, 'USD')}`,
+      true
     );
 
     drawRow(
       'UTILIDAD NETA',
-      formatCurrency(netProfitCordobas, 'NIO'),
-      formatCurrency(netProfitCordobas / exchangeRate, 'USD')
+      formatCurrency(netProfit, 'NIO'),
+      formatCurrency(netProfit / exchangeRate, 'USD'),
+      true,
+      netProfit >= 0 ? '#2E7D32' : '#C62828'
     );
 
     doc.end();
 
   } catch (error) {
-    console.error('❌ Error al exportar PDF mensual:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Error al generar PDF mensual: ' + error.message
-    });
+    console.error(error);
+    res.status(500).json({ error: 'Error al generar PDF' });
   }
 },
 

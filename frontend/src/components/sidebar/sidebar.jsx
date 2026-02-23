@@ -115,7 +115,7 @@ const Sidebar = ({ setPage, active, setActive, currentPage }) => {
               ✕
             </button>
             <div className="sidebar-logo">
-              <h2>🦷 Care U Smile</h2>
+              <h2>Care U Smile</h2>
               <p className="sidebar-subtitle">Gestión Odontológica</p>
             </div>
           </div>

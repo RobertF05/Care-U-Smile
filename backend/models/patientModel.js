@@ -7,41 +7,37 @@ import {
 
 const Patient = {
   // Obtener todos los pacientes
-  async getAll(page = 1, limit = 20, search = '') {
-    const from = (page - 1) * limit;
-    const to = from + limit - 1;
-    
-    let query = supabaseAdmin
-      .from('patients')
-      .select('*', { count: 'exact' })
-      .order('creation_date', { ascending: false });
-    
-    if (search) {
-      query = query.or(`first_name.ilike.%${search}%,first_last_name.ilike.%${search}%,identification.ilike.%${search}%`);
-    }
-    
-    query = query.range(from, to);
-    
-    const { data, error, count } = await query;
-    
-    if (error) throw error;
-    
-    // Formatear fechas para mostrar
-    const formattedData = data.map(patient => ({
-      ...patient,
-      creation_date_display: formatNicaraguaDateTime(patient.creation_date),
-      birthdate_display: patient.birthdate ? 
-        formatNicaraguaDate(patient.birthdate) : null
-    }));
-    
-    return {
-      data: formattedData,
-      total: count,
-      page,
-      limit,
-      totalPages: Math.ceil(count / limit)
-    };
-  },
+  // Obtener todos los pacientes SIN paginación
+async getAll(search = '') {
+
+  let query = supabaseAdmin
+    .from('patients')
+    .select('*', { count: 'exact' })
+    .order('creation_date', { ascending: false });
+
+  if (search) {
+    query = query.or(
+      `first_name.ilike.%${search}%,first_last_name.ilike.%${search}%,identification.ilike.%${search}%`
+    );
+  }
+
+  const { data, error, count } = await query;
+
+  if (error) throw error;
+
+  const formattedData = data.map(patient => ({
+    ...patient,
+    creation_date_display: formatNicaraguaDateTime(patient.creation_date),
+    birthdate_display: patient.birthdate
+      ? formatNicaraguaDate(patient.birthdate)
+      : null
+  }));
+
+  return {
+    data: formattedData,
+    total: count
+  };
+},
 
   // Obtener paciente por ID
   async getById(id) {

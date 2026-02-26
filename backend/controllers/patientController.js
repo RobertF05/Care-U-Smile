@@ -2,46 +2,29 @@
 import { supabaseAdmin } from '../config/supabase.js';
 // Agregar al principio del archivo:
 import PatientMedicalInfo from '../models/PatientMedicalInfo.js';
+import Patient from '../models/patientModel.js';
 
 const patientController = {
   // Obtener todos los pacientes
   getAll: async (req, res) => {
-    try {
-      const { page = 1, limit = 20, search = '' } = req.query;
-      const from = (page - 1) * limit;
-      const to = from + limit - 1;
-      
-      let query = supabaseAdmin
-        .from('patients')
-        .select('*', { count: 'exact' })
-        .order('creation_date', { ascending: false });
-      
-      if (search) {
-        query = query.or(`first_name.ilike.%${search}%,first_last_name.ilike.%${search}%,identification.ilike.%${search}%`);
-      }
-      
-      query = query.range(from, to);
-      
-      const { data, error, count } = await query;
-      
-      if (error) throw error;
-      
-      res.json({
-        success: true,
-        data,
-        total: count,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        totalPages: Math.ceil(count / limit)
-      });
-    } catch (error) {
-      console.error('Error al obtener pacientes:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Error al obtener pacientes'
-      });
-    }
-  },
+  try {
+    const { search = '' } = req.query;
+
+    const result = await Patient.getAll(search);
+
+    res.json({
+      success: true,
+      ...result
+    });
+
+  } catch (error) {
+    console.error('Error al obtener pacientes:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error al obtener pacientes'
+    });
+  }
+},
 // controllers/patientController.js - Actualizar el método create:
 create: async (req, res) => {
   try {

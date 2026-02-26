@@ -11,17 +11,12 @@ import {
 
 const Appointment = {
   // Obtener todas las citas
-  getAll: async (req, res) => {
+  getAll: async (page = 1, limit, filters = {}) => {
   try {
-    const { 
-      startDate, 
-      endDate, 
-      state,
-      patientId,
-      isOrthodontics,
-      isRegistered
-    } = req.query || {};
-    
+
+    const from = limit ? (page - 1) * limit : undefined;
+    const to = limit ? from + limit - 1 : undefined;
+
     let query = supabaseAdmin
       .from('clinical_appointments')
       .select(`
@@ -34,52 +29,44 @@ const Appointment = {
         )
       `, { count: 'exact' })
       .order('appointment_date', { ascending: true });
-    
-    // =========================
-    // FILTROS (IGUALES QUE ANTES)
-    // =========================
-    
-    if (startDate) {
-      const startNicaragua = `${startDate}T00:00:00`;
-      console.log(`🔍 Filtro startDate: ${startNicaragua}`);
-      query = query.gte('appointment_date', startNicaragua);
+
+    // 🔎 Aplicar filtros
+    if (filters.startDate) {
+      query = query.gte('appointment_date', `${filters.startDate}T00:00:00`);
     }
-    
-    if (endDate) {
-      const endNicaragua = `${endDate}T23:59:59`;
-      console.log(`🔍 Filtro endDate: ${endNicaragua}`);
-      query = query.lte('appointment_date', endNicaragua);
+
+    if (filters.endDate) {
+      query = query.lte('appointment_date', `${filters.endDate}T23:59:59`);
     }
-    
-    if (state) {
-      query = query.eq('state', state);
+
+    if (filters.state) {
+      query = query.eq('state', filters.state);
     }
-    
-    if (patientId) {
-      query = query.eq('Patient_ID', patientId);
+
+    if (filters.patientId) {
+      query = query.eq('Patient_ID', filters.patientId);
     }
-    
-    if (isOrthodontics !== undefined) {
-      query = query.eq('is_orthodontics', isOrthodontics === 'true');
+
+    if (filters.isOrthodontics !== undefined) {
+      query = query.eq('is_orthodontics', filters.isOrthodontics);
     }
-    
-    if (isRegistered !== undefined) {
-      query = query.eq('is_registered', isRegistered === 'true');
+
+    if (filters.isRegistered !== undefined) {
+      query = query.eq('is_registered', filters.isRegistered);
     }
-    
-    // 🚫 ELIMINADO: range(from, to)
-    
+
+    // 🔢 Solo aplicar paginación si limit existe
+    if (limit) {
+      query = query.range(from, to);
+    }
+
     const { data, error, count } = await query;
-    
+
     if (error) throw error;
-    
-    // =========================
-    // TRANSFORMACIÓN ORIGINAL (SIN TOCAR)
-    // =========================
-    
+
     const transformedData = data.map(item => {
       const fechaBD = new Date(item.appointment_date);
-      
+
       const formattedDate = fechaBD.toLocaleString('es-NI', {
         year: 'numeric',
         month: '2-digit',
@@ -89,7 +76,7 @@ const Appointment = {
         second: '2-digit',
         hour12: true
       });
-      
+
       return {
         ...item,
         appointment_date: formattedDate,
@@ -99,19 +86,18 @@ const Appointment = {
         is_registered: item.is_registered || false
       };
     });
-    
-    res.json({ 
-      success: true, 
+
+    return {
       data: transformedData,
-      total: count
-    });
-    
+      total: count,
+      page,
+      limit: limit || null,
+      totalPages: limit ? Math.ceil(count / limit) : 1
+    };
+
   } catch (error) {
-    console.error('Error al obtener citas:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Error al obtener citas' 
-    });
+    console.error('Error en model getAll:', error);
+    throw error;
   }
 },
 

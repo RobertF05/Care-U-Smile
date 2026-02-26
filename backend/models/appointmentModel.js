@@ -17,15 +17,16 @@ const Appointment = {
       .from('clinical_appointments')
       .select(`
         *,
-        patients (
-          id,
+        patients:Patient_ID (
+          Patient_ID,
           first_name,
-          last_name,
-          phone,
+          first_last_name,
+          second_last_name,
+          number_phone,
           email
         )
       `, { count: 'exact' })
-      .order('created_at', { ascending: false });
+      .order('appointment_date', { ascending: false });
 
     // =========================
     // FILTROS

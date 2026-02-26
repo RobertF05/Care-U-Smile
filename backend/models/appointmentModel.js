@@ -11,7 +11,7 @@ import {
 
 const Appointment = {
   // Obtener todas las citas
-async getAll(page = 1, limit = null, filters = {}) {
+  async getAll(page = 1, limit = null, filters = {}) {
   try {
     let query = supabaseAdmin
       .from('clinical_appointments')
@@ -58,7 +58,7 @@ async getAll(page = 1, limit = null, filters = {}) {
     }
 
     // =========================
-    // PAGINACIÓN (solo si hay limit)
+    // PAGINACIÓN
     // =========================
 
     if (limit) {
@@ -72,7 +72,7 @@ async getAll(page = 1, limit = null, filters = {}) {
     if (error) throw error;
 
     // =========================
-    // TRANSFORMACIÓN + NOMBRE PACIENTE
+    // TRANSFORMACIÓN SEGURA
     // =========================
 
     const transformedData = data.map(appointment => {
@@ -85,10 +85,10 @@ async getAll(page = 1, limit = null, filters = {}) {
       return {
         ...appointment,
 
-        // 👇 Esto arregla AppointmentPage
+        // Nombre plano (para AppointmentPage)
         patient_name: fullName,
 
-        // 👇 Esto mantiene funcionando el Dashboard
+        // Objeto paciente (para Dashboard)
         patients: patient
           ? {
               ...patient,
@@ -96,25 +96,23 @@ async getAll(page = 1, limit = null, filters = {}) {
             }
           : null,
 
+        // 🔥 FECHAS EN ISO SIN Z (NO RESTA 6 HORAS)
         appointment_date: appointment.appointment_date
           ? new Date(appointment.appointment_date)
-              .toLocaleString('es-NI', {
-                timeZone: 'America/Managua',
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: true
-              })
+              .toISOString()
+              .replace('Z', '')
           : null,
 
         created_at: appointment.created_at
-          ? formatNicaraguaDateTime(appointment.created_at)
+          ? new Date(appointment.created_at)
+              .toISOString()
+              .replace('Z', '')
           : null,
 
         updated_at: appointment.updated_at
-          ? formatNicaraguaDateTime(appointment.updated_at)
+          ? new Date(appointment.updated_at)
+              .toISOString()
+              .replace('Z', '')
           : null
       };
     });

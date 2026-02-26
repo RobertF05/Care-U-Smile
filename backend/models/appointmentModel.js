@@ -28,10 +28,6 @@ const Appointment = {
       `, { count: 'exact' })
       .order('appointment_date', { ascending: false });
 
-    // =========================
-    // FILTROS
-    // =========================
-
     if (filters.startDate && filters.endDate) {
       const startDateTime = `${filters.startDate}T00:00:00`;
       const endDateTime = `${filters.endDate}T23:59:59`;
@@ -57,10 +53,6 @@ const Appointment = {
       query = query.eq('is_registered', filters.isRegistered);
     }
 
-    // =========================
-    // PAGINACIÓN
-    // =========================
-
     if (limit) {
       const from = (page - 1) * limit;
       const to = from + limit - 1;
@@ -71,10 +63,6 @@ const Appointment = {
 
     if (error) throw error;
 
-    // =========================
-    // TRANSFORMACIÓN SEGURA
-    // =========================
-
     const transformedData = data.map(appointment => {
       const patient = appointment.patients;
 
@@ -84,11 +72,7 @@ const Appointment = {
 
       return {
         ...appointment,
-
-        // Nombre plano (para AppointmentPage)
         patient_name: fullName,
-
-        // Objeto paciente (para Dashboard)
         patients: patient
           ? {
               ...patient,
@@ -96,24 +80,10 @@ const Appointment = {
             }
           : null,
 
-        // 🔥 FECHAS EN ISO SIN Z (NO RESTA 6 HORAS)
-        appointment_date: appointment.appointment_date
-          ? new Date(appointment.appointment_date)
-              .toISOString()
-              .replace('Z', '')
-          : null,
-
-        created_at: appointment.created_at
-          ? new Date(appointment.created_at)
-              .toISOString()
-              .replace('Z', '')
-          : null,
-
+        // 🔥 NO TOCAMOS LAS FECHAS
+        appointment_date: appointment.appointment_date,
+        created_at: appointment.created_at,
         updated_at: appointment.updated_at
-          ? new Date(appointment.updated_at)
-              .toISOString()
-              .replace('Z', '')
-          : null
       };
     });
 

@@ -33,16 +33,14 @@ const Appointment = {
     // =========================
 
     if (filters.startDate && filters.endDate) {
-      const { startUTC, endUTC } = createNicaraguaDateRange(
-        filters.startDate,
-        filters.endDate
-      );
+      const startDateTime = `${filters.startDate}T00:00:00`;
+      const endDateTime = `${filters.endDate}T23:59:59`;
 
       query = query
-        .gte('appointment_date', startUTC)
-        .lte('appointment_date', endUTC);
+        .gte('appointment_date', startDateTime)
+        .lte('appointment_date', endDateTime);
     }
-
+    
     if (filters.state) {
       query = query.eq('state', filters.state);
     }

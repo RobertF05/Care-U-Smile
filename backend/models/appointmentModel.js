@@ -11,7 +11,7 @@ import {
 
 const Appointment = {
   // Obtener todas las citas
-  async getAll(page = 1, limit = null, filters = {}) {
+async getAll(page = 1, limit = null, filters = {}) {
   try {
     let query = supabaseAdmin
       .from('clinical_appointments')
@@ -72,21 +72,43 @@ const Appointment = {
     if (error) throw error;
 
     // =========================
-    // TRANSFORMACIÓN DE FECHAS
+    // TRANSFORMACIÓN + NOMBRE PACIENTE
     // =========================
 
-    const transformedData = data.map(appointment => ({
-      ...appointment,
-      appointment_date: appointment.appointment_date
-        ? formatNicaraguaDateTime(appointment.appointment_date)
-        : null,
-      created_at: appointment.created_at
-        ? formatNicaraguaDateTime(appointment.created_at)
-        : null,
-      updated_at: appointment.updated_at
-        ? formatNicaraguaDateTime(appointment.updated_at)
-        : null
-    }));
+    const transformedData = data.map(appointment => {
+      const patient = appointment.patients;
+
+      const fullName = patient
+        ? `${patient.first_name || ''} ${patient.first_last_name || ''} ${patient.second_last_name || ''}`.trim()
+        : 'Paciente no especificado';
+
+      return {
+        ...appointment,
+
+        // 👇 Esto arregla AppointmentPage
+        patient_name: fullName,
+
+        // 👇 Esto mantiene funcionando el Dashboard
+        patients: patient
+          ? {
+              ...patient,
+              full_name: fullName
+            }
+          : null,
+
+        appointment_date: appointment.appointment_date
+          ? formatNicaraguaDateTime(appointment.appointment_date)
+          : null,
+
+        created_at: appointment.created_at
+          ? formatNicaraguaDateTime(appointment.created_at)
+          : null,
+
+        updated_at: appointment.updated_at
+          ? formatNicaraguaDateTime(appointment.updated_at)
+          : null
+      };
+    });
 
     return {
       data: transformedData,

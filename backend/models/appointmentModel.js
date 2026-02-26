@@ -97,7 +97,16 @@ async getAll(page = 1, limit = null, filters = {}) {
           : null,
 
         appointment_date: appointment.appointment_date
-          ? formatNicaraguaDateTime(appointment.appointment_date)
+          ? new Date(appointment.appointment_date)
+              .toLocaleString('es-NI', {
+                timeZone: 'America/Managua',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true
+              })
           : null,
 
         created_at: appointment.created_at

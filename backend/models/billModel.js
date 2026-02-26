@@ -5,47 +5,41 @@ import {
 
 const Bill = {
   // Obtener todos los gastos
-  async getAll(page = 1, limit = 20, filters = {}) {
-    const from = (page - 1) * limit;
-    const to = from + limit - 1;
-    
-    let query = supabaseAdmin
-      .from('bills')
-      .select('*', { count: 'exact' })
-      .order('bill_date', { ascending: false });
-    
-    if (filters.category) {
-      query = query.eq('category', filters.category);
-    }
-    
-    if (filters.type) {
-      query = query.eq('is_recurrent', filters.type === 'FIJO');
-    }
-    
-    if (filters.startDate) {
-      const start = adjustDateForQuery(filters.startDate);
-      query = query.gte('bill_date', start);
-    }
-    
-    if (filters.endDate) {
-      const end = adjustDateForQuery(filters.endDate);
-      query = query.lte('bill_date', end);
-    }
-    
-    query = query.range(from, to);
-    
-    const { data, error, count } = await query;
-    
-    if (error) throw error;
-    
-    return {
-      data,
-      total: count,
-      page,
-      limit,
-      totalPages: Math.ceil(count / limit)
-    };
-  },
+  // Obtener todos los gastos SIN paginación
+async getAll(filters = {}) {
+
+  let query = supabaseAdmin
+    .from('bills')
+    .select('*', { count: 'exact' })
+    .order('bill_date', { ascending: false });
+
+  if (filters.category) {
+    query = query.eq('category', filters.category);
+  }
+
+  if (filters.type) {
+    query = query.eq('is_recurrent', filters.type === 'FIJO');
+  }
+
+  if (filters.startDate) {
+    const start = adjustDateForQuery(filters.startDate);
+    query = query.gte('bill_date', start);
+  }
+
+  if (filters.endDate) {
+    const end = adjustDateForQuery(filters.endDate);
+    query = query.lte('bill_date', end);
+  }
+
+  const { data, error, count } = await query;
+
+  if (error) throw error;
+
+  return {
+    data: data || [],
+    total: count || 0
+  };
+},
 
   // Obtener gasto por ID
   async getById(id) {

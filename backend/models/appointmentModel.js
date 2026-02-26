@@ -11,80 +11,96 @@ import {
 
 const Appointment = {
   // Obtener todas las citas
-  async getAll(page = 1, limit = 20, filters = {}) {
-    const from = (page - 1) * limit;
-    const to = from + limit - 1;
-    
+  async getAll(page = 1, limit = null, filters = {}) {
+  try {
     let query = supabaseAdmin
       .from('clinical_appointments')
       .select(`
         *,
         patients (
+          id,
           first_name,
-          first_last_name,
-          identification,
-          number_phone
+          last_name,
+          phone,
+          email
         )
       `, { count: 'exact' })
-      .order('appointment_date', { ascending: true });
-    
-    // Aplicar filtros con conversión de zona horaria
-    if (filters.startDate) {
-      const startUTC = convertDateStringToUTCStart(filters.startDate);
-      query = query.gte('appointment_date', startUTC);
+      .order('created_at', { ascending: false });
+
+    // =========================
+    // FILTROS
+    // =========================
+
+    if (filters.startDate && filters.endDate) {
+      const { startUTC, endUTC } = createNicaraguaDateRange(
+        filters.startDate,
+        filters.endDate
+      );
+
+      query = query
+        .gte('appointment_date', startUTC)
+        .lte('appointment_date', endUTC);
     }
-    
-    if (filters.endDate) {
-      const endUTC = convertDateStringToUTCEnd(filters.endDate);
-      query = query.lte('appointment_date', endUTC);
-    }
-    
+
     if (filters.state) {
       query = query.eq('state', filters.state);
     }
-    
+
     if (filters.patientId) {
-      query = query.eq('Patient_ID', filters.patientId);
+      query = query.eq('patient_id', filters.patientId);
     }
-    
+
     if (filters.isOrthodontics !== undefined) {
       query = query.eq('is_orthodontics', filters.isOrthodontics);
     }
-    
+
     if (filters.isRegistered !== undefined) {
       query = query.eq('is_registered', filters.isRegistered);
     }
-    
-    query = query.range(from, to);
-    
+
+    // =========================
+    // PAGINACIÓN (solo si hay limit)
+    // =========================
+
+    if (limit) {
+      const from = (page - 1) * limit;
+      const to = from + limit - 1;
+      query = query.range(from, to);
+    }
+
     const { data, error, count } = await query;
-    
+
     if (error) throw error;
-    
-    // Transformar datos y convertir fechas a Nicaragua
-    const transformedData = data.map(item => {
-      const appointmentDateNicaragua = formatNicaraguaDateTime(item.appointment_date);
-      
-      return {
-        ...item,
-        appointment_date: appointmentDateNicaragua,
-        appointment_date_utc: item.appointment_date, // Guardar original UTC
-        appointment_date_obj: toNicaraguaTime(item.appointment_date), // Para ordenamiento
-        patient_name: `${item.patients?.first_name || ''} ${item.patients?.first_last_name || ''}`.trim(),
-        patient_identification: item.patients?.identification,
-        patient_phone: item.patients?.number_phone,
-        is_registered: item.is_registered || false
-      };
-    });
-    
+
+    // =========================
+    // TRANSFORMACIÓN DE FECHAS
+    // =========================
+
+    const transformedData = data.map(appointment => ({
+      ...appointment,
+      appointment_date: appointment.appointment_date
+        ? formatNicaraguaDateTime(appointment.appointment_date)
+        : null,
+      created_at: appointment.created_at
+        ? formatNicaraguaDateTime(appointment.created_at)
+        : null,
+      updated_at: appointment.updated_at
+        ? formatNicaraguaDateTime(appointment.updated_at)
+        : null
+    }));
+
     return {
       data: transformedData,
       total: count,
-      page,
-      limit,
-      totalPages: Math.ceil(count / limit)
+      page: limit ? page : 1,
+      limit: limit || count
     };
-  },
+
+  } catch (error) {
+    console.error('Error en getAll appointments:', error);
+    throw error;
+  }
+},
 
   // Obtener cita por ID
   async getById(id) {

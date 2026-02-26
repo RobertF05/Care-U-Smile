@@ -4,34 +4,40 @@ import DailyClosing from '../models/dailyClosingModel.js';
 const dailyClosingController = {
   // Obtener todos los cierres diarios
   getAll: async (req, res) => {
-    try {
-      const { 
-        page = 1, 
-        limit = 30, 
-        closing_type, 
-        startDate, 
-        endDate 
-      } = req.query;
-      
-      const filters = {};
-      if (closing_type) filters.closing_type = closing_type;
-      if (startDate) filters.startDate = startDate;
-      if (endDate) filters.endDate = endDate;
-      
-      const result = await DailyClosing.getAll(parseInt(page), parseInt(limit), filters);
-      
-      res.json({ 
-        success: true, 
-        ...result 
-      });
-    } catch (error) {
-      console.error('Error al obtener cierres diarios:', error);
-      res.status(500).json({ 
-        success: false, 
-        error: 'Error al obtener cierres diarios' 
-      });
-    }
-  },
+  try {
+    const { 
+      page = 1,
+      limit,
+      closing_type,
+      startDate,
+      endDate
+    } = req.query;
+
+    const filters = {};
+
+    if (closing_type) filters.closing_type = closing_type;
+    if (startDate) filters.startDate = startDate;
+    if (endDate) filters.endDate = endDate;
+
+    const result = await DailyClosing.getAll(
+      parseInt(page),
+      limit ? parseInt(limit) : null,
+      filters
+    );
+
+    res.json({
+      success: true,
+      ...result
+    });
+
+  } catch (error) {
+    console.error('Error al obtener cierres diarios:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error al obtener cierres diarios'
+    });
+  }
+},
 
   // Obtener cierre por ID
   getById: async (req, res) => {

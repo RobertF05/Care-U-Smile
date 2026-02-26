@@ -11,37 +11,47 @@ import {
 
 const DailyClosing = {
   // Obtener todos los cierres diarios
-  async getAll(page = 1, limit = 30, filters = {}) {
-    const from = (page - 1) * limit;
-    const to = from + limit - 1;
-    
+  async getAll(page = 1, limit = null, filters = {}) {
+  try {
     let query = supabaseAdmin
       .from('daily_closings')
       .select('*', { count: 'exact' })
       .order('closing_date', { ascending: false });
-    
+
+    // =========================
+    // FILTROS
+    // =========================
+
     if (filters.closing_type) {
       query = query.eq('closing_type', filters.closing_type);
     }
-    
+
     if (filters.startDate) {
       query = query.gte('closing_date', filters.startDate);
     }
-    
+
     if (filters.endDate) {
       query = query.lte('closing_date', filters.endDate);
     }
-    
-    query = query.range(from, to);
-    
+
+    // =========================
+    // PAGINACIÓN SOLO SI HAY LIMIT
+    // =========================
+
+    if (limit) {
+      const from = (page - 1) * limit;
+      const to = from + limit - 1;
+      query = query.range(from, to);
+    }
+
     const { data, error, count } = await query;
-    
+
     if (error) throw error;
-    
+
     const settings = await this.getSystemSettings();
     const exchangeRate = settings?.exchange_rate || 36.5;
-    
-    const formattedData = data.map(closing => ({
+
+    const formattedData = (data || []).map(closing => ({
       ...closing,
       closing_date_exact: closing.closing_date,
       closing_date_formatted: formatNicaraguaDate(closing.closing_date),
@@ -53,15 +63,20 @@ const DailyClosing = {
       total_variable_expenses_usd: (closing.total_variable_expenses || 0) / exchangeRate,
       net_profit_usd: (closing.net_profit || 0) / exchangeRate
     }));
-    
+
     return {
       data: formattedData,
       total: count,
-      page,
-      limit,
-      totalPages: Math.ceil(count / limit)
+      page: limit ? page : 1,
+      limit: limit || count,
+      totalPages: limit ? Math.ceil(count / limit) : 1
     };
-  },
+
+  } catch (error) {
+    console.error('Error en getAll daily closings:', error);
+    throw error;
+  }
+},
 
   // Obtener cierre por ID
   async getById(id) {

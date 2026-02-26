@@ -1,110 +1,50 @@
 import { supabaseAdmin } from '../config/supabase.js';
 import Procedure from '../models/procedureModel.js';
 import procedureController from './procedureController.js'; 
+import Appointment from '../models/appointmentModel.js';
 
 const appointmentController = {
   getAll: async (req, res) => {
-    try {
-      const { 
-        page = 1, 
-        limit = 20, 
-        startDate, 
-        endDate, 
-        state,
-        patientId,
-        isOrthodontics,
-        isRegistered
-      } = req.query;
-      
-      const from = (page - 1) * limit;
-      const to = from + limit - 1;
-      
-      let query = supabaseAdmin
-        .from('clinical_appointments')
-        .select(`
-          *,
-          patients (
-            first_name,
-            first_last_name,
-            identification,
-            number_phone
-          )
-        `, { count: 'exact' })
-        .order('appointment_date', { ascending: true });
-      
-      if (startDate) {
-        const startNicaragua = `${startDate}T00:00:00`;
-        console.log(`🔍 Filtro startDate: ${startNicaragua}`);
-        query = query.gte('appointment_date', startNicaragua);
-      }
-      
-      if (endDate) {
-        const endNicaragua = `${endDate}T23:59:59`;
-        console.log(`🔍 Filtro endDate: ${endNicaragua}`);
-        query = query.lte('appointment_date', endNicaragua);
-      }
-      
-      if (state) {
-        query = query.eq('state', state);
-      }
-      
-      if (patientId) {
-        query = query.eq('Patient_ID', patientId);
-      }
-      
-      if (isOrthodontics !== undefined) {
-        query = query.eq('is_orthodontics', isOrthodontics === 'true');
-      }
-      
-      if (isRegistered !== undefined) {
-        query = query.eq('is_registered', isRegistered === 'true');
-      }
-      
-      query = query.range(from, to);
-      
-      const { data, error, count } = await query;
-      
-      if (error) throw error;
-      
-      const transformedData = data.map(item => {
-        const fechaBD = new Date(item.appointment_date);
-        
-        const formattedDate = fechaBD.toLocaleString('es-NI', {
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: true
-        });
-        
-        return {
-          ...item,
-          appointment_date: formattedDate,
-          patient_name: `${item.patients?.first_name || ''} ${item.patients?.first_last_name || ''}`.trim(),
-          patient_identification: item.patients?.identification,
-          patient_phone: item.patients?.number_phone,
-          is_registered: item.is_registered || false
-        };
-      });
-      
-      res.json({ 
-        success: true, 
-        data: transformedData,
-        total: count,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        totalPages: Math.ceil(count / limit)
-      });
-    } catch (error) {
-      console.error('Error al obtener citas:', error);
-      res.status(500).json({ 
-        success: false, 
-        error: 'Error al obtener citas' 
-      });
-    }
-  },
+  try {
+    const { 
+      page = 1, 
+      limit,
+      startDate, 
+      endDate, 
+      state,
+      patientId,
+      isOrthodontics,
+      isRegistered
+    } = req.query;
+
+    const filters = {};
+
+    if (startDate) filters.startDate = startDate;
+    if (endDate) filters.endDate = endDate;
+    if (state) filters.state = state;
+    if (patientId) filters.patientId = patientId;
+    if (isOrthodontics !== undefined) filters.isOrthodontics = isOrthodontics === 'true';
+    if (isRegistered !== undefined) filters.isRegistered = isRegistered === 'true';
+
+    const result = await Appointment.getAll(
+      parseInt(page),
+      limit ? parseInt(limit) : undefined,
+      filters
+    );
+
+    res.json({
+      success: true,
+      ...result
+    });
+
+  } catch (error) {
+    console.error('Error al obtener citas:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error al obtener citas'
+    });
+  }
+},
 
   getById: async (req, res) => {
     try {

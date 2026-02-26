@@ -2,37 +2,32 @@ import Bill from '../models/billModel.js';
 
 const billController = {
   // Obtener todos los gastos
-  getAll: async (req, res) => {
-    try {
-      const { 
-        page = 1, 
-        limit = 20, 
-        category, 
-        type, 
-        startDate, 
-        endDate 
-      } = req.query;
-      
-      const filters = {};
-      if (category) filters.category = category;
-      if (type) filters.type = type;
-      if (startDate) filters.startDate = startDate;
-      if (endDate) filters.endDate = endDate;
-      
-      const result = await Bill.getAll(parseInt(page), parseInt(limit), filters);
-      
-      res.json({ 
-        success: true, 
-        ...result 
-      });
-    } catch (error) {
-      console.error('Error al obtener gastos:', error);
-      res.status(500).json({ 
-        success: false, 
-        error: 'Error al obtener gastos' 
-      });
-    }
-  },
+  // Obtener todos los gastos SIN paginación
+getAll: async (req, res) => {
+  try {
+    const { category, type, startDate, endDate } = req.query;
+
+    const filters = {};
+    if (category) filters.category = category;
+    if (type) filters.type = type;
+    if (startDate) filters.startDate = startDate;
+    if (endDate) filters.endDate = endDate;
+
+    const result = await Bill.getAll(filters);
+
+    res.json({
+      success: true,
+      ...result
+    });
+
+  } catch (error) {
+    console.error('Error al obtener gastos:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error al obtener gastos'
+    });
+  }
+},
 
   // Obtener gasto por ID
   getById: async (req, res) => {

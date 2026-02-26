@@ -80,8 +80,12 @@ const Appointment = {
             }
           : null,
 
-        // 🔥 NO TOCAMOS LAS FECHAS
-        appointment_date: appointment.appointment_date,
+        appointment_date: appointment.appointment_date
+          ? new Date(
+              new Date(appointment.appointment_date)
+                .toLocaleString('en-US', { timeZone: 'America/Managua' })
+            ).toISOString()
+          : null,
         created_at: appointment.created_at,
         updated_at: appointment.updated_at
       };

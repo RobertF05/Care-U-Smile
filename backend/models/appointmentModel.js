@@ -11,96 +11,107 @@ import {
 
 const Appointment = {
   // Obtener todas las citas
-  async getAll(page = 1, limit = null, filters = {}) {
+  getAll: async (req, res) => {
   try {
+    const { 
+      startDate, 
+      endDate, 
+      state,
+      patientId,
+      isOrthodontics,
+      isRegistered
+    } = req.query;
+    
     let query = supabaseAdmin
       .from('clinical_appointments')
       .select(`
         *,
-        patients:Patient_ID (
-          Patient_ID,
+        patients (
           first_name,
           first_last_name,
-          second_last_name,
-          number_phone,
-          email
+          identification,
+          number_phone
         )
       `, { count: 'exact' })
-      .order('appointment_date', { ascending: false });
-
-    if (filters.startDate && filters.endDate) {
-      const startDateTime = `${filters.startDate}T00:00:00`;
-      const endDateTime = `${filters.endDate}T23:59:59`;
-
-      query = query
-        .gte('appointment_date', startDateTime)
-        .lte('appointment_date', endDateTime);
+      .order('appointment_date', { ascending: true });
+    
+    // =========================
+    // FILTROS (IGUALES QUE ANTES)
+    // =========================
+    
+    if (startDate) {
+      const startNicaragua = `${startDate}T00:00:00`;
+      console.log(`🔍 Filtro startDate: ${startNicaragua}`);
+      query = query.gte('appointment_date', startNicaragua);
     }
     
-    if (filters.state) {
-      query = query.eq('state', filters.state);
+    if (endDate) {
+      const endNicaragua = `${endDate}T23:59:59`;
+      console.log(`🔍 Filtro endDate: ${endNicaragua}`);
+      query = query.lte('appointment_date', endNicaragua);
     }
-
-    if (filters.patientId) {
-      query = query.eq('patient_id', filters.patientId);
+    
+    if (state) {
+      query = query.eq('state', state);
     }
-
-    if (filters.isOrthodontics !== undefined) {
-      query = query.eq('is_orthodontics', filters.isOrthodontics);
+    
+    if (patientId) {
+      query = query.eq('Patient_ID', patientId);
     }
-
-    if (filters.isRegistered !== undefined) {
-      query = query.eq('is_registered', filters.isRegistered);
+    
+    if (isOrthodontics !== undefined) {
+      query = query.eq('is_orthodontics', isOrthodontics === 'true');
     }
-
-    if (limit) {
-      const from = (page - 1) * limit;
-      const to = from + limit - 1;
-      query = query.range(from, to);
+    
+    if (isRegistered !== undefined) {
+      query = query.eq('is_registered', isRegistered === 'true');
     }
-
+    
+    // 🚫 ELIMINADO: range(from, to)
+    
     const { data, error, count } = await query;
-
+    
     if (error) throw error;
-
-    const transformedData = data.map(appointment => {
-      const patient = appointment.patients;
-
-      const fullName = patient
-        ? `${patient.first_name || ''} ${patient.first_last_name || ''} ${patient.second_last_name || ''}`.trim()
-        : 'Paciente no especificado';
-
+    
+    // =========================
+    // TRANSFORMACIÓN ORIGINAL (SIN TOCAR)
+    // =========================
+    
+    const transformedData = data.map(item => {
+      const fechaBD = new Date(item.appointment_date);
+      
+      const formattedDate = fechaBD.toLocaleString('es-NI', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+      });
+      
       return {
-        ...appointment,
-        patient_name: fullName,
-        patients: patient
-          ? {
-              ...patient,
-              full_name: fullName
-            }
-          : null,
-
-        appointment_date: appointment.appointment_date
-          ? new Date(
-              new Date(appointment.appointment_date)
-                .toLocaleString('en-US', { timeZone: 'America/Managua' })
-            ).toISOString()
-          : null,
-        created_at: appointment.created_at,
-        updated_at: appointment.updated_at
+        ...item,
+        appointment_date: formattedDate,
+        patient_name: `${item.patients?.first_name || ''} ${item.patients?.first_last_name || ''}`.trim(),
+        patient_identification: item.patients?.identification,
+        patient_phone: item.patients?.number_phone,
+        is_registered: item.is_registered || false
       };
     });
-
-    return {
+    
+    res.json({ 
+      success: true, 
       data: transformedData,
-      total: count,
-      page: limit ? page : 1,
-      limit: limit || count
-    };
-
+      total: count
+    });
+    
   } catch (error) {
-    console.error('Error en getAll appointments:', error);
-    throw error;
+    console.error('Error al obtener citas:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Error al obtener citas' 
+    });
   }
 },
 

@@ -20,7 +20,7 @@ const Appointment = {
       patientId,
       isOrthodontics,
       isRegistered
-    } = req.query;
+    } = req.query || {};
     
     let query = supabaseAdmin
       .from('clinical_appointments')

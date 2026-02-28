@@ -67,6 +67,15 @@ const BillsPage = () => {
 
   const { addNotification } = useNotification();
 
+  // Función helper para obtener la fecha local en formato YYYY-MM-DD
+  const getLocalDateString = () => {
+    const date = new Date();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   // Estados
   const [showFilters, setShowFilters] = useState(true);
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -79,7 +88,7 @@ const BillsPage = () => {
   const [expandedBills, setExpandedBills] = useState({});
   const [dateRange, setDateRange] = useState({
     startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
-    endDate: new Date().toISOString().split('T')[0]
+    endDate: getLocalDateString() // Usamos la función helper aquí también
   });
 
   // Formularios CON SOPORTE PARA DÓLARES Y TIPO DE CAMBIO DINÁMICO
@@ -87,7 +96,7 @@ const BillsPage = () => {
     description: '',
     amount: '',
     amount_USD: '',
-    bill_date: new Date().toISOString().split('T')[0],
+    bill_date: getLocalDateString(), // AHORA USA LA FECHA LOCAL CORRECTA
     category: 'Materiales Odontológicos',
     currency_used: 'NIO',
     exchange_rate_bill: systemSettings.exchange_rate || 36.5,
@@ -148,14 +157,14 @@ const BillsPage = () => {
   };
 
   const formatDate = (dateString) => {
-  if (!dateString) return '';
+    if (!dateString) return '';
 
-  // Tomar solo la parte YYYY-MM-DD
-  const datePart = dateString.split('T')[0];
-  const [year, month, day] = datePart.split('-');
+    // Tomar solo la parte YYYY-MM-DD
+    const datePart = dateString.split('T')[0];
+    const [year, month, day] = datePart.split('-');
 
-  return `${day}/${month}/${year}`;
-};
+    return `${day}/${month}/${year}`;
+  };
 
   // Función para manejar cambios en moneda
   const handleCurrencyChange = (field, value, isNewBill = true) => {
@@ -279,7 +288,7 @@ const BillsPage = () => {
     }));
   };
 
-  // Crear nuevo gasto - MODIFICADO: alert -> addNotification
+  // Crear nuevo gasto
   const handleCreateBill = async (e) => {
     e.preventDefault();
     
@@ -297,11 +306,12 @@ const BillsPage = () => {
 
       await createBill(billData);
       
+      // Reset del formulario usando la función helper para la fecha
       setNewBill({
         description: '',
         amount: '',
         amount_USD: '',
-        bill_date: new Date().toISOString().split('T')[0],
+        bill_date: getLocalDateString(), // AHORA USA LA FECHA LOCAL CORRECTA
         category: 'Materiales Odontológicos',
         currency_used: 'NIO',
         exchange_rate_bill: systemSettings.exchange_rate || 36.5,
@@ -310,12 +320,10 @@ const BillsPage = () => {
       
       setShowAddModal(false);
       
-      // 🔴 CAMBIO: alert -> addNotification
       addNotification('✅ Gasto registrado exitosamente', 'success', 5000);
       
     } catch (error) {
       console.error('Error al crear gasto:', error);
-      // 🔴 CAMBIO: alert -> addNotification
       addNotification(`❌ Error: ${error.message}`, 'error', 5000);
     }
   };
@@ -336,7 +344,7 @@ const BillsPage = () => {
     setShowEditModal(true);
   };
 
-  // Actualizar gasto - MODIFICADO: alert -> addNotification
+  // Actualizar gasto
   const handleUpdateBill = async (e) => {
     e.preventDefault();
     
@@ -357,26 +365,22 @@ const BillsPage = () => {
       setShowEditModal(false);
       setSelectedBill(null);
       
-      // 🔴 CAMBIO: alert -> addNotification
       addNotification('✅ Gasto actualizado exitosamente', 'success', 5000);
       
     } catch (error) {
       console.error('Error al actualizar gasto:', error);
-      // 🔴 CAMBIO: alert -> addNotification
       addNotification(`❌ Error: ${error.message}`, 'error', 5000);
     }
   };
 
-  // Eliminar gasto - MODIFICADO: alert dentro de confirm -> addNotification
+  // Eliminar gasto
   const handleDeleteBill = async (billId) => {
     if (window.confirm('¿Está seguro de que desea eliminar este gasto?\nEsta acción no se puede deshacer.')) {
       try {
         await deleteBill(billId);
-        // 🔴 CAMBIO: alert -> addNotification
         addNotification('✅ Gasto eliminado exitosamente', 'success', 5000);
       } catch (error) {
         console.error('Error al eliminar gasto:', error);
-        // 🔴 CAMBIO: alert -> addNotification
         addNotification(`❌ Error: ${error.message}`, 'error', 5000);
       }
     }
@@ -1127,7 +1131,7 @@ const BillsPage = () => {
                 </div>
               </div>
 
-              {/* Rango de fechas - MODIFICADO: alert -> addNotification */}
+              {/* Rango de fechas */}
               <div className="stats-section">
                 <h4>Estadísticas por Período</h4>
                 <div className="date-range-selector">
@@ -1152,7 +1156,6 @@ const BillsPage = () => {
                     onClick={async () => {
                       const periodStats = await getDateRangeStats();
                       if (periodStats) {
-                        // 🔴 CAMBIO: alert -> addNotification
                         addNotification(
                           `📊 Estadísticas del período:\n` +
                           `Gastos totales: ${formatCurrency(periodStats.total_expenses)}\n` +

@@ -72,6 +72,15 @@ const MonthlyClosingsPage = () => {
 
   const { addNotification } = useNotification();
 
+  // Función helper para obtener la fecha local en formato YYYY-MM-DD
+  const getLocalDateString = () => {
+    const date = new Date();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   // Estados
   const [showFilters, setShowFilters] = useState(true);
   const [yearFilter, setYearFilter] = useState(new Date().getFullYear().toString());
@@ -111,9 +120,9 @@ const MonthlyClosingsPage = () => {
     comentary: ''
   });
 
-  // Formulario para crear cierre diario
+  // Formulario para crear cierre diario - AHORA USA LA FECHA LOCAL CORRECTA
   const [newDailyClosing, setNewDailyClosing] = useState({
-    date: new Date().toISOString().split('T')[0],
+    date: getLocalDateString(), // Reemplazado toISOString() por getLocalDateString()
     closing_type: 'general',
     comentary: ''
   });
@@ -716,7 +725,7 @@ const MonthlyClosingsPage = () => {
         
         setShowCreateDailyModal(false);
         setNewDailyClosing({
-          date: new Date().toISOString().split('T')[0],
+          date: getLocalDateString(), // Reset usando la función helper
           closing_type: 'general',
           comentary: ''
         });

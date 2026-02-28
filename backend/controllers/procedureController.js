@@ -333,468 +333,409 @@ calculateProcedurePayments: (procedureData) => {
 },
 
   // ============================================
-  // OBTENER PROCEDIMIENTOS REGULARES (NO ORTODONCIA)
-  // ============================================
-  getAllNormal: async (req, res) => {
-    try {
-      const { 
-        page = 1, 
-        limit = 100, 
-        startDate, 
-        endDate,
-        patientId,
-        timeFilter
-      } = req.query;
+// OBTENER PROCEDIMIENTOS REGULARES (NO ORTODONCIA)
+// ============================================
+getAllNormal: async (req, res) => {
+  try {
+    const { 
+      startDate, 
+      endDate,
+      patientId,
+      timeFilter
+    } = req.query;
+    
+    console.log('📋 Procedimientos normales - Parámetros:', { 
+      startDate, endDate, patientId, timeFilter 
+    });
+    
+    // Construir consulta base
+    let query = supabaseAdmin
+      .from('procedures')
+      .select(`
+        *,
+        patients (
+          first_name,
+          first_last_name,
+          identification
+        ),
+        clinical_appointments (
+          query_type,
+          appointment_date
+        )
+      `, { count: 'exact' })
+      .eq('is_orthodontics', false)
+      .order('procedure_date', { ascending: false });
+    
+    // 1. SI HAY FECHAS ESPECÍFICAS -> Usar esas fechas
+    if (startDate && endDate) {
+      const startUTC = safeToISOString(`${startDate}T00:00:00`);
+      const endUTC = safeToISOString(`${endDate}T23:59:59`);
       
-      console.log('📋 Procedimientos normales - Parámetros:', { 
-        page, limit, startDate, endDate, patientId, timeFilter 
-      });
+      if (startUTC && endUTC) {
+        console.log('📅 Usando fechas específicas:', { startUTC, endUTC });
+        query = query.gte('procedure_date', startUTC);
+        query = query.lte('procedure_date', endUTC);
+      }
+    } 
+    // 2. SI HAY FILTRO DE TIEMPO Y NO ES 'all' -> Calcular rango
+    else if (timeFilter && timeFilter !== 'all') {
+      console.log('📅 Calculando rango para filtro:', timeFilter);
       
-      const from = (page - 1) * limit;
-      const to = from + limit - 1;
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      const day = now.getDate();
       
-      // Construir consulta base
-      let query = supabaseAdmin
-        .from('procedures')
-        .select(`
-          *,
-          patients (
-            first_name,
-            first_last_name,
-            identification
-          ),
-          clinical_appointments (
-            query_type,
-            appointment_date
-          )
-        `, { count: 'exact' })
-        .eq('is_orthodontics', false)
-        .order('procedure_date', { ascending: false });
+      let startDateObj, endDateObj;
       
-      // 1. SI HAY FECHAS ESPECÍFICAS -> Usar esas fechas
-      if (startDate && endDate) {
-        const startUTC = safeToISOString(`${startDate}T00:00:00`);
-        const endUTC = safeToISOString(`${endDate}T23:59:59`);
-        
-        if (startUTC && endUTC) {
-          console.log('📅 Usando fechas específicas:', { startUTC, endUTC });
-          query = query.gte('procedure_date', startUTC);
-          query = query.lte('procedure_date', endUTC);
-        }
-      } 
-      // 2. SI HAY FILTRO DE TIEMPO Y NO ES 'all' -> Calcular rango
-      else if (timeFilter && timeFilter !== 'all') {
-        console.log('📅 Calculando rango para filtro:', timeFilter);
-        
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = now.getMonth();
-        const day = now.getDate();
-        
-        let startDateObj, endDateObj;
-        
-        switch(timeFilter) {
-          case 'today':
-            startDateObj = new Date(year, month, day, 0, 0, 0, 0);
-            endDateObj = new Date(year, month, day, 23, 59, 59, 999);
-            break;
-            
-          case 'thisWeek':
-            const dayOfWeek = now.getDay();
-            const startOfWeek = new Date(year, month, day - dayOfWeek, 0, 0, 0, 0);
-            const endOfWeek = new Date(year, month, day + (6 - dayOfWeek), 23, 59, 59, 999);
-            startDateObj = startOfWeek;
-            endDateObj = endOfWeek;
-            break;
-            
-          case 'thisMonth':
-            startDateObj = new Date(year, month, 1, 0, 0, 0, 0);
-            endDateObj = new Date(year, month + 1, 0, 23, 59, 59, 999);
-            break;
-            
-          default:
-            console.log('⚠️ Filtro no reconocido, sin filtro de fecha');
-            break;
-        }
-        
-        if (startDateObj && endDateObj) {
-          query = query.gte('procedure_date', startDateObj.toISOString());
-          query = query.lte('procedure_date', endDateObj.toISOString());
-          console.log('📅 Rango aplicado:', { 
-            start: startDateObj.toISOString(), 
-            end: endDateObj.toISOString() 
-          });
-        }
-      } 
-      // 3. SI ES 'all' O NO HAY FILTROS -> NO aplicar filtro de fecha
-      else {
-        console.log('📅 Mostrando TODOS los procedimientos (sin filtro de fecha)');
+      switch(timeFilter) {
+        case 'today':
+          startDateObj = new Date(year, month, day, 0, 0, 0, 0);
+          endDateObj = new Date(year, month, day, 23, 59, 59, 999);
+          break;
+          
+        case 'thisWeek':
+          const dayOfWeek = now.getDay();
+          const startOfWeek = new Date(year, month, day - dayOfWeek, 0, 0, 0, 0);
+          const endOfWeek = new Date(year, month, day + (6 - dayOfWeek), 23, 59, 59, 999);
+          startDateObj = startOfWeek;
+          endDateObj = endOfWeek;
+          break;
+          
+        case 'thisMonth':
+          startDateObj = new Date(year, month, 1, 0, 0, 0, 0);
+          endDateObj = new Date(year, month + 1, 0, 23, 59, 59, 999);
+          break;
       }
       
-      // Filtro por paciente
-      if (patientId && patientId.trim() !== "") {
-        query = query.eq('Patient_ID', patientId);
+      if (startDateObj && endDateObj) {
+        query = query.gte('procedure_date', startDateObj.toISOString());
+        query = query.lte('procedure_date', endDateObj.toISOString());
       }
-      
-      // Paginación
-      query = query.range(from, to);
-      
-      console.log('🔍 Ejecutando consulta...');
-      const { data, error, count: totalCount } = await query;
-      
-      if (error) {
-        console.error('❌ Error en Supabase:', error);
-        throw error;
-      }
-      
-      console.log(`✅ ${data?.length || 0} procedimientos encontrados`);
-      
-      // Transformar datos
-      const transformedData = (data || []).map(item => {
-        // Formatear fechas para mostrar
-        let procedureDateFormatted = 'N/A';
-        try {
-          if (item.procedure_date) {
-            procedureDateFormatted = formatNicaraguaDateTime(item.procedure_date);
-          }
-        } catch (error) {
-          console.error('Error formateando fecha:', error);
-        }
-        
-        let creationDateFormatted = 'N/A';
-        try {
-          if (item.creation_date) {
-            creationDateFormatted = formatNicaraguaDateTime(item.creation_date);
-          }
-        } catch (error) {
-          console.error('Error formateando creación:', error);
-        }
-        
-        const originalAppointmentDate = item.clinical_appointments?.[0]?.appointment_date;
-        let originalAppointmentDateFormatted = null;
-        try {
-          if (originalAppointmentDate) {
-            originalAppointmentDateFormatted = formatNicaraguaDateTime(originalAppointmentDate);
-          }
-        } catch (error) {
-          console.error('Error formateando cita original:', error);
-        }
-        
-        // Calcular montos usando los campos ya calculados
-        const exchangeRate = item.exchange_rate || 36.5;
-        const totalProcedureUSD = item.total_procedure_usd || (item.total_procedure / exchangeRate);
-        const clinicNetIncomeUSD = item.clinic_payment_dollars || (item.clinic_payment_cordobas / exchangeRate);
-        const externalDoctorPaymentUSD = item.external_doctor_payment_usd || (item.external_doctor_payment / exchangeRate);
-        
-        return {
-          ...item,
-          procedure_date: procedureDateFormatted,
-          procedure_date_utc: item.procedure_date,
-          creation_date: creationDateFormatted,
-          patient_name: `${item.patients?.first_name || ''} ${item.patients?.first_last_name || ''}`.trim() || 'Paciente no especificado',
-          patient_identification: item.patients?.identification || 'N/A',
-          original_query_type: item.clinical_appointments?.[0]?.query_type || item.procedure_description,
-          original_appointment_date: originalAppointmentDateFormatted,
-          // Ingresos en córdobas (ya calculados)
-          clinic_income: item.clinic_payment_cordobas || 0,
-          clinic_net_income: item.clinic_payment_cordobas || 0, // Ya incluye deducción
-          external_doctor_payment: item.external_doctor_payment || 0,
-          // Ingresos en dólares
-          total_procedure_usd: totalProcedureUSD,
-          clinic_net_income_usd: clinicNetIncomeUSD,
-          external_doctor_payment_usd: externalDoctorPaymentUSD,
-          // Asegurar que los campos estén presentes
-          amount_cordobas: item.amount_cordobas || 0,
-          amount_dollars: item.amount_dollars || 0,
-          payment_method_cordobas: item.payment_method_cordobas || 'No especificado',
-          payment_method_dollars: item.payment_method_dollars || 'No especificado',
-          exchange_rate: exchangeRate,
-          total_cost_USD: item.total_cost_USD || 0,
-          // Información adicional
-          has_external_doctor: !!item.external_doctor || !!item.external_doctor_name || (item.external_doctor_payment > 0),
-          external_doctor_name: item.external_doctor_name || item.external_doctor || null,
-          external_doctor_specialty: item.external_doctor_specialty || null,
-          // NUEVOS CAMPOS
-          ortho_doctor_percentage: item.ortho_doctor_percentage,
-          external_doctor_percentage: item.external_doctor_percentage,
-          external_doctor_split_type: item.external_doctor_split_type || 'from_total'
-        };
-      });
-      
-      // Calcular estadísticas
-      const totalIncome = transformedData.reduce((sum, item) => sum + (item.clinic_income || 0), 0);
-      const totalExternalPayments = transformedData.reduce((sum, item) => sum + (item.external_doctor_payment || 0), 0);
-      
-      res.json({ 
-        success: true, 
-        data: transformedData,
-        total: totalCount || 0,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        totalPages: Math.ceil((totalCount || 0) / limit),
-        filterApplied: timeFilter || 'all',
-        stats: {
-          totalProcedures: transformedData.length,
-          totalIncome,
-          totalExternalPayments,
-          clinicNetIncome: totalIncome, // Ya incluye deducción
-          averageIncomePerProcedure: transformedData.length > 0 ? totalIncome / transformedData.length : 0
-        }
-      });
-      
-    } catch (error) {
-      console.error('❌ Error al obtener procedimientos:', error);
-      res.status(500).json({ 
-        success: false, 
-        error: 'Error al obtener procedimientos',
-        details: error.message
-      });
     }
-  },
+    
+    // Filtro por paciente
+    if (patientId && patientId.trim() !== "") {
+      query = query.eq('Patient_ID', patientId);
+    }
+    
+    console.log('🔍 Ejecutando consulta...');
+    const { data, error, count: totalCount } = await query;
+    
+    if (error) {
+      console.error('❌ Error en Supabase:', error);
+      throw error;
+    }
+    
+    console.log(`✅ ${data?.length || 0} procedimientos encontrados`);
+    
+    const transformedData = (data || []).map(item => {
+      let procedureDateFormatted = 'N/A';
+      try {
+        if (item.procedure_date) {
+          procedureDateFormatted = formatNicaraguaDateTime(item.procedure_date);
+        }
+      } catch (error) {
+        console.error('Error formateando fecha:', error);
+      }
+      
+      let creationDateFormatted = 'N/A';
+      try {
+        if (item.creation_date) {
+          creationDateFormatted = formatNicaraguaDateTime(item.creation_date);
+        }
+      } catch (error) {
+        console.error('Error formateando creación:', error);
+      }
+      
+      const originalAppointmentDate = item.clinical_appointments?.[0]?.appointment_date;
+      let originalAppointmentDateFormatted = null;
+      try {
+        if (originalAppointmentDate) {
+          originalAppointmentDateFormatted = formatNicaraguaDateTime(originalAppointmentDate);
+        }
+      } catch (error) {
+        console.error('Error formateando cita original:', error);
+      }
+      
+      const exchangeRate = item.exchange_rate || 36.5;
+      const totalProcedureUSD = item.total_procedure_usd || (item.total_procedure / exchangeRate);
+      const clinicNetIncomeUSD = item.clinic_payment_dollars || (item.clinic_payment_cordobas / exchangeRate);
+      const externalDoctorPaymentUSD = item.external_doctor_payment_usd || (item.external_doctor_payment / exchangeRate);
+      
+      return {
+        ...item,
+        procedure_date: procedureDateFormatted,
+        procedure_date_utc: item.procedure_date,
+        creation_date: creationDateFormatted,
+        patient_name: `${item.patients?.first_name || ''} ${item.patients?.first_last_name || ''}`.trim() || 'Paciente no especificado',
+        patient_identification: item.patients?.identification || 'N/A',
+        original_query_type: item.clinical_appointments?.[0]?.query_type || item.procedure_description,
+        original_appointment_date: originalAppointmentDateFormatted,
+        clinic_income: item.clinic_payment_cordobas || 0,
+        clinic_net_income: item.clinic_payment_cordobas || 0,
+        external_doctor_payment: item.external_doctor_payment || 0,
+        total_procedure_usd: totalProcedureUSD,
+        clinic_net_income_usd: clinicNetIncomeUSD,
+        external_doctor_payment_usd: externalDoctorPaymentUSD,
+        amount_cordobas: item.amount_cordobas || 0,
+        amount_dollars: item.amount_dollars || 0,
+        payment_method_cordobas: item.payment_method_cordobas || 'No especificado',
+        payment_method_dollars: item.payment_method_dollars || 'No especificado',
+        exchange_rate: exchangeRate,
+        total_cost_USD: item.total_cost_USD || 0,
+        has_external_doctor: !!item.external_doctor || !!item.external_doctor_name || (item.external_doctor_payment > 0),
+        external_doctor_name: item.external_doctor_name || item.external_doctor || null,
+        external_doctor_specialty: item.external_doctor_specialty || null,
+        ortho_doctor_percentage: item.ortho_doctor_percentage,
+        external_doctor_percentage: item.external_doctor_percentage,
+        external_doctor_split_type: item.external_doctor_split_type || 'from_total'
+      };
+    });
+    
+    const totalIncome = transformedData.reduce((sum, item) => sum + (item.clinic_income || 0), 0);
+    const totalExternalPayments = transformedData.reduce((sum, item) => sum + (item.external_doctor_payment || 0), 0);
+    
+    res.json({ 
+      success: true, 
+      data: transformedData,
+      total: totalCount || 0,
+      filterApplied: timeFilter || 'all',
+      stats: {
+        totalProcedures: transformedData.length,
+        totalIncome,
+        totalExternalPayments,
+        clinicNetIncome: totalIncome,
+        averageIncomePerProcedure: transformedData.length > 0 ? totalIncome / transformedData.length : 0
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Error al obtener procedimientos:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Error al obtener procedimientos',
+      details: error.message
+    });
+  }
+},
 
   // ============================================
-  // OBTENER PROCEDIMIENTOS DE ORTODONCIA
-  // ============================================
-  getAllOrthodontics: async (req, res) => {
-    try {
-      const { 
-        page = 1, 
-        limit = 100, 
-        startDate, 
-        endDate,
-        patientId,
-        timeFilter
-      } = req.query;
+// OBTENER PROCEDIMIENTOS DE ORTODONCIA
+// ============================================
+getAllOrthodontics: async (req, res) => {
+  try {
+    const { 
+      startDate, 
+      endDate,
+      patientId,
+      timeFilter
+    } = req.query;
+    
+    console.log('📋 Ortodoncias - Parámetros:', { 
+      startDate, endDate, patientId, timeFilter 
+    });
+    
+    // Construir consulta base
+    let query = supabaseAdmin
+      .from('procedures')
+      .select(`
+        *,
+        patients (
+          first_name,
+          first_last_name,
+          identification
+        ),
+        clinical_appointments (
+          query_type,
+          appointment_date
+        )
+      `)
+      .eq('is_orthodontics', true)
+      .order('procedure_date', { ascending: false });
+    
+    // 1. SI HAY FECHAS ESPECÍFICAS
+    if (startDate && endDate) {
+      const startUTC = safeToISOString(`${startDate}T00:00:00`);
+      const endUTC = safeToISOString(`${endDate}T23:59:59`);
       
-      console.log('📋 Ortodoncias - Parámetros:', { 
-        page, limit, startDate, endDate, patientId, timeFilter 
-      });
+      if (startUTC && endUTC) {
+        console.log('📅 Ortodoncias - Usando fechas específicas:', { startUTC, endUTC });
+        query = query.gte('procedure_date', startUTC);
+        query = query.lte('procedure_date', endUTC);
+      }
+    } 
+    // 2. FILTRO DE TIEMPO
+    else if (timeFilter && timeFilter !== 'all') {
+      console.log('📅 Ortodoncias - Calculando rango para filtro:', timeFilter);
       
-      const from = (page - 1) * limit;
-      const to = from + limit - 1;
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      const day = now.getDate();
       
-      // Construir consulta base
-      let query = supabaseAdmin
-        .from('procedures')
-        .select(`
-          *,
-          patients (
-            first_name,
-            first_last_name,
-            identification
-          ),
-          clinical_appointments (
-            query_type,
-            appointment_date
-          )
-        `, { count: 'exact' })
-        .eq('is_orthodontics', true)
-        .order('procedure_date', { ascending: false });
+      let startDateObj, endDateObj;
       
-      // 1. SI HAY FECHAS ESPECÍFICAS -> Usar esas fechas
-      if (startDate && endDate) {
-        const startUTC = safeToISOString(`${startDate}T00:00:00`);
-        const endUTC = safeToISOString(`${endDate}T23:59:59`);
-        
-        if (startUTC && endUTC) {
-          console.log('📅 Ortodoncias - Usando fechas específicas:', { startUTC, endUTC });
-          query = query.gte('procedure_date', startUTC);
-          query = query.lte('procedure_date', endUTC);
-        }
-      } 
-      // 2. SI HAY FILTRO DE TIEMPO Y NO ES 'all' -> Calcular rango
-      else if (timeFilter && timeFilter !== 'all') {
-        console.log('📅 Ortodoncias - Calculando rango para filtro:', timeFilter);
-        
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = now.getMonth();
-        const day = now.getDate();
-        
-        let startDateObj, endDateObj;
-        
-        switch(timeFilter) {
-          case 'today':
-            startDateObj = new Date(year, month, day, 0, 0, 0, 0);
-            endDateObj = new Date(year, month, day, 23, 59, 59, 999);
-            break;
-            
-          case 'thisWeek':
-            const dayOfWeek = now.getDay();
-            const startOfWeek = new Date(year, month, day - dayOfWeek, 0, 0, 0, 0);
-            const endOfWeek = new Date(year, month, day + (6 - dayOfWeek), 23, 59, 59, 999);
-            startDateObj = startOfWeek;
-            endDateObj = endOfWeek;
-            break;
-            
-          case 'thisMonth':
-            startDateObj = new Date(year, month, 1, 0, 0, 0, 0);
-            endDateObj = new Date(year, month + 1, 0, 23, 59, 59, 999);
-            break;
-            
-          default:
-            console.log('⚠️ Ortodoncias - Filtro no reconocido, sin filtro de fecha');
-            break;
-        }
-        
-        if (startDateObj && endDateObj) {
-          query = query.gte('procedure_date', startDateObj.toISOString());
-          query = query.lte('procedure_date', endDateObj.toISOString());
-          console.log('📅 Ortodoncias - Rango aplicado:', { 
-            start: startDateObj.toISOString(), 
-            end: endDateObj.toISOString() 
-          });
-        }
-      } 
-      // 3. SI ES 'all' O NO HAY FILTROS -> NO aplicar filtro de fecha
-      else {
-        console.log('📅 Ortodoncias - Mostrando TODAS las ortodoncias (sin filtro de fecha)');
+      switch(timeFilter) {
+        case 'today':
+          startDateObj = new Date(year, month, day, 0, 0, 0, 0);
+          endDateObj = new Date(year, month, day, 23, 59, 59, 999);
+          break;
+          
+        case 'thisWeek':
+          const dayOfWeek = now.getDay();
+          startDateObj = new Date(year, month, day - dayOfWeek, 0, 0, 0, 0);
+          endDateObj = new Date(year, month, day + (6 - dayOfWeek), 23, 59, 59, 999);
+          break;
+          
+        case 'thisMonth':
+          startDateObj = new Date(year, month, 1, 0, 0, 0, 0);
+          endDateObj = new Date(year, month + 1, 0, 23, 59, 59, 999);
+          break;
       }
       
-      // Filtro por paciente
-      if (patientId && patientId.trim() !== "") {
-        query = query.eq('Patient_ID', patientId);
+      if (startDateObj && endDateObj) {
+        query = query.gte('procedure_date', startDateObj.toISOString());
+        query = query.lte('procedure_date', endDateObj.toISOString());
+        
+        console.log('📅 Ortodoncias - Rango aplicado:', { 
+          start: startDateObj.toISOString(), 
+          end: endDateObj.toISOString() 
+        });
       }
-      
-      // Paginación
-      query = query.range(from, to);
-      
-      console.log('🔍 Ortodoncias - Ejecutando consulta...');
-      const { data, error, count: totalCount } = await query;
-      
-      if (error) {
-        console.error('❌ Error en Supabase (ortodoncias):', error);
-        throw error;
-      }
-      
-      console.log(`✅ ${data?.length || 0} ortodoncias encontradas`);
-      
-      // Transformar datos
-      const transformedData = (data || []).map(item => {
-        const exchangeRate = item.exchange_rate || 36.5;
-        
-        // Calcular en córdobas (ya calculados)
-        const clinicIncomeCordobas = item.clinic_payment_cordobas || 0;
-        const doctorIncomeCordobas = item.doctor_payment_cordobas || 0;
-        const externalDoctorPaymentCordobas = item.external_doctor_payment || 0;
-        
-        // Calcular en dólares
-        const totalUSD = item.total_procedure_usd || (item.total_procedure / exchangeRate);
-        const clinicIncomeUSD = item.clinic_payment_dollars || (clinicIncomeCordobas / exchangeRate);
-        const doctorIncomeUSD = item.doctor_payment_dollars || (doctorIncomeCordobas / exchangeRate);
-        const externalDoctorPaymentUSD = item.external_doctor_payment_usd || (externalDoctorPaymentCordobas / exchangeRate);
-        
-        // Formatear fechas
-        let procedureDateFormatted = 'N/A';
-        try {
-          if (item.procedure_date) {
-            procedureDateFormatted = formatNicaraguaDateTime(item.procedure_date);
-          }
-        } catch (error) {
-          console.error('Error formateando fecha:', error);
-        }
-        
-        let creationDateFormatted = 'N/A';
-        try {
-          if (item.creation_date) {
-            creationDateFormatted = formatNicaraguaDateTime(item.creation_date);
-          }
-        } catch (error) {
-          console.error('Error formateando creación:', error);
-        }
-        
-        const originalAppointmentDate = item.clinical_appointments?.[0]?.appointment_date;
-        let originalAppointmentDateFormatted = null;
-        try {
-          if (originalAppointmentDate) {
-            originalAppointmentDateFormatted = formatNicaraguaDateTime(originalAppointmentDate);
-          }
-        } catch (error) {
-          console.error('Error formateando cita original:', error);
-        }
-        
-        return {
-          ...item,
-          procedure_date: procedureDateFormatted,
-          procedure_date_utc: item.procedure_date,
-          creation_date: creationDateFormatted,
-          patient_name: `${item.patients?.first_name || ''} ${item.patients?.first_last_name || ''}`.trim() || 'Paciente no especificado',
-          patient_identification: item.patients?.identification || 'N/A',
-          original_query_type: item.clinical_appointments?.[0]?.query_type || item.procedure_description,
-          original_appointment_date: originalAppointmentDateFormatted,
-          // Ingresos en córdobas
-          clinic_income: clinicIncomeCordobas,
-          doctor_income: doctorIncomeCordobas,
-          clinic_net_income: clinicIncomeCordobas, // Ya incluye deducción
-          external_doctor_payment: externalDoctorPaymentCordobas,
-          // Ingresos en dólares
-          clinic_income_usd: clinicIncomeUSD,
-          doctor_income_usd: doctorIncomeUSD,
-          clinic_net_income_usd: clinicIncomeUSD,
-          external_doctor_payment_usd: externalDoctorPaymentUSD,
-          // Montos específicos
-          clinic_payment_cordobas: clinicIncomeCordobas,
-          doctor_payment_cordobas: doctorIncomeCordobas,
-          clinic_payment_dollars: clinicIncomeUSD,
-          doctor_payment_dollars: doctorIncomeUSD,
-          total_procedure: item.total_procedure,
-          total_procedure_usd: totalUSD,
-          // Asegurar que los campos de pago estén presentes
-          amount_cordobas: item.amount_cordobas || 0,
-          amount_dollars: item.amount_dollars || 0,
-          payment_method_cordobas: item.payment_method_cordobas || 'No especificado',
-          payment_method_dollars: item.payment_method_dollars || 'No especificado',
-          exchange_rate: exchangeRate,
-          total_cost_USD: item.total_cost_USD || 0,
-          // Porcentajes
-          clinic_payment_percentage: item.clinic_payment_percentage,
-          doctor_payment_percentage: item.doctor_payment_percentage,
-          // NUEVOS CAMPOS
-          ortho_doctor_percentage: item.ortho_doctor_percentage,
-          external_doctor_percentage: item.external_doctor_percentage,
-          external_doctor_split_type: item.external_doctor_split_type || 'from_total',
-          // Información adicional
-          has_external_doctor: !!item.external_doctor || !!item.external_doctor_name || (item.external_doctor_payment > 0),
-          external_doctor_name: item.external_doctor_name || item.external_doctor || null,
-          external_doctor_specialty: item.external_doctor_specialty || null
-        };
-      });
-      
-      // Calcular estadísticas
-      const totalIncome = transformedData.reduce((sum, item) => sum + (item.clinic_income || 0), 0);
-      const totalDoctorIncome = transformedData.reduce((sum, item) => sum + (item.doctor_income || 0), 0);
-      const totalExternalPayments = transformedData.reduce((sum, item) => sum + (item.external_doctor_payment || 0), 0);
-      
-      res.json({ 
-        success: true, 
-        data: transformedData,
-        total: totalCount || 0,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        totalPages: Math.ceil((totalCount || 0) / limit),
-        filterApplied: timeFilter || 'all',
-        stats: {
-          totalProcedures: transformedData.length,
-          totalIncome,
-          totalDoctorIncome,
-          totalExternalPayments,
-          clinicNetIncome: totalIncome, // Ya incluye deducción
-          clinicPercentage: transformedData.length > 0 ? 
-            transformedData[0].clinic_payment_percentage || 40 : 40,
-          doctorPercentage: transformedData.length > 0 ? 
-            transformedData[0].doctor_payment_percentage || 60 : 60
-        }
-      });
-      
-    } catch (error) {
-      console.error('❌ Error al obtener ortodoncias:', error);
-      res.status(500).json({ 
-        success: false, 
-        error: 'Error al obtener ortodoncias',
-        details: error.message
-      });
+    } 
+    else {
+      console.log('📅 Ortodoncias - Mostrando TODAS las ortodoncias (sin filtro de fecha)');
     }
-  },
+    
+    // Filtro por paciente
+    if (patientId && patientId.trim() !== "") {
+      query = query.eq('Patient_ID', patientId);
+    }
+    
+    console.log('🔍 Ortodoncias - Ejecutando consulta...');
+    const { data, error } = await query;
+    
+    if (error) {
+      console.error('❌ Error en Supabase (ortodoncias):', error);
+      throw error;
+    }
+    
+    console.log(`✅ ${data?.length || 0} ortodoncias encontradas`);
+    
+    // Transformar datos
+    const transformedData = (data || []).map(item => {
+      const exchangeRate = item.exchange_rate || 36.5;
+
+      const clinicIncomeCordobas = item.clinic_payment_cordobas || 0;
+      const doctorIncomeCordobas = item.doctor_payment_cordobas || 0;
+      const externalDoctorPaymentCordobas = item.external_doctor_payment || 0;
+
+      const totalUSD = item.total_procedure_usd || (item.total_procedure / exchangeRate);
+      const clinicIncomeUSD = item.clinic_payment_dollars || (clinicIncomeCordobas / exchangeRate);
+      const doctorIncomeUSD = item.doctor_payment_dollars || (doctorIncomeCordobas / exchangeRate);
+      const externalDoctorPaymentUSD = item.external_doctor_payment_usd || (externalDoctorPaymentCordobas / exchangeRate);
+
+      let procedureDateFormatted = 'N/A';
+      try {
+        if (item.procedure_date) {
+          procedureDateFormatted = formatNicaraguaDateTime(item.procedure_date);
+        }
+      } catch (error) {}
+
+      let creationDateFormatted = 'N/A';
+      try {
+        if (item.creation_date) {
+          creationDateFormatted = formatNicaraguaDateTime(item.creation_date);
+        }
+      } catch (error) {}
+
+      const originalAppointmentDate = item.clinical_appointments?.[0]?.appointment_date;
+      let originalAppointmentDateFormatted = null;
+      try {
+        if (originalAppointmentDate) {
+          originalAppointmentDateFormatted = formatNicaraguaDateTime(originalAppointmentDate);
+        }
+      } catch (error) {}
+
+      return {
+        ...item,
+        procedure_date: procedureDateFormatted,
+        procedure_date_utc: item.procedure_date,
+        creation_date: creationDateFormatted,
+        patient_name: `${item.patients?.first_name || ''} ${item.patients?.first_last_name || ''}`.trim() || 'Paciente no especificado',
+        patient_identification: item.patients?.identification || 'N/A',
+        original_query_type: item.clinical_appointments?.[0]?.query_type || item.procedure_description,
+        original_appointment_date: originalAppointmentDateFormatted,
+
+        clinic_income: clinicIncomeCordobas,
+        doctor_income: doctorIncomeCordobas,
+        clinic_net_income: clinicIncomeCordobas,
+        external_doctor_payment: externalDoctorPaymentCordobas,
+
+        clinic_income_usd: clinicIncomeUSD,
+        doctor_income_usd: doctorIncomeUSD,
+        clinic_net_income_usd: clinicIncomeUSD,
+        external_doctor_payment_usd: externalDoctorPaymentUSD,
+
+        clinic_payment_cordobas: clinicIncomeCordobas,
+        doctor_payment_cordobas: doctorIncomeCordobas,
+        clinic_payment_dollars: clinicIncomeUSD,
+        doctor_payment_dollars: doctorIncomeUSD,
+        total_procedure: item.total_procedure,
+        total_procedure_usd: totalUSD,
+
+        amount_cordobas: item.amount_cordobas || 0,
+        amount_dollars: item.amount_dollars || 0,
+        payment_method_cordobas: item.payment_method_cordobas || 'No especificado',
+        payment_method_dollars: item.payment_method_dollars || 'No especificado',
+        exchange_rate: exchangeRate,
+        total_cost_USD: item.total_cost_USD || 0,
+
+        clinic_payment_percentage: item.clinic_payment_percentage,
+        doctor_payment_percentage: item.doctor_payment_percentage,
+
+        ortho_doctor_percentage: item.ortho_doctor_percentage,
+        external_doctor_percentage: item.external_doctor_percentage,
+        external_doctor_split_type: item.external_doctor_split_type || 'from_total',
+
+        has_external_doctor: !!item.external_doctor || !!item.external_doctor_name || (item.external_doctor_payment > 0),
+        external_doctor_name: item.external_doctor_name || item.external_doctor || null,
+        external_doctor_specialty: item.external_doctor_specialty || null
+      };
+    });
+    
+    const totalIncome = transformedData.reduce((sum, item) => sum + (item.clinic_income || 0), 0);
+    const totalDoctorIncome = transformedData.reduce((sum, item) => sum + (item.doctor_income || 0), 0);
+    const totalExternalPayments = transformedData.reduce((sum, item) => sum + (item.external_doctor_payment || 0), 0);
+    
+    res.json({ 
+      success: true, 
+      data: transformedData,
+      total: transformedData.length,
+      filterApplied: timeFilter || 'all',
+      stats: {
+        totalProcedures: transformedData.length,
+        totalIncome,
+        totalDoctorIncome,
+        totalExternalPayments,
+        clinicNetIncome: totalIncome,
+        clinicPercentage: transformedData.length > 0 ? 
+          transformedData[0].clinic_payment_percentage || 40 : 40,
+        doctorPercentage: transformedData.length > 0 ? 
+          transformedData[0].doctor_payment_percentage || 60 : 60
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Error al obtener ortodoncias:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Error al obtener ortodoncias',
+      details: error.message
+    });
+  }
+},
 
   // ============================================
   // OBTENER PROCEDIMIENTO POR ID

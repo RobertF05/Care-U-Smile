@@ -307,50 +307,112 @@ const Procedure = {
   },
 
   // Obtener procedimientos regulares (NO ortodoncia)
-  async getAllNormal(page = 1, limit = 20, filters = {}) {
-    const from = (page - 1) * limit;
-    const to = from + limit - 1;
-    
-    let query = supabaseAdmin
-      .from('procedures')
-      .select(`
-        *,
-        patients (
-          first_name,
-          first_last_name,
-          identification
-        ),
-        clinical_appointments (
-          query_type,
-          appointment_date
-        )
-      `, { count: 'exact' })
-      .eq('is_orthodontics', false)
-      .order('procedure_date', { ascending: false });
-    
-    // Aplicar filtros con conversión de zona horaria
-    if (filters.startDate) {
-      const startUTC = convertDateStringToUTCStart(filters.startDate);
-      query = query.gte('procedure_date', startUTC);
-    }
-    
-    if (filters.endDate) {
-      const endUTC = convertDateStringToUTCEnd(filters.endDate);
-      query = query.lte('procedure_date', endUTC);
-    }
-    
-    if (filters.patientId) {
-      query = query.eq('Patient_ID', filters.patientId);
-    }
-    
-    query = query.range(from, to);
-    
-    const { data, error, count } = await query;
-    
-    if (error) throw error;
-    
-    // Transformar datos y convertir fechas
-    const transformedData = data.map(item => ({
+async getAllNormal(filters = {}) {
+
+  let query = supabaseAdmin
+    .from('procedures')
+    .select(`
+      *,
+      patients (
+        first_name,
+        first_last_name,
+        identification
+      ),
+      clinical_appointments (
+        query_type,
+        appointment_date
+      )
+    `)
+    .eq('is_orthodontics', false)
+    .order('procedure_date', { ascending: false });
+
+  // Aplicar filtros con conversión de zona horaria
+  if (filters.startDate) {
+    const startUTC = convertDateStringToUTCStart(filters.startDate);
+    query = query.gte('procedure_date', startUTC);
+  }
+
+  if (filters.endDate) {
+    const endUTC = convertDateStringToUTCEnd(filters.endDate);
+    query = query.lte('procedure_date', endUTC);
+  }
+
+  if (filters.patientId) {
+    query = query.eq('Patient_ID', filters.patientId);
+  }
+
+  const { data, error } = await query;
+
+  if (error) throw error;
+
+  const transformedData = (data || []).map(item => ({
+    ...item,
+    procedure_date: formatNicaraguaDateTime(item.procedure_date),
+    procedure_date_utc: item.procedure_date,
+    creation_date: formatNicaraguaDateTime(item.creation_date),
+    patient_name: `${item.patients?.first_name || ''} ${item.patients?.first_last_name || ''}`.trim(),
+    patient_identification: item.patients?.identification,
+    original_query_type: item.clinical_appointments?.query_type,
+    original_appointment_date: item.clinical_appointments?.appointment_date
+      ? formatNicaraguaDateTime(item.clinical_appointments.appointment_date)
+      : null,
+    clinic_income: item.clinic_payment_cordobas || 0,
+    external_doctor_payment: item.external_doctor_payment || 0,
+    clinic_net_income: item.clinic_payment_cordobas || 0
+  }));
+
+  return {
+    data: transformedData,
+    total: transformedData.length
+  };
+},
+
+  // Obtener procedimientos de ortodoncia
+async getAllOrthodontics(filters = {}) {
+
+  let query = supabaseAdmin
+    .from('procedures')
+    .select(`
+      *,
+      patients (
+        first_name,
+        first_last_name,
+        identification
+      ),
+      clinical_appointments (
+        query_type,
+        appointment_date
+      )
+    `)
+    .eq('is_orthodontics', true)
+    .order('procedure_date', { ascending: false });
+
+  // Aplicar filtros con conversión de zona horaria
+  if (filters.startDate) {
+    const startUTC = convertDateStringToUTCStart(filters.startDate);
+    query = query.gte('procedure_date', startUTC);
+  }
+
+  if (filters.endDate) {
+    const endUTC = convertDateStringToUTCEnd(filters.endDate);
+    query = query.lte('procedure_date', endUTC);
+  }
+
+  if (filters.patientId) {
+    query = query.eq('Patient_ID', filters.patientId);
+  }
+
+  const { data, error } = await query;
+
+  if (error) throw error;
+
+  const transformedData = (data || []).map(item => {
+    const total = item.total_procedure || 0;
+    const clinicPayment = item.clinic_payment_cordobas || 0;
+    const doctorPayment = item.doctor_payment_cordobas || 0;
+    const externalPayment = item.external_doctor_payment || 0;
+
+    return {
       ...item,
       procedure_date: formatNicaraguaDateTime(item.procedure_date),
       procedure_date_utc: item.procedure_date,
@@ -358,100 +420,22 @@ const Procedure = {
       patient_name: `${item.patients?.first_name || ''} ${item.patients?.first_last_name || ''}`.trim(),
       patient_identification: item.patients?.identification,
       original_query_type: item.clinical_appointments?.query_type,
-      original_appointment_date: item.clinical_appointments?.appointment_date ? 
-        formatNicaraguaDateTime(item.clinical_appointments.appointment_date) : null,
-      // Ingresos ya calculados
-      clinic_income: item.clinic_payment_cordobas || 0,
-      external_doctor_payment: item.external_doctor_payment || 0,
-      clinic_net_income: item.clinic_payment_cordobas || 0 // Ya incluye deducción
-    }));
-    
-    return {
-      data: transformedData,
-      total: count,
-      page,
-      limit,
-      totalPages: Math.ceil(count / limit)
+      original_appointment_date: item.clinical_appointments?.appointment_date
+        ? formatNicaraguaDateTime(item.clinical_appointments.appointment_date)
+        : null,
+      clinic_income: clinicPayment,
+      doctor_income: doctorPayment,
+      external_doctor_payment: externalPayment,
+      clinic_net_income: clinicPayment,
+      total_procedure: total
     };
-  },
+  });
 
-  // Obtener procedimientos de ortodoncia
-  async getAllOrthodontics(page = 1, limit = 20, filters = {}) {
-    const from = (page - 1) * limit;
-    const to = from + limit - 1;
-    
-    let query = supabaseAdmin
-      .from('procedures')
-      .select(`
-        *,
-        patients (
-          first_name,
-          first_last_name,
-          identification
-        ),
-        clinical_appointments (
-          query_type,
-          appointment_date
-        )
-      `, { count: 'exact' })
-      .eq('is_orthodontics', true)
-      .order('procedure_date', { ascending: false });
-    
-    // Aplicar filtros con conversión de zona horaria
-    if (filters.startDate) {
-      const startUTC = convertDateStringToUTCStart(filters.startDate);
-      query = query.gte('procedure_date', startUTC);
-    }
-    
-    if (filters.endDate) {
-      const endUTC = convertDateStringToUTCEnd(filters.endDate);
-      query = query.lte('procedure_date', endUTC);
-    }
-    
-    if (filters.patientId) {
-      query = query.eq('Patient_ID', filters.patientId);
-    }
-    
-    query = query.range(from, to);
-    
-    const { data, error, count } = await query;
-    
-    if (error) throw error;
-    
-    // Transformar datos y mostrar montos calculados
-    const transformedData = data.map(item => {
-      const total = item.total_procedure || 0;
-      const clinicPayment = item.clinic_payment_cordobas || 0;
-      const doctorPayment = item.doctor_payment_cordobas || 0;
-      const externalPayment = item.external_doctor_payment || 0;
-      
-      return {
-        ...item,
-        procedure_date: formatNicaraguaDateTime(item.procedure_date),
-        procedure_date_utc: item.procedure_date,
-        creation_date: formatNicaraguaDateTime(item.creation_date),
-        patient_name: `${item.patients?.first_name || ''} ${item.patients?.first_last_name || ''}`.trim(),
-        patient_identification: item.patients?.identification,
-        original_query_type: item.clinical_appointments?.query_type,
-        original_appointment_date: item.clinical_appointments?.appointment_date ? 
-          formatNicaraguaDateTime(item.clinical_appointments.appointment_date) : null,
-        // Ingresos ya calculados
-        clinic_income: clinicPayment,
-        doctor_income: doctorPayment,
-        external_doctor_payment: externalPayment,
-        clinic_net_income: clinicPayment, // Ya incluye deducción de doctor externo
-        total_procedure: total
-      };
-    });
-    
-    return {
-      data: transformedData,
-      total: count,
-      page,
-      limit,
-      totalPages: Math.ceil(count / limit)
-    };
-  },
+  return {
+    data: transformedData,
+    total: transformedData.length
+  };
+},
 
   // Obtener procedimiento por ID
   async getById(id) {
